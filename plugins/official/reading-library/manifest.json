@@ -1,0 +1,41 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.reading-library",
+  "release_version": "0.2.0",
+  "display_name": "研读图书馆",
+  "description": "AI 荐读 + 自主收藏 + AI 陪读 + 认知档案：推荐书籍、用户上传书目信息、章节计划与阅读问答、批注转研究问题；从阅读与复盘中沉淀可追溯的用户认知档案（profile_version 版本链，本机存储、可查改删）。只进学习流，不改投资原则。",
+  "plugin_type": "library_app",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_learning_context",
+    "submit_evidence"
+  ],
+  "ui_slots": [
+    {
+      "slot": "app.library",
+      "level": "L3"
+    },
+    {
+      "slot": "today.learning",
+      "level": "L2"
+    }
+  ],
+  "mount": "own_page",
+  "schema_versions": {
+    "LearningUnit": "1.0",
+    "Evidence": "1.0"
+  },
+  "entrypoint": "library.plan",
+  "artifact_sha256": "d34c4e347c03811d6bf216474ad86ec3410490c94e6c4bc55d34e0ca072eef81",
+  "signature": "JI+x+RR4T3vwBvujhWP2V3FKz4XgwVtoej1WSp4YwGsPWdzYLURd2tGl7J0jqbLWuUR+KoljPwX8FduPGSH5Bw==",
+  "network_allowlist": [
+    "openlibrary.org"
+  ],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

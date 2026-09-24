@@ -1,0 +1,145 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "capability_id": {
+      "pattern": "^[a-z][a-z0-9_.-]+$",
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "capability_version": {
+      "default": "1.0",
+      "title": "Capability Version",
+      "type": "string"
+    },
+    "stability": {
+      "default": "stable",
+      "title": "Stability",
+      "type": "string"
+    },
+    "input_schema": {
+      "additionalProperties": true,
+      "title": "Input Schema",
+      "type": "object"
+    },
+    "output_schema": {
+      "additionalProperties": true,
+      "title": "Output Schema",
+      "type": "object"
+    },
+    "allowed_resource_types": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Resource Types",
+      "type": "array"
+    },
+    "scope": {
+      "default": "user",
+      "title": "Scope",
+      "type": "string"
+    },
+    "private_namespace_write": {
+      "default": false,
+      "title": "Private Namespace Write",
+      "type": "boolean"
+    },
+    "model_access": {
+      "default": false,
+      "title": "Model Access",
+      "type": "boolean"
+    },
+    "notification_proposal": {
+      "default": false,
+      "title": "Notification Proposal",
+      "type": "boolean"
+    },
+    "scheduled_task": {
+      "default": false,
+      "title": "Scheduled Task",
+      "type": "boolean"
+    },
+    "network_allowlist": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Network Allowlist",
+      "type": "array"
+    },
+    "rate_limit_per_minute": {
+      "default": 30,
+      "minimum": 0,
+      "title": "Rate Limit Per Minute",
+      "type": "integer"
+    },
+    "max_concurrency": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Max Concurrency",
+      "type": "integer"
+    },
+    "max_cpu_seconds": {
+      "default": 30,
+      "minimum": 1,
+      "title": "Max Cpu Seconds",
+      "type": "integer"
+    },
+    "max_memory_mb": {
+      "default": 256,
+      "minimum": 16,
+      "title": "Max Memory Mb",
+      "type": "integer"
+    },
+    "max_execution_seconds": {
+      "default": 60,
+      "minimum": 1,
+      "title": "Max Execution Seconds",
+      "type": "integer"
+    },
+    "max_output_bytes": {
+      "default": 1000000,
+      "minimum": 1024,
+      "title": "Max Output Bytes",
+      "type": "integer"
+    },
+    "data_leaves_device": {
+      "default": false,
+      "title": "Data Leaves Device",
+      "type": "boolean"
+    },
+    "retention": {
+      "default": "run_scoped",
+      "title": "Retention",
+      "type": "string"
+    },
+    "deletion_policy": {
+      "default": "core_managed",
+      "title": "Deletion Policy",
+      "type": "string"
+    },
+    "side_effects": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Side Effects",
+      "type": "array"
+    },
+    "deterministic": {
+      "default": true,
+      "title": "Deterministic",
+      "type": "boolean"
+    },
+    "requires_confirmation": {
+      "default": false,
+      "title": "Requires Confirmation",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "capability_id",
+    "input_schema",
+    "output_schema"
+  ],
+  "title": "PluginCapability",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/plugin-capability/1.0"
+}

@@ -1,0 +1,32 @@
+[project]
+name = "investment-steward-core"
+version = "0.1.0"
+description = "Local-first Core API for AI Investment Steward"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+  "alembic>=1.14,<2",
+  "cryptography>=43,<47",
+  "fastapi>=0.115,<1",
+  "pydantic>=2.10,<3",
+  "sqlalchemy>=2,<3",
+  "uvicorn[standard]>=0.34,<1"
+]
+
+[project.optional-dependencies]
+# 阶段 8 · cn-company-evidence 财报证据（经用户批准引入）。仅作为可选 extra，
+# 基础 Core 安装不含重依赖；未安装时财报端点显式降级、不生成证据。
+financials = ["akshare>=1.14,<2"]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.27,<1",
+  "pytest>=8.3,<9",
+  "ruff>=0.9,<1"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/investment_steward_core"]

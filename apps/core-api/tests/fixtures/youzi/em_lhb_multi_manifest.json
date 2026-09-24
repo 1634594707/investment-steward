@@ -1,0 +1,132 @@
+{
+  "captured_at": "2026-09-18",
+  "days": [
+    "2026-09-11",
+    "2026-09-14",
+    "2026-09-15",
+    "2026-09-16",
+    "2026-09-17"
+  ],
+  "files": {
+    "em_lhb_details_20260911.json": {
+      "sha256": "11cb5aebd3d31891cd66aa642cc5826397adc175fab8ee508c845f30a663a913",
+      "bytes": 73167,
+      "declared_count": 68,
+      "pages": 1,
+      "rows": 68,
+      "has_D1": 68
+    },
+    "em_lhb_buy_20260911.json": {
+      "sha256": "946698ef4f4d368fc58990c03983aba6e706c34364c9c3064249332e111092b7",
+      "bytes": 208449,
+      "declared_count": 340,
+      "pages": 1,
+      "rows": 340,
+      "has_D1": null
+    },
+    "em_lhb_sell_20260911.json": {
+      "sha256": "157a65cbb9c323393810805f510d9e2086a02ceffd4d7259f73f1ea4df4119c6",
+      "bytes": 207184,
+      "declared_count": 340,
+      "pages": 1,
+      "rows": 340,
+      "has_D1": null
+    },
+    "em_lhb_details_20260914.json": {
+      "sha256": "787426d6384677a8f89580b6aa890be01f953d45d8d855c68de87950bf1a641b",
+      "bytes": 90560,
+      "declared_count": 84,
+      "pages": 1,
+      "rows": 84,
+      "has_D1": 84
+    },
+    "em_lhb_buy_20260914.json": {
+      "sha256": "3e03743903322e6a4b7bcb72d4cf86a0b9afbfd79c1ab69cd7c2fad3e0422fb4",
+      "bytes": 257468,
+      "declared_count": 420,
+      "pages": 1,
+      "rows": 420,
+      "has_D1": null
+    },
+    "em_lhb_sell_20260914.json": {
+      "sha256": "5028c1e9ad19bf1a736f5006753b3a12bd99d4f87ad024f1b781f524c7e2a160",
+      "bytes": 257425,
+      "declared_count": 420,
+      "pages": 1,
+      "rows": 420,
+      "has_D1": null
+    },
+    "em_lhb_details_20260915.json": {
+      "sha256": "0e23526c36df59061338a2d1d1378075348dab5e073e9ca7ed86928be09849e9",
+      "bytes": 78523,
+      "declared_count": 73,
+      "pages": 1,
+      "rows": 73,
+      "has_D1": 73
+    },
+    "em_lhb_buy_20260915.json": {
+      "sha256": "588342516e452c720893fadb63f91c75ea81f58eb73d003ffac56f31f9eead9b",
+      "bytes": 222706,
+      "declared_count": 365,
+      "pages": 1,
+      "rows": 365,
+      "has_D1": null
+    },
+    "em_lhb_sell_20260915.json": {
+      "sha256": "0ef8baae3892d52c6a4f395c192d2e6e7ea0e8e09f22fa732df98c873976fbfa",
+      "bytes": 221784,
+      "declared_count": 365,
+      "pages": 1,
+      "rows": 365,
+      "has_D1": null
+    },
+    "em_lhb_details_20260916.json": {
+      "sha256": "32dafacbae70f38bb6c324e4d7882057c2868631d6b84e524b594c1767361e15",
+      "bytes": 76017,
+      "declared_count": 71,
+      "pages": 1,
+      "rows": 71,
+      "has_D1": 71
+    },
+    "em_lhb_buy_20260916.json": {
+      "sha256": "16b8f6707be49fac27356b5c3a54d5e032d94362cc77f792cec661c756ebf6b6",
+      "bytes": 222971,
+      "declared_count": 365,
+      "pages": 1,
+      "rows": 365,
+      "has_D1": null
+    },
+    "em_lhb_sell_20260916.json": {
+      "sha256": "4c1da11c0588aaa4ed9a07d24fa91b0ecd355f1864d4a4ec2e1b3c3569c95833",
+      "bytes": 222884,
+      "declared_count": 365,
+      "pages": 1,
+      "rows": 365,
+      "has_D1": null
+    },
+    "em_lhb_details_20260917.json": {
+      "sha256": "8880c94f02b080962b53f74e4dd5d95ab7058c11255bf4cc64112e8c1a903032",
+      "bytes": 65642,
+      "declared_count": 62,
+      "pages": 1,
+      "rows": 62,
+      "has_D1": 0
+    },
+    "em_lhb_buy_20260917.json": {
+      "sha256": "0994f39c05910bb8b5ad5e5bf62895518c9563ae3b938025a31179c50204c1a4",
+      "bytes": 187457,
+      "declared_count": 310,
+      "pages": 1,
+      "rows": 310,
+      "has_D1": null
+    },
+    "em_lhb_sell_20260917.json": {
+      "sha256": "89213b881be442b60422030ed8c1e396dc4763557a3bc1b187f994a8d7f5126e",
+      "bytes": 186045,
+      "declared_count": 310,
+      "pages": 1,
+      "rows": 310,
+      "has_D1": null
+    }
+  }
+}

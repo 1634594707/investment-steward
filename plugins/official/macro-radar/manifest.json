@@ -1,0 +1,43 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.macro-radar",
+  "release_version": "0.1.0",
+  "display_name": "宏观雷达",
+  "description": "聚合主要经济体公开宏观数据（就业/通胀/增长/货币），按透明规则输出四维状态定位；发言人信号驱动权重调节，AI 只提议、用户拍板，weight_version 版本链保证历史可复算。",
+  "plugin_type": "evidence_app",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_public_evidence",
+    "run_analysis",
+    "submit_evidence"
+  ],
+  "ui_slots": [
+    {
+      "slot": "app.macro",
+      "level": "L3"
+    },
+    {
+      "slot": "research.board",
+      "level": "L2"
+    }
+  ],
+  "mount": "own_page",
+  "schema_versions": {
+    "Evidence": "1.0"
+  },
+  "entrypoint": "macro.radar",
+  "artifact_sha256": "58b05a75614ac6807083a008b1dcbdf65338e8b84aaef90830662b17a085da5d",
+  "signature": "JkTNT16sXnXlZKQiT5DPI9zl8DR8cGIWCTxMJNWWhl2I7gt8ywqtGfNlhgc/sgZ2Bw0mrwNGQ938n6wG+EUcBg==",
+  "network_allowlist": [
+    "api.stlouisfed.org",
+    "api.worldbank.org",
+    "data.stats.gov.cn"
+  ],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

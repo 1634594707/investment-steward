@@ -1,0 +1,243 @@
+/* —— 战法雷达（official.stock-tactics）—— */
+.tactics-page .tactics-layout { display: flex; flex-direction: column; gap: calc(var(--space-6) * var(--density-scale)); }
+
+.tactics-manual {
+  display: block; width: 100%; max-width: 560px; margin-top: calc(var(--space-2) * var(--density-scale));
+  background: var(--white-a02); border: 1px solid var(--line); border-radius: var(--radius-2);
+  color: inherit; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); font: inherit;
+}
+
+.tactics-watch-form { display: flex; gap: calc(var(--space-2) * var(--density-scale)); flex-wrap: wrap; margin: calc(var(--space-2) * var(--density-scale)) 0; }
+.tactics-watch-form input {
+  flex: 1; min-width: 120px;
+  background: var(--white-a02); border: 1px solid var(--line); border-radius: var(--radius-2);
+  color: inherit; padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); font: inherit;
+}
+
+.tactics-scan-result table tr.hit td { background: var(--white-a03); }
+.tactics-scan-result td small { display: block; color: var(--faint); font-size: var(--text-1); }
+
+.tactic-badges { display: inline-flex; gap: calc(var(--space-1) * var(--density-scale)); flex-wrap: wrap; }
+.tactic-badge {
+  display: inline-block; padding: 2px calc(var(--space-2) * var(--density-scale)); border-radius: var(--radius-pill);
+  font-size: var(--text-1); border: 1px solid var(--line); color: var(--faint);
+}
+.tactic-badge.bullish { border-color: color-mix(in srgb, var(--mkt-up) 45%, transparent); color: var(--mkt-up); }
+.tactic-badge.bearish { border-color: color-mix(in srgb, var(--mkt-down) 45%, transparent); color: var(--mkt-down); }
+
+.tactic-chips { display: flex; gap: calc(var(--space-1) * var(--density-scale)); flex-wrap: wrap; margin: calc(var(--space-2) * var(--density-scale)) 0; }
+
+.tactics-chart { height: 380px; margin: calc(var(--space-3) * var(--density-scale)) 0 calc(var(--space-1) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); overflow: hidden; }
+
+.tactics-signal-list time { color: var(--faint); font-size: var(--text-2); }
+
+.tactics-note-list { list-style: none; margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--space-2) * var(--density-scale)); }
+.tactics-note-list li {
+  display: flex; gap: calc(var(--space-2) * var(--density-scale)); align-items: baseline;
+  border: 1px solid var(--line); border-radius: var(--radius-2); padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  background: var(--white-a02);
+}
+.tactics-note-list time { flex-shrink: 0; color: var(--faint); font-size: var(--text-1); }
+.tactics-note-list span { font-size: var(--text-3); }
+
+/* —— v24 质量分：分数徽标 + 分项明细（口径可见、可复算） —— */
+.tactics-scan-result .sort-basis,
+.score-panel .sort-basis {
+  margin: calc(var(--space-1) * var(--density-scale)) 0 calc(var(--space-2) * var(--density-scale)); padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  border-left: 2px solid var(--line);
+  background: var(--white-a02); border-radius: 0 var(--radius-2) var(--radius-2) 0;
+  color: var(--muted); font-size: var(--text-2); line-height: 1.6;
+}
+.tactics-scan-result .sort-basis b, .score-panel .sort-basis b { color: inherit; }
+
+.tactic-score {
+  display: inline-flex; align-items: baseline; gap: calc(var(--space-1) * var(--density-scale));
+  margin-left: calc(var(--space-2) * var(--density-scale)); padding: 1px calc(var(--space-2) * var(--density-scale)); border-radius: var(--radius-pill);
+  font-size: var(--text-2); font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line); background: var(--white-a02); color: var(--faint);
+  cursor: help;
+}
+.tactic-score i { font-style: normal; font-size: var(--text-1); opacity: 0.75; }
+/* K01（2026-09-18 排版与研报呈现一致性路线图）：涨跌色走 --mkt-up/--mkt-down token，
+   随设置页「红涨绿跌 ↔ mint/amber」切换同步变色；语义 bullish=涨=up、bearish=跌=down 不反。 */
+.tactic-score.bullish { border-color: color-mix(in srgb, var(--mkt-up) 45%, transparent); color: var(--mkt-up); }
+.tactic-score.bearish { border-color: color-mix(in srgb, var(--mkt-down) 45%, transparent); color: var(--mkt-down); }
+.tactic-score.conflict { border-color: color-mix(in srgb, var(--amber) 50%, transparent); color: var(--amber); }
+
+.insufficient-note { display: block; margin-top: calc(var(--space-1) * var(--density-scale)); color: var(--warn, #d9a05b); font-size: var(--text-1); }
+
+.score-panel {
+  margin: calc(var(--space-2) * var(--density-scale)) 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--white-a02);
+}
+.score-panel-head { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--space-1) * var(--density-scale)); }
+
+.score-detail { margin-top: calc(var(--space-1) * var(--density-scale)); }
+.score-detail > summary {
+  cursor: pointer; list-style: none; font-size: var(--text-2); color: var(--muted);
+  display: inline-block; padding: 2px calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-pill);
+}
+.score-detail > summary::-webkit-details-marker { display: none; }
+.score-detail[open] > summary { color: inherit; }
+
+.score-detail-table {
+  width: 100%; margin-top: calc(var(--space-2) * var(--density-scale)); border-collapse: collapse; font-size: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.score-detail-table th, .score-detail-table td {
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap;
+}
+.score-detail-table th { color: var(--faint); font-weight: 500; }
+.score-detail-table td.bullish { color: var(--mkt-up); }
+.score-detail-table td.bearish { color: var(--mkt-down); }
+.score-detail-table td time { color: var(--faint); }
+
+/* 扫描结果表格新增「分项」列后整体横向可滚动，窄窗口不挤压 */
+.tactics-scan-result { overflow-x: auto; }
+.tactics-scan-result .kv-table { min-width: 640px; }
+
+/* —— v26 同族合并：命中属实但不再重复计分（必须让用户看得见，不能默默丢掉）—— */
+.tactic-badge.merged { opacity: 0.55; border-style: dashed; }
+.tactic-badge .merged-dot {
+  display: inline-block; width: 4px; height: 4px; margin-left: calc(var(--space-1) * var(--density-scale));
+  border-radius: 50%; background: currentColor; vertical-align: middle;
+}
+.score-detail-table tr.family-merged td { opacity: 0.6; }
+.score-detail-table .family-tag { margin-left: calc(var(--space-1) * var(--density-scale)); color: var(--faint); font-size: var(--text-1); }
+.merged-note {
+  display: inline-block; margin-left: calc(var(--space-1) * var(--density-scale)); padding: 0 calc(var(--space-1) * var(--density-scale));
+  border: 1px dashed var(--line); border-radius: var(--radius-pill);
+  color: var(--faint); font-size: 9px; /* K02 豁免：合并标记微标签 */ cursor: help;
+}
+
+/* —— v26 行业板块扫描 —— */
+.tactics-sector-result { display: flex; flex-direction: column; gap: calc(var(--space-4) * var(--density-scale)); }
+.sector-block {
+  border: 1px solid var(--line); border-radius: var(--radius-2); overflow: hidden;
+}
+.sector-block.failed { border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.sector-block-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--space-2) * var(--density-scale));
+  padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); background: var(--white-a02); border-bottom: 1px solid var(--line);
+  font-size: var(--text-3);
+}
+.sector-block-head b { font-size: var(--text-4); }
+/* 涨跌色走 mkt token（K01），与徽章/质量分/图表同源于 --mkt-up/--mkt-down */
+.sector-change { font-size: var(--text-2); font-variant-numeric: tabular-nums; }
+.sector-change.up { color: var(--mkt-up); }
+.sector-change.down { color: var(--mkt-down); }
+.sector-resonance {
+  padding: 1px calc(var(--space-2) * var(--density-scale)); border-radius: var(--radius-pill); font-size: var(--text-1);
+  border: 1px solid var(--line); background: var(--white-a02); cursor: help;
+}
+.sector-resonance.bullish { border-color: color-mix(in srgb, var(--mkt-up) 45%, transparent); color: var(--mkt-up); }
+.sector-resonance.bearish { border-color: color-mix(in srgb, var(--mkt-down) 45%, transparent); color: var(--mkt-down); }
+
+.sector-pick { margin-top: calc(var(--space-2) * var(--density-scale)); }
+.sector-pick .price-input { max-width: 220px; }
+.sector-pick-grid {
+  display: flex; flex-wrap: wrap; gap: calc(var(--space-1) * var(--density-scale)); margin-top: calc(var(--space-2) * var(--density-scale));
+  max-height: 220px; overflow-y: auto;
+}
+.sector-pick-grid .tag-button i { font-style: normal; margin-left: calc(var(--space-1) * var(--density-scale)); font-size: var(--text-1); }
+.sector-pick-grid .tag-button i.up { color: var(--mkt-up); }
+.sector-pick-grid .tag-button i.down { color: var(--mkt-down); }
+
+.tag-remove {
+  margin-left: calc(var(--space-1) * var(--density-scale)); border: 0; background: transparent; color: inherit;
+  cursor: pointer; font-size: var(--text-3); line-height: 1; padding: 0 2px;
+}
+
+.sector-tag { display: block; color: var(--faint); font-size: var(--text-1); }
+
+/* —— v26 AI 复核（手动触发，规则分与 AI 分并列）—— */
+.soft-tag.warn { border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn); }
+
+.ai-review-panel { border-color: var(--ai-review-line); }
+.ai-review-panel-head { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--space-2) * var(--density-scale)); }
+.ai-review-panel-head h4 { margin: 0; }
+
+.ai-review-list { display: flex; flex-direction: column; gap: calc(var(--space-3) * var(--density-scale)); margin-top: calc(var(--space-2) * var(--density-scale)); }
+.ai-review-card {
+  padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2);
+  background: var(--white-a02);
+}
+.ai-review-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--space-2) * var(--density-scale)); font-size: var(--text-3);
+}
+.ai-review-head b { font-size: var(--text-4); }
+.ai-review-head small { color: var(--faint); font-size: var(--text-2); }
+.ai-review-head time { margin-left: auto; color: var(--faint); font-size: var(--text-1); }
+.ai-review-head .soft-tag i { font-style: normal; margin-left: calc(var(--space-1) * var(--density-scale)); font-variant-numeric: tabular-nums; }
+.ai-review-head .soft-tag i.up { color: var(--mkt-up); }
+.ai-review-head .soft-tag i.down { color: var(--mkt-down); }
+.ai-review-summary { margin: calc(var(--space-2) * var(--density-scale)) 0 calc(var(--space-1) * var(--density-scale)); font-size: var(--text-3); line-height: 1.6; }
+.ai-review-lists { display: flex; flex-wrap: wrap; gap: calc(var(--space-4) * var(--density-scale)); margin: calc(var(--space-2) * var(--density-scale)) 0; }
+.ai-review-lists > div { min-width: 160px; flex: 1; }
+.ai-review-list-label { color: var(--faint); font-size: var(--text-1); margin-bottom: calc(var(--space-1) * var(--density-scale)); }
+.ai-review-lists ul { margin: 0; padding-left: calc(var(--space-4) * var(--density-scale)); font-size: var(--text-2); line-height: 1.7; color: var(--muted); }
+
+/* —— v27 可信交付：排序口径公开 + 数据质量 + 最新信号 + 失效条件 ——
+   设计意图：「口径公开」不靠一段自我声明，而是做成可见、可切换、可展开的控件；
+   数据质量与分数并排，避免用户把「样本不足的 90 分」当成强信号。 */
+
+/* 展示排序切换：只改前端顺序，不改后端排名口径（每行仍标 rank-no） */
+.sort-switch {
+  display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--space-1) * var(--density-scale));
+  margin: 0 0 calc(var(--space-2) * var(--density-scale));
+}
+.sort-switch .filter-hint { flex-shrink: 0; }
+.sort-switch .tag-button { font-variant-numeric: tabular-nums; cursor: pointer; }
+
+/* 最近一条计分信号的日期/年龄 —— 回答「这个分数是不是老信号撑的」。
+   单独提亮到 --muted：它是判断分数的关键，不该和普通注释一样淡。 */
+.tactics-scan-result td .latest-signal {
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+
+/* 数据质量三态徽标（ok / thin / insufficient）——§五 颜色联动（2026-09-13）：
+   与分数分开着色；充足=青绿（确认语义）、偏薄=琥珀（待核验）、不足=灰蓝（无法判定，原因见悬浮/行内标注），
+   不复用行情红绿，避免与涨跌语义互代。 */
+.data-quality {
+  display: inline-flex; align-items: center;
+  margin-top: 3px; padding: 0 calc(var(--space-1) * var(--density-scale));
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  font-size: var(--text-1); line-height: 16px; cursor: help;
+}
+/* 扫描行内的 small 被 `.tactics-scan-result td small` 设成 block，这里拉回行内胶囊 */
+.tactics-scan-result td .data-quality { display: inline-flex; width: fit-content; }
+.data-quality.ok { border-color: color-mix(in srgb, var(--mint) 45%, transparent); color: var(--mint); }
+.data-quality.thin { border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn); }
+.data-quality.insufficient { border-color: color-mix(in srgb, var(--muted) 50%, transparent); color: var(--muted); }
+
+/* 失效条件是一整句自然语言，必须覆盖明细表的 nowrap，否则把表格撑爆 */
+.score-detail-table td.invalidation-cell {
+  white-space: normal; min-width: 190px; max-width: 300px;
+  color: var(--muted); line-height: 1.5;
+}
+.score-detail-table td.invalidation-cell .family-tag { display: block; margin-left: 0; }
+
+/* 明细表新增「触发价 / 失效条件」两列后整体加宽，窄窗口走横滚而不是挤压 */
+.score-detail-table { min-width: 760px; }
+
+/* —— v29 信号时间线：状态 / 权重 / 失效条件列 —— */
+.tactics-signal-timeline td { vertical-align: top; }
+.tactics-signal-timeline .signal-timeline-invalidation { max-width: 220px; color: var(--muted, #7b828b); font-size: var(--text-2); line-height: 1.5; }
+.signal-state-none { color: var(--faint, #565d66); }
+
+/* —— v28 信号状态机：状态标签在明细表内不换行挤压，悬浮标题已含判定原因 —— */
+.score-detail-table td.signal-state-cell { white-space: nowrap; }
+/* 榜单行内的状态/门槛标签统一为小块，避免与日期、质量标签挤成一行溢出 */
+.tactics-scan-result td .soft-tag { display: inline-flex; width: fit-content; margin-top: 2px; }
+
+/* —— K06（2026-09-18 排版与研报呈现一致性路线图）：战法雷达此前 0 条 @media。
+   窄档（<1024，与 shell narrow / body[data-width-tier=xs|sm] 同阈值）让宽表（质量分明细 min-width:760、
+   扫描结果 kv-table min-width:640）走横向滚动，页头/信号区可换行，避免撑破父容器。 —— */
+@media (max-width: 1023px) {
+  .score-detail { overflow-x: auto; }
+  .tactics-header, .score-panel-head { flex-wrap: wrap; }
+}
+body[data-width-tier="xs"] .score-detail,
+body[data-width-tier="sm"] .score-detail { overflow-x: auto; }
+body[data-width-tier="xs"] .score-panel-head,
+body[data-width-tier="sm"] .score-panel-head { flex-wrap: wrap; }

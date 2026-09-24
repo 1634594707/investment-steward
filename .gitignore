@@ -1,0 +1,81 @@
+node_modules/
+dist/
+build/
+.venv/
+.uv-cache/
+.runtime-test/
+.runtime-local/
+.runtime-acceptance/
+.runtime-acceptance-f/
+.runtime-*/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.tsbuildinfo
+*.py[cod]
+*.sqlite3
+*.sqlite3-*
+.env
+.env.*
+!.env.example
+coverage/
+artifacts/
+reports/
+.local-data/
+.tmp_*.json
+scripts/_inline.tmp.js
+.tmp-pytest*
+.pytest-tmp*
+.tmp-verify-data/
+_tmp_*
+.cleanup-trash/
+dist-desktop/
+dist-desktop2/
+apps/desktop-host/build*/
+apps/desktop-host/dist*/
+
+# 插件签名私钥：仅公钥入库，私钥本地生成不得提交
+apps/core-api/keys/*.pem
+!apps/core-api/keys/*.pub.pem
+
+# 移动端签名密钥与口令：密钥本体、口令配置都不得入库
+*.keystore
+*.jks
+*.p12
+*.pfx
+mobile/.env.local
+
+# WorkBuddy：笔记/临时产物不入库，仅放行 teamai 注入的 hooks
+# （teamai single-repo 模式靠它让队友 clone 后自动引导）
+.workbuddy/*
+!.workbuddy/settings.json
+
+# 未选用的 AI 工具目录（本机安装产物）
+.codebuddy/
+.claude/
+.cursor/
+
+# AI 工具 skills 目录 = teamai pull 分发的本地副本，源头在 .teamai/skills/
+.codex/skills/
+
+# 运行日志
+*.log
+scripts/relay_bootstrap_token.txt
+scripts/relay-app.tar.gz
+
+# 会话运行时临时目录（任意层级）
+**/.runtime/
+# 桌面端 PyInstaller 构建产物（tools/ 下同理，只留 *.spec / hooks / sidecar_entry.py）
+apps/desktop-host/tools/build*/
+apps/desktop-host/tools/dist/
+
+#  fixtures 重命名期的就地备份：内容已在 youzi/ 下入库，不再重复提交
+apps/core-api/tests/fixtures/*.bak-*/
+
+# 内部过程文档（任务路线图/设计方案/实施记录/证据归档）：仅保留本地，不入库
+docs/*.md
+docs/evidence/
+
+# 本地工作目录
+.recovery-*/
+.workbuddy-ai/

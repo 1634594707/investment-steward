@@ -1,0 +1,11 @@
+{
+  "name": "@investment-steward/ui-card-schemas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "src/index.ts",
+  "exports": {".": {"types": "./src/index.ts", "import": "./src/index.ts"}},
+  "scripts": {"typecheck": "tsc -p tsconfig.json"},
+  "dependencies": {"@investment-steward/domain-contracts": "workspace:*"},
+  "devDependencies": {"typescript": "^5.7.3"}
+}

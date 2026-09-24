@@ -1,0 +1,26 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.golden-evidence",
+  "release_version": "0.1.0",
+  "display_name": "证据样例提供器",
+  "description": "用于契约测试的结构化证据输出插件。",
+  "plugin_type": "evidence_provider",
+  "license": "internal-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "submit_evidence"
+  ],
+  "schema_versions": {
+    "Evidence": "1.0"
+  },
+  "entrypoint": "golden.evidence",
+  "artifact_sha256": "73f86bb51c3b2710b743e7d4885535d0df971ba9c819395539e85d9f3d3a1816",
+  "signature": "xsMq6IOcFT0B9BxvraJmpX1rOdAyfN2Vdl6s5tDYzr/VX7TTjK8imPY2Xnkgf8u/TZjhgrQiohSj2UJ48yocCA==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

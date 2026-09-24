@@ -1,0 +1,24 @@
+{
+  "name": "investment-steward",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  },
+  "engines": {
+    "node": ">=20.19 <25"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @investment-steward/web-shell dev",
+    "start:local": "powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1",
+    "build:web": "pnpm --filter @investment-steward/web-shell build",
+    "check:bridge": "node scripts/check-bridge-coverage.mjs",
+    "typecheck": "pnpm -r typecheck",
+    "test:contracts": "pnpm --filter @investment-steward/domain-contracts test",
+    "dev:desktop": "pnpm --filter @investment-steward/desktop-host dev",
+    "core:test": "uv run --directory apps/core-api pytest",
+    "core:lint": "uv run --directory apps/core-api ruff check src tests",
+    "core:format-check": "uv run --directory apps/core-api ruff format --check src tests"
+  }
+}

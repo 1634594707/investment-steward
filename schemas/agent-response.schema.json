@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "ActionMode": {
+      "enum": [
+        "observe",
+        "research",
+        "review_plan",
+        "no_action"
+      ],
+      "title": "ActionMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "response_id": {
+      "format": "uuid",
+      "title": "Response Id",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "user_question": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "User Question",
+      "type": "string"
+    },
+    "context_snapshot_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Context Snapshot Refs",
+      "type": "array"
+    },
+    "summary": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "reasoning_outline": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasoning Outline",
+      "type": "array"
+    },
+    "confidence_description": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Confidence Description",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "supporting_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Supporting Refs",
+      "type": "array"
+    },
+    "contradicting_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Contradicting Refs",
+      "type": "array"
+    },
+    "missing_information": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Information",
+      "type": "array"
+    },
+    "freshness_warning": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Freshness Warning",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "action_mode": {
+      "$ref": "#/$defs/ActionMode"
+    },
+    "supported_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Supported Actions",
+      "type": "array"
+    },
+    "learning_link": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Learning Link"
+    },
+    "suggested_activity": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Suggested Activity"
+    },
+    "user_confirmation_required": {
+      "default": false,
+      "title": "User Confirmation Required",
+      "type": "boolean"
+    },
+    "proposed_changes": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Proposed Changes"
+    },
+    "model_provider": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Provider"
+    },
+    "model_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Name"
+    },
+    "prompt_policy_version": {
+      "default": "1.0",
+      "title": "Prompt Policy Version",
+      "type": "string"
+    },
+    "plugin_runs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Plugin Runs",
+      "type": "array"
+    },
+    "tool_calls": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Calls",
+      "type": "array"
+    },
+    "audit_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Audit Refs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "response_id",
+    "run_id",
+    "user_id",
+    "user_question",
+    "summary",
+    "confidence_description",
+    "action_mode"
+  ],
+  "title": "AgentResponse",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/agent-response/1.0"
+}

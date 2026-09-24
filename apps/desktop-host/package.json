@@ -1,0 +1,98 @@
+{
+  "name": "@investment-steward/desktop-host",
+  "packageManager": "pnpm@10.32.1",
+  "version": "0.1.8",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build:icon": "../../.venv/Scripts/python.exe ../../scripts/build_desktop_icon.py",
+    "dev": "electron .",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "build:backend": "cd tools && python -m PyInstaller --noconfirm steward-backend.spec",
+    "dist:win": "node ../../scripts/check-bridge-coverage.mjs && tsc -p tsconfig.json && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.investmentsteward.app",
+    "productName": "Investment Steward",
+    "copyright": "Copyright © 2026 Investment Steward",
+    "directories": {
+      "output": "../../dist-desktop2"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "asar": true,
+    "beforePack": "tools/hooks/beforePack.cjs",
+    "afterPack": "tools/hooks/afterPack.cjs",
+    "extraResources": [
+      {
+        "from": "resources/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "tools/dist/steward-backend.exe",
+        "to": "backend/steward-backend.exe"
+      },
+      {
+        "from": "../web-shell/dist",
+        "to": "web"
+      },
+      {
+        "from": "../../plugins",
+        "to": "plugins"
+      },
+      {
+        "from": "../core-api/keys/steward-plugin-publishing.pub.pem",
+        "to": "keys/steward-plugin-publishing.pub.pem"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Investment Steward"
+    },
+    "portable": {
+      "artifactName": "Investment-Steward-${version}-portable.${ext}"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "publish": {
+      "provider": "github",
+      "owner": "1634594707",
+      "repo": "investment-steward"
+    }
+  },
+  "dependencies": {
+    "@investment-steward/host-bridge": "workspace:*",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.7.3"
+  },
+  "description": "Investment Steward desktop host (local-first AI investment steward)",
+  "author": "aplicity"
+}

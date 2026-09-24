@@ -1,0 +1,219 @@
+{
+  "_meta": {
+    "task": "Q01 固定回归样本（2026-09-19 研报与追问质量提升任务路线图）",
+    "origin": "样本取自 2026-09-19 18:10 生成的《研报-002468-申通快递》与其 18:18 追问附录；此处只保留结构化字段与关键输出片段，行情/财务数字为**该次快照的历史值**，不是实时行情，测试不得据此断言当前价格。",
+    "snapshot_generated_at": "2026-09-19T18:10:21+08:00",
+    "followup_created_at": "2026-09-19T18:18:44+08:00",
+    "source_boundary": "来源为数据商接口二次分发（S1/S4/S5 B 级、S2/S5 C 级），无 A 级一手公告原文；测试断言只围绕「用户是否会被误导」，不围绕数字本身正确性。",
+    "model": "deepseek-v4-pro-ga-260813",
+    "prompt_version_report": "2.8",
+    "prompt_version_followup": "1.1"
+  },
+  "report": {
+    "kind": "stock",
+    "symbol": "002468",
+    "subject": "样本快递股份",
+    "title": "样本标的：盈利高增长与PE低分位共振，但PB偏高与技术信号待确认构成短线矛盾",
+    "report_revision": 1,
+    "data_as_of": "2026-09-19",
+    "latest_price": 14.9,
+    "executive_summary": "方向偏多需验证盈利可持续性，技术信号未确认。",
+    "conclusion": {
+      "statement": "总体倾向偏多但需确认：盈利高增长与强现金流构成支撑，技术面转强但未确认，估值分化。",
+      "direction": "偏多",
+      "core_conflict": "市场对短期盈利改善的持续性仍有分歧",
+      "confidence": "medium"
+    },
+    "claims": [
+      {"claim_id": "C1", "text": "2026年上半年营收与归母净利润同比大幅改善，TTM经营现金流对归母净利润覆盖倍数达2.63，盈利质量较好。", "sources": ["S4"], "requires": ["revenue", "net_income", "cash_flow"], "importance": "high", "support": "full", "evidence_quality": "B"},
+      {"claim_id": "C2", "text": "估值呈现PE/PS历史低分位、低于物流同业中位，但PB处于中高分位、高于同业中位，正常化盈利未验证前估值结论为无数据。", "sources": ["S5"], "requires": ["pe", "pb", "ps"], "importance": "high", "support": "partial", "evidence_quality": "C"},
+      {"claim_id": "C3", "text": "短期技术面出现均线多头排列等偏多信号，但均为新触发或待确认，需后续放量站稳确认。", "sources": ["S1"], "requires": ["indicator", "trend"], "importance": "high", "support": "full", "evidence_quality": "B"},
+      {"claim_id": "C4", "text": "8月快递服务业务收入同比增长21.95%，高频经营数据对基本面形成短期支撑。", "sources": ["S2"], "requires": ["news_event"], "importance": "low", "support": "partial", "evidence_quality": "C"},
+      {"claim_id": "C5", "text": "周线、月线现价位于20周均线和20月均线上方，中期趋势有支撑但未脱离震荡区中下部。", "sources": ["S1"], "requires": ["trend", "price_level"], "importance": "low", "support": "full", "evidence_quality": "B"}
+    ],
+    "claim_findings": {
+      "total": 5,
+      "core_conclusion_state": "partial",
+      "core_support_counts": {"supported": 2, "total": 3},
+      "core_support_note": "核心口径：importance=high 的判断全数支撑才算「有支撑」；未标 importance 时全部判断视为核心。",
+      "claims": [
+        {"claim_id": "C1", "text": "2026年上半年营收与归母净利润同比大幅改善，TTM经营现金流对归母净利润覆盖倍数达2.63，盈利质量较好。", "sources": ["S4"], "importance": "high", "support": "full", "evidence_quality": "B"},
+        {"claim_id": "C2", "text": "估值呈现PE/PS历史低分位、低于物流同业中位，但PB处于中高分位、高于同业中位，正常化盈利未验证前估值结论为无数据。", "sources": ["S5"], "importance": "high", "support": "partial", "evidence_quality": "C"},
+        {"claim_id": "C3", "text": "短期技术面出现均线多头排列等偏多信号，但均为新触发或待确认，需后续放量站稳确认。", "sources": ["S1"], "importance": "high", "support": "full", "evidence_quality": "B"},
+        {"claim_id": "C4", "text": "8月快递服务业务收入同比增长21.95%，高频经营数据对基本面形成短期支撑。", "sources": ["S2"], "importance": "low", "support": "partial", "evidence_quality": "C"},
+        {"claim_id": "C5", "text": "周线、月线现价位于20周均线和20月均线上方，中期趋势有支撑但未脱离震荡区中下部。", "sources": ["S1"], "importance": "low", "support": "full", "evidence_quality": "B"}
+      ]
+    },
+    "valuation": {
+      "pe_ttm": "11.70",
+      "pe_percentile": "近1250个交易日 PE(TTM) 1.7%分位（2021-07-27起）",
+      "peer_position": "物流同业中位 PE(TTM) 12.22（7只可比），本股第4/7；PB中位1.52（20只可比），本股第13/20",
+      "verdict": "无数据",
+      "verdict_raw": "偏便宜",
+      "verdict_note": "模型给出的估值结论「偏便宜」缺少正常化盈利支撑，按「无法判断」口径归一为「无数据」。",
+      "basis": "正常化盈利未拆分一次性损益，S5虽给出PE/PS低分位，但不能排除利润处于阶段性高点",
+      "normalized_earnings": {"value": null, "basis": "", "confidence": ""},
+      "valuation_cases": [],
+      "margin_of_safety": null,
+      "valuation_status": "undetermined",
+      "valuation_status_raw": "undervalued",
+      "valuation_status_note": "模型声称「低估」但未给出正常化盈利值或依据。",
+      "limitations": ["正常化盈利未剔除一次性损益/周期因素", "S5同口径不含股息率", "同业PE仅7只可比，亏损股已剔除"]
+    },
+    "pillar_verdicts": {"fundamental": "偏强", "valuation": "无法判断", "technical": "待确认"},
+    "horizon": ["短线", "3~12个月"],
+    "scenarios": [
+      {"name": "乐观", "trigger": "放量站稳战法触发价15.21且两个交易日收盘不破最近抬高低点14.07", "invalidates": "收盘跌破MA20（14.30）或最近抬高低点14.07", "horizon": "未来5-10个交易日", "probability": null, "probability_level": "中", "probability_basis": "none", "expected_range": {"low": 15.21, "high": 18.95}, "range_status": "estimated", "range_status_label": "预估区间", "range_status_note": "", "range_basis": "", "source": "S1"},
+      {"name": "中性", "trigger": "维持14.30上方窄幅震荡，量能持平", "invalidates": "收盘跌破MA20（14.30）", "horizon": "未来10个交易日", "probability": null, "probability_level": "中", "probability_basis": "none", "expected_range": {"low": 14.3, "high": 15.21}, "range_status": "estimated", "range_status_label": "预估区间", "range_status_note": "", "range_basis": "技术位", "source": "S1"},
+      {"name": "悲观", "trigger": "收盘跌破最近抬高低点14.07且MA20走平或下拐", "invalidates": "重新放量站回MA20上方并站稳两个交易日", "horizon": "未来10个交易日", "probability": null, "probability_level": "低", "probability_basis": "none", "expected_range": {"low": 13.76, "high": 14.07}, "range_status": "estimated", "range_status_label": "预估区间", "range_status_note": "", "range_basis": "技术位", "source": "S1"}
+    ],
+    "levels": {
+      "support": [
+        {"price": 14.3, "basis": "日线MA20（最新指标）"},
+        {"price": 14.07, "basis": "最近一个抬高的波段低点（近10日低点）"},
+        {"price": 13.76, "basis": "前10日低点"}
+      ],
+      "resistance": [
+        {"price": 15.21, "basis": "2026-09-17/18战法触发价区域"},
+        {"price": 18.95, "basis": "近250日收盘高点"}
+      ]
+    },
+    "watchpoints": [
+      {"signal": "量能是否显著放大（近5日均量突破近20日均量）配合价格站上15.21", "verify_by": "2026-09-21 收盘后", "expected_if_true": "若放量越过触发价，短线看涨结构加强", "due_on": "2026-09-21", "status": "pending_review"},
+      {"signal": "月度经营数据能否延续20%以上收入增速", "verify_by": "下一次月度经营简报披露后", "expected_if_true": "基本面偏强判断得到强化", "due_on": "", "status": "pending_review"}
+    ],
+    "citations": ["S1", "S2", "S3", "S4", "S5"],
+    "sources": {
+      "S1": "行情快照（K线/指标/战法）：现价14.90，MA5 14.67｜MA10 14.53｜MA20 14.30，近250日收盘区间12.48-18.95",
+      "S2": "近期新闻（东方财富）：8月快递服务业务收入54.07亿元，同比增长21.95%",
+      "S3": "近期公告（东方财富，标题口径）：回购进展、终止可转债等",
+      "S4": "财务摘要（东财 F10）：2026H1 营收324.91亿元、归母净利10.35亿元；TTM经营现金流51.23亿元",
+      "S5": "估值（东方财富 datacenter）：PE(TTM)11.70、PB(MRQ)1.94、PS(TTM)0.36、PEG0.31"
+    },
+    "source_asof": {"S1": "2026-09-19", "S2": "2026-09-18", "S3": "2026-09-18", "S4": "2026-06-30", "S5": "2026-09-19"},
+    "source_meta": {
+      "S1": {"provider": "腾讯行情", "retrieved_at": "2026-09-19T18:09:40+08:00"},
+      "S2": {"provider": "东方财富", "retrieved_at": "2026-09-19T18:09:41+08:00"},
+      "S3": {"provider": "东方财富", "retrieved_at": "2026-09-19T18:09:42+08:00"},
+      "S4": {"provider": "东方财富 F10", "retrieved_at": "2026-09-19T18:09:43+08:00"},
+      "S5": {"provider": "东方财富 datacenter（RPT_VALUEANALYSIS_DET）", "retrieved_at": "2026-09-19T18:09:44+08:00"}
+    },
+    "evidence_quality": {
+      "tiers": {"A": [], "B": ["S1", "S3", "S4"], "C": ["S2", "S5"], "D": []},
+      "core_support_qualities": ["A", "B"]
+    },
+    "limitations": [
+      "正常化盈利未拆分一次性损益，无法验证利润可持续性",
+      "技术信号多为待确认/new，尚未达到确认标准",
+      "新闻中行业资金净流入未列明是否含该股，不做个股资金归因"
+    ]
+  },
+  "followup": {
+    "question": "现在可以买入吗，是不是双十一的时候股会涨？",
+    "observed_1_1_output": {
+      "_note": "1.1 版实际输出片段（缺陷留证）：全部判断都「无法判断」并占满首屏，验证点凭空给出 2026-11-30。",
+      "conclusion_change": "unchanged",
+      "affected_claims": [
+        {"claim_id": "C1", "effect": "cannot_judge", "reason": "无新信息验证盈利持续性。"},
+        {"claim_id": "C2", "effect": "cannot_judge", "reason": "未提供新估值或净资产证据。"},
+        {"claim_id": "C3", "effect": "cannot_judge", "reason": "无新增量价确认。"},
+        {"claim_id": "C4", "effect": "cannot_judge", "reason": "未提供8月后经营数据。"},
+        {"claim_id": "C5", "effect": "cannot_judge", "reason": "无新周/月线变化。"}
+      ],
+      "new_watchpoints": [
+        {"signal": "双十一大促期间快递业务量及单票收入是否出现量价齐升", "verify_by": "2026-11-30", "expected_if_true": "若收入增速显著高于20%且单票收入未大幅下滑，将强化偏多方向。"}
+      ]
+    },
+    "samples_1_2": {
+      "no_new_material": {
+        "direct_answer": "以现有证据不能确认「现在可以买入」：技术确认条件未满足，估值合理价值未评估。",
+        "answerability": "partially_answered",
+        "key_conditions": ["放量站稳 15.21（行情截至 2026-09-19）且两交易日不破 14.07"],
+        "evidence_gaps": ["缺双十一历史区间的季节性统计"],
+        "affected_claims": [
+          {"claim_id": "C1", "effect": "cannot_judge", "reason": "无新增证据。"},
+          {"claim_id": "C2", "effect": "cannot_judge", "reason": "无新增证据。"},
+          {"claim_id": "C3", "effect": "cannot_judge", "reason": "无新增据。"},
+          {"claim_id": "C4", "effect": "cannot_judge", "reason": "无新增证据。"},
+          {"claim_id": "C5", "effect": "cannot_judge", "reason": "无新增证据。"}
+        ],
+        "conclusion_change": "unchanged",
+        "scenario_changes": [],
+        "new_watchpoints": [
+          {"signal": "双十一期间业务量与单票收入是否量价齐升", "verify_by": "2026-11-30", "date_basis": "", "event_anchor": "", "expected_if_true": "业务量上升且单票收入上升时基本面支撑增强"}
+        ],
+        "price_refs": [{"level": 14.3, "role": "ma", "as_of": "", "window": "未来5-10个交易日"}],
+        "answer": "原报告方向偏多，但技术信号未确认，PB 中高分位与正常化盈利未验证构成核心矛盾。",
+        "limitations": ["本轮无用户补充材料，未获取新数据"]
+      },
+      "contradictory_evidence": {
+        "direct_answer": "这条新材料削弱了盈利可持续性判断，买点条件比原报告更严格。",
+        "answerability": "answered",
+        "key_conditions": ["以补充材料属实为前提"],
+        "evidence_gaps": ["缺一手公告原文核验"],
+        "affected_claims": [
+          {"claim_id": "C1", "effect": "weakens", "reason": "单票收入同比下降，现金流覆盖来自应收增加。"},
+          {"claim_id": "C2", "effect": "cannot_judge", "reason": "无估值新证据。"}
+        ],
+        "conclusion_change": "weakened",
+        "scenario_changes": [{"name": "乐观", "change": "触发概率下调"}],
+        "new_watchpoints": [
+          {"signal": "月度经营简报是否确认单票收入降幅收窄", "verify_by": "2026-10-20", "date_basis": "disclosed_schedule", "event_anchor": "10 月经营简报披露", "expected_if_true": "降幅收窄则削弱结论被修复"}
+        ],
+        "price_refs": [{"level": 14.07, "role": "support", "as_of": "2026-09-19", "window": "至下一份月度经营数据披露"}],
+        "answer": "补充材料若属实，则「量价齐升」不成立（实为量增价降），盈利质量判断需下修。",
+        "limitations": ["材料未独立验证"]
+      },
+      "reinforcing_evidence": {
+        "direct_answer": "新材料支持原判断，但仍不构成买入确认：技术条件未复核到最新行情。",
+        "answerability": "partially_answered",
+        "key_conditions": ["补充材料属实且行情刷新后重新验证"],
+        "evidence_gaps": ["缺最新一日的量价确认"],
+        "affected_claims": [
+          {"claim_id": "C1", "effect": "supports", "reason": "已披露的业绩预告确认利润改善。"},
+          {"claim_id": "C3", "effect": "irrelevant", "reason": "与基本面材料无直接路径。"}
+        ],
+        "conclusion_change": "strengthened",
+        "scenario_changes": [],
+        "new_watchpoints": [
+          {"signal": "刷新行情后价格是否仍在 MA20 上方", "verify_by": "2026-09-25", "date_basis": "trading_calendar", "event_anchor": "", "expected_if_true": "站稳则技术确认成立"}
+        ],
+        "price_refs": [{"level": 14.3, "role": "ma", "as_of": "2026-09-19", "window": "未来 2 个交易日"}],
+        "answer": "业绩预告强化了基本面支撑，但价格条件需用刷新后的行情重新判定。",
+        "limitations": ["行情未刷新，技术条件沿用历史快照"]
+      },
+      "research_mode_no_supporting_claims": {
+        "direct_answer": "结论需修订。",
+        "answerability": "answered",
+        "affected_claims": [{"claim_id": "C1", "effect": "cannot_judge", "reason": "未落到具体判断。"}],
+        "conclusion_change": "strengthened",
+        "new_watchpoints": [],
+        "price_refs": [],
+        "answer": "模型声称增强但未列出受影响判断，与状态轴矛盾。",
+        "limitations": []
+      }
+    }
+  },
+  "kline_fixture": {
+    "_note": "合成日线序列（仅用于交易日历/季节性窗口算术复算）：2023-2026 年每月首交易日与月末附近的收盘，非真实行情。",
+    "rows": [
+      {"timestamp": "2023-09-01", "close": 10.0}, {"timestamp": "2023-09-04", "close": 10.2},
+      {"timestamp": "2023-10-09", "close": 10.5}, {"timestamp": "2023-10-31", "close": 10.1},
+      {"timestamp": "2023-11-01", "close": 10.3}, {"timestamp": "2023-11-13", "close": 11.2},
+      {"timestamp": "2023-11-14", "close": 11.6}, {"timestamp": "2023-11-30", "close": 11.0},
+      {"timestamp": "2023-12-01", "close": 10.8}, {"timestamp": "2023-12-29", "close": 11.4},
+      {"timestamp": "2024-09-02", "close": 11.5}, {"timestamp": "2024-09-30", "close": 12.0},
+      {"timestamp": "2024-10-08", "close": 12.4}, {"timestamp": "2024-10-31", "close": 13.1},
+      {"timestamp": "2024-11-01", "close": 13.4}, {"timestamp": "2024-11-11", "close": 14.2},
+      {"timestamp": "2024-11-15", "close": 13.6}, {"timestamp": "2024-11-29", "close": 13.9},
+      {"timestamp": "2024-12-02", "close": 13.5}, {"timestamp": "2024-12-31", "close": 14.0},
+      {"timestamp": "2025-09-01", "close": 13.2}, {"timestamp": "2025-09-30", "close": 13.8},
+      {"timestamp": "2025-10-09", "close": 14.0}, {"timestamp": "2025-10-31", "close": 14.4},
+      {"timestamp": "2025-11-03", "close": 14.6}, {"timestamp": "2025-11-11", "close": 15.2},
+      {"timestamp": "2025-11-17", "close": 14.8}, {"timestamp": "2025-11-28", "close": 15.0},
+      {"timestamp": "2025-12-01", "close": 14.7}, {"timestamp": "2025-12-31", "close": 15.1},
+      {"timestamp": "2026-09-01", "close": 14.1}, {"timestamp": "2026-09-17", "close": 14.6},
+      {"timestamp": "2026-09-18", "close": 14.9}, {"timestamp": "2026-09-19", "close": 14.9}
+    ]
+  }
+}

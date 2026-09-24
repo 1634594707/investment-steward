@@ -1,0 +1,34 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.cn-market-data",
+  "release_version": "0.1.0",
+  "display_name": "中国市场行情",
+  "description": "提供 A 股与 ETF 的 OHLCV/K 线、交易日历与数据时效信息。",
+  "plugin_type": "evidence_provider",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_market_data",
+    "submit_evidence"
+  ],
+  "ui_slots": [
+    {
+      "slot": "invest.market_view",
+      "level": "L3"
+    }
+  ],
+  "schema_versions": {
+    "OHLCV": "1.0",
+    "Evidence": "1.0"
+  },
+  "entrypoint": "market.candles",
+  "artifact_sha256": "2af47f8c308c5a8fcad42b29678eab8b46a9189e6b5fe14eca9314c6604058a6",
+  "signature": "poMNmRW9hR8+6mmEj5U8i2ZKA/aF8tQCt4VXQjVR3aq3SR5haJv5W5+32BarXwdAG7nE0qwAhajba0JZ/uKgCg==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

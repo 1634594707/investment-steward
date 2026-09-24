@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: investment-steward-relay
+Version: 0.1.0
+Summary: 轻量同步中转服务（路线图阶段 4）：设备登记 / 变更事件 / 加密中转包。服务器只见密文与元数据。
+Requires-Python: >=3.11
+Requires-Dist: fastapi<1,>=0.115
+Requires-Dist: uvicorn<1,>=0.30
+Requires-Dist: httpx<1,>=0.27

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f1112" />
+    <title>Investment Steward</title>
+    <style>
+      /* F2-5 启动壳：JS/字体/CSS 就绪前即有像素（壳先到、数据后到）。React 挂载后由 main.tsx 移除。 */
+      html, body { margin: 0; background: #0f1112; }
+      #boot-shell { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #94a09c; font: 500 12px/1.5 "Noto Sans SC", system-ui, sans-serif; }
+      #boot-shell .mark { display: flex; align-items: end; gap: 3px; padding: 6px; border: 1px solid rgba(185, 230, 202, .5); }
+      #boot-shell .mark i { width: 4px; background: #b9e6ca; display: block; }
+      #boot-shell .mark i:nth-child(1) { height: 9px; opacity: .6; }
+      #boot-shell .mark i:nth-child(2) { height: 14px; }
+      #boot-shell .mark i:nth-child(3) { height: 18px; opacity: .8; }
+      #boot-shell .bar { width: 132px; height: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+      #boot-shell .bar i { display: block; width: 40%; height: 100%; background: #b9e6ca; animation: boot-slide 1.1s ease-in-out infinite; }
+      @keyframes boot-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) { #boot-shell .bar i { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="boot-shell" role="status" aria-label="应用启动中">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>STEWARD · 投资管家</span>
+      <span class="bar" aria-hidden="true"><i></i></span>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

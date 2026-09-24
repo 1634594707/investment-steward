@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>研投管家</title>
+<style>
+:root{color-scheme:dark;--bg:#0B0F14;--panel:#0F151D;--panel2:#141C26;--line:#1D2734;--txt:#DDE5EF;--dim:#78859A;--accent:#2FBF8F;--accent-d:#1E7A5C;--up:#E5484D;--down:#46A758;--warn:#E8A20C;--blue:#5B9BD5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.55 -apple-system,"HarmonyOS Sans","MiSans",system-ui,sans-serif;padding-bottom:60px}
+header{position:sticky;top:0;background:rgba(11,15,20,.95);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+header h1{font-size:15px;font-weight:600;letter-spacing:.5px}
+#syncChip{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:5px}
+#syncChip i{width:6px;height:6px;border-radius:99px;background:var(--dim);display:inline-block}
+#syncChip.ok i{background:var(--accent)}
+main{padding:12px 12px 8px;max-width:640px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:9px}
+.sec{font-size:13px;font-weight:600;margin-bottom:4px}
+.meta{font-size:11px;color:var(--dim);margin-top:6px}
+.note{font-size:11.5px;color:var(--dim);margin:4px 0}
+.warn-note{font-size:11.5px;color:var(--warn);margin:4px 0}
+.badge{display:inline-block;font-size:10px;border-radius:4px;padding:1px 6px;margin-right:5px;vertical-align:1px;border:1px solid transparent}
+.b-open{background:#33241363;color:var(--warn);border-color:#4a3a1863}.b-done{background:#12241B;color:var(--accent)}.b-info{background:#15202F;color:var(--blue)}.b-unread{background:#2A1417;color:var(--up)}.b-dim{background:var(--panel2);color:var(--dim)}
+.b-up{color:var(--up)}.b-down{color:var(--down)}
+.empty{color:var(--dim);text-align:center;padding:26px 0;font-size:12.5px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--dim);flex-shrink:0}
+.kv .v{word-break:break-all;text-align:right}
+input,textarea,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--txt);padding:9px 11px;font-size:13.5px;margin:4px 0 8px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent-d)}
+textarea{resize:vertical;min-height:64px}
+.btn{display:inline-block;background:var(--accent);color:#06120D;border:0;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer}
+.btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line);font-weight:400}
+.btn.block{display:block;width:100%}
+.btn:disabled{opacity:.45}
+.btn.mini{padding:4px 9px;font-size:11.5px;font-weight:400}
+.err{color:var(--up);font-size:12px;margin:5px 0}
+.okmsg{color:var(--accent);font-size:12px;margin:5px 0}
+.hidden{display:none}
+.row{display:flex;gap:8px;align-items:center}
+.row>*:first-child{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}
+.chip-sel{border:1px solid var(--line);border-radius:5px;padding:3px 10px;font-size:11.5px;color:var(--dim);background:var(--panel2);cursor:pointer}
+.chip-sel.on{color:var(--accent);border-color:var(--accent-d);background:#12241B}
+.seg{display:flex;gap:6px;margin:4px 0 8px}
+.seg button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:12px;padding:6px 0;cursor:pointer}
+.seg button.on{color:#06120D;background:var(--accent);border-color:var(--accent);font-weight:600}
+.steps{display:flex;gap:6px;margin-bottom:10px}
+.steps div{flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--panel)}
+.steps b{display:block;font-size:12px;font-weight:600;color:var(--txt)}
+.steps span{font-size:10px;color:var(--dim)}
+#kline{width:100%;height:320px;display:block;background:var(--panel2);border-radius:7px;border:1px solid var(--line)}
+#klineInfo{font-size:10.5px;color:var(--dim);line-height:1.6;padding:5px 2px 0;word-break:break-all}
+.report-view{white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--txt)}
+.list-item{padding:8px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.list-item:last-child{border-bottom:0}
+.list-item .t{font-size:13px;margin-bottom:2px}
+.list-item .m{font-size:10.5px;color:var(--dim)}
+.stock-tabs,.wb-tabs{display:flex;gap:6px;margin-top:8px}
+.stock-tabs button,.wb-tabs button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:12px;padding:6px 0;cursor:pointer}
+.stock-tabs button.on,.wb-tabs button.on{color:var(--accent);border-color:var(--accent-d);background:#12241B}
+.tactic-row{padding:6px 0;border-bottom:1px solid var(--line);font-size:12px}
+.tactic-row:last-child{border-bottom:0}
+.tactic-row .nm{font-weight:600}
+.news-item{padding:8px 2px;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.55}
+.news-item:last-child{border-bottom:0}
+.news-item .nt{display:block;font-size:10.5px;color:var(--dim);margin-bottom:2px}
+.news-item .ns{color:var(--txt);word-break:break-all}
+.stq{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13px}
+.stq:last-child{border-bottom:0}
+.stq.hd{color:var(--dim);font-size:10.5px;padding:2px 2px 5px;border-bottom:1px solid var(--line)}
+.stq .snm{flex:1;cursor:pointer;overflow:hidden}
+.stq .snm b{display:block;font-weight:600;font-size:14px;color:var(--txt)}
+.stq .snm i{font-style:normal;color:var(--dim);font-size:10.5px}
+.stq .sp{width:74px;text-align:right;font-family:monospace;font-size:13.5px;flex-shrink:0}
+.stq.hd .sp{font-size:10.5px}
+.sp.up{color:var(--up)}.sp.down{color:var(--down)}
+.stq .del{background:none;border:0;color:var(--dim);font-size:11px;padding:2px 4px;flex-shrink:0}
+.qchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--accent-d);border-radius:5px;padding:3px 8px;font-size:12px;color:var(--accent);background:#12241B}
+.qchip .x{cursor:pointer;color:var(--dim);font-size:13px;padding:0 2px}
+.scan-item{padding:7px 2px;border-bottom:1px solid var(--line);font-size:12px}
+.scan-item .hd{display:flex;justify-content:space-between}
+.scan-item .hd .nm{font-weight:600}
+.scan-item .sg{color:var(--dim);font-size:11px;margin-top:2px}
+.paircode{letter-spacing:8px;text-transform:uppercase;font-family:monospace;font-size:17px;text-align:center}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--dim);font-size:10.5px;padding:6px 0 7px;cursor:pointer}
+nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--accent)}
+details summary{cursor:pointer;font-size:12px;color:var(--dim);padding:4px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>研投管家</h1>
+  <span id="syncChip"><i></i><span id="syncChipTxt">未接入</span></span>
+</header>
+<main>
+
+  <!-- ① 总览 -->
+  <section id="page-home">
+    <div class="card">
+      <div class="sec">生成报告</div>
+      <div class="row">
+        <input id="homeCode" placeholder="标的代码,如 600519" inputmode="numeric" autocomplete="off">
+        <button class="btn" id="btnHomeReport">去生成</button>
+      </div>
+      <div id="homeRpList"></div>
+    </div>
+    <div class="card">
+      <div class="sec">市场快讯 <button class="btn ghost mini" id="btnNewsRefresh" style="float:right">刷新</button></div>
+      <div id="newsBox"><div class="empty">加载中…</div></div>
+    </div>
+    <details class="card">
+      <summary>设备接入(手机电脑互传暂缓,先跳过)</summary>
+      <div id="homePair">
+        <p class="note">在 Windows「设置 → Core 与连接 → 生成手机配对码」拿到 6 位码,输入即可,无需抄密钥。</p>
+        <input id="inPairCode" class="paircode" placeholder="配对码" maxlength="6" autocomplete="off">
+        <button class="btn block" id="btnPairCode">一键接入</button>
+        <details>
+          <summary>手动粘贴(高级)</summary>
+          <label class="note">中转地址</label><input id="inRelay" placeholder="https://st.18257.xyz">
+          <label class="note">用户令牌</label><textarea id="inToken" placeholder="user_token"></textarea>
+          <label class="note">同步密钥</label><textarea id="inKey" placeholder="sync_key"></textarea>
+          <button class="btn block" id="btnPair">注册本设备并保存</button>
+        </details>
+        <div id="pairMsg"></div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ② 自选股 -->
+  <section id="page-stocks" class="hidden">
+    <div class="card">
+      <div class="row">
+        <input id="inStock" placeholder="代码:A股自动识别市场,如 600519 / 300750" autocomplete="off">
+        <button class="btn" id="btnAddStock">添加</button>
+      </div>
+      <div id="stockList"></div>
+    </div>
+    <div class="card hidden" id="stockDetail">
+      <div class="sec" id="stcTitle">—</div>
+      <div id="klineInfo">—</div>
+      <canvas id="kline" width="640" height="480"></canvas>
+      <div class="meta" id="klineMeta">—</div>
+      <div class="stock-tabs">
+        <button class="on" data-t="ann">公告</button>
+        <button data-t="news">新闻</button>
+        <button data-t="fin">财报</button>
+      </div>
+      <div id="infoBox"><div class="empty">加载中…</div></div>
+    </div>
+  </section>
+
+  <!-- ③ 研究工作台 -->
+  <section id="page-work" class="hidden">
+    <div class="wb-tabs">
+      <button class="on" data-w="report">个股研报</button>
+      <button data-w="tactics">战法雷达</button>
+    </div>
+
+    <!-- 个股研报(对齐桌面 AI 研究工作台) -->
+    <div id="wb-report">
+      <div class="card" style="margin-top:9px">
+        <div class="steps">
+          <div><b>① 界定方向</b><span>产业/主题 → 方向研判(桌面)</span></div>
+          <div><b>② 跑 K 线</b><span>标的池筛选·信号·强势分排名</span></div>
+          <div><b>③ 深研究</b><span>K 线自选股 → 个股研报</span></div>
+        </div>
+        <div class="sec">个股研报</div>
+        <p class="note">选取后生成:新闻/公告/财报 + K 线战法快扫 → 研报描述。<span style="color:var(--warn)">研究参考,不构成投资建议。</span></p>
+        <label class="note">标的代码(手动输入: 600519 / 000868 / 689009)</label>
+        <input id="rpCode" placeholder="如:600519 / 300750 / AAPL" autocomplete="off">
+        <div class="row">
+          <input id="qAddCode" placeholder="加入生成队列,如 600722" inputmode="numeric" autocomplete="off" style="flex:1">
+          <button class="btn ghost" id="btnQueueAdd">加入队列</button>
+        </div>
+        <label class="note">从自选股快速加入(点选,生成时按队列顺序串行执行)</label>
+        <div class="chips" id="wlPick"></div>
+        <div class="chips" id="queueBox"></div>
+        <label class="note">关注点(可选)</label>
+        <div class="chips" id="rpChips"></div>
+        <input id="rpFocus" placeholder="自定义关注点(可选)">
+        <label class="note">研究问题模板(点选拼入,可改:对象与时间范围 · 待验证假设 · 证据范围 · 反证条件)</label>
+        <div class="chips" id="rqChips"></div>
+        <label class="note">K线回看区间(影响技术面分析口径)</label>
+        <div class="seg" id="rpDays">
+          <button data-v="60">60 日</button>
+          <button data-v="120" class="on">120 日</button>
+          <button data-v="250">250 日</button>
+        </div>
+        <p class="note">产物:摘要 + 核心结论 + 关键逻辑(引用来源) + 催化剂 + 风险提示 + 数据缺口 + 免责声明</p>
+        <p class="note">生成模型:当前 <span id="genModelTxt" style="color:var(--txt)">—</span>(可在「设置 → 模型配置」切换)</p>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="btnGenReport">生成报告</button>
+          <button class="btn ghost" id="btnGenBg">后台生成</button>
+        </div>
+        <div id="genMsg"></div>
+      </div>
+      <div class="card hidden" id="rpOutCard">
+        <div class="sec" id="rpOutTitle">研报</div>
+        <div class="report-view" id="rpOut"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn mini" id="btnRpSave" style="flex:1">存手机</button>
+          <button class="btn ghost mini" id="btnRpCopy" style="flex:1">复制</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec">历史产出</div>
+        <div class="chips" id="histChips"></div>
+        <div id="rpHistory"><div class="empty">还没有生成过研报</div></div>
+      </div>
+    </div>
+
+    <!-- 战法雷达 -->
+    <div id="wb-tactics" class="hidden">
+      <div class="card" style="margin-top:9px">
+        <div class="sec">战法雷达</div>
+        <p class="note"><span id="tacCount">21</span> 个战法,信号只描述图形事实,不构成买卖建议。引擎与 Windows 端 tactics.py 同口径(纯 K 线确定性计算,本机完成,不消耗 AI)。</p>
+        <details>
+          <summary>战法清单(点击展开 21 项说明)</summary>
+          <div id="tacCatalog"></div>
+        </details>
+      </div>
+      <div class="card">
+        <div class="sec">强势池扫描</div>
+        <p class="note">涨幅/换手/成交额三榜前 N 合并去重(强势池),逐票跑 K 线战法引擎,约 1-3 分钟。榜单源三路自动互备:新浪 → 东财 → 东财延迟,哪个通用哪个。</p>
+        <label class="note">板块(按代码前缀过滤)</label>
+        <div class="chips" id="sectChips"></div>
+        <label class="note">榜选数</label>
+        <div class="seg" id="scanTop">
+          <button data-v="20">前 20</button>
+          <button data-v="40" class="on">前 40</button>
+          <button data-v="60">前 60</button>
+        </div>
+        <label class="note">价格区间(可留空 = 不限)</label>
+        <div class="row">
+          <input id="pxMin" type="number" inputmode="decimal" placeholder="最低价" style="flex:1">
+          <span class="note" style="flex:0">—</span>
+          <input id="pxMax" type="number" inputmode="decimal" placeholder="最高价" style="flex:1">
+        </div>
+        <label class="note">战法</label>
+        <div class="chips" id="tacPickChips"></div>
+        <div class="row" style="margin-top:6px">
+          <button class="btn" id="btnScan">开始扫描</button>
+          <button class="btn ghost hidden" id="btnScanStop">停止</button>
+        </div>
+        <div class="meta" id="scanMeta"></div>
+        <div id="scanResults"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 设置 -->
+  <section id="page-set" class="hidden">
+    <div class="card">
+      <div class="sec">模型配置</div>
+      <p class="note">v0.3.6 起内置免费 AI 渠道下线（其 Key 曾硬编码在安装包内，属密钥泄漏）。请配置自己的 OpenAI 兼容 API。</p>
+      <div id="cfgCustom">
+        <label class="note">API 地址(OpenAI 兼容,如 https://api.deepseek.com)</label>
+        <input id="cfgUrl" placeholder="https://…">
+        <label class="note">API Key</label>
+        <input id="cfgKey" type="password" placeholder="sk-…">
+        <label class="note">模型名</label>
+        <input id="cfgModel" placeholder="如 deepseek-chat">
+        <button class="btn ghost block" id="btnTestCustom">测试连接并保存</button>
+        <div id="cfgMsg"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">设备与同步</div>
+      <div class="kv"><span class="k">设备</span><span class="v" id="stDevice">—</span></div>
+      <div class="kv"><span class="k">游标</span><span class="v" id="stCursor">—</span></div>
+      <div class="kv"><span class="k">已缓存事件</span><span class="v" id="stCount">—</span></div>
+      <button class="btn block" id="btnSyncSet" style="margin-top:10px">立即同步</button>
+      <button class="btn ghost block" id="btnLogoutSet" style="margin-top:8px">退出登录(清除凭据)</button>
+    </div>
+    <div class="card">
+      <div class="sec">隐私与缓存</div>
+      <button class="btn ghost block" id="btnReset">清空本机缓存(保留接入)</button>
+      <p class="note" style="text-align:center;margin-top:10px">研投管家 Mobile v0.3.6 · 数据经 relay 端到端加密</p>
+    </div>
+  </section>
+
+</main>
+<nav>
+  <button data-p="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>总览</button>
+  <button data-p="stocks"><svg viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.3l6.1-.7z"/></svg>自选股</button>
+  <button data-p="work"><svg viewBox="0 0 24 24"><path d="M4 4h16v3H4z"/><path d="M6 7v13h12V7"/><path d="M9 11h6M9 15h6"/></svg>工作台</button>
+  <button data-p="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>设置</button>
+</nav>
+<script>
+"use strict";
+/* 顶层 JS 错误可视化 */
+window.onerror = function (msg, src, line, col) {
+  var d = document.createElement("div");
+  d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#5B1A1A;color:#fff;font:11px/1.4 monospace;padding:6px 8px;z-index:999;white-space:pre-wrap";
+  d.textContent = "JS错误: " + msg + " @" + line + ":" + col;
+  document.body.appendChild(d);
+};
+
+/* ===== 常量与状态 ===== */
+var LS = {
+  get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  del: function (k) { localStorage.removeItem(k); }
+};
+var state = {
+  events: LS.get("events", []),
+  cursor: LS.get("cursor", 0),
+  relay: LS.get("relay", ""),
+  deviceToken: LS.get("deviceToken", ""),
+  deviceId: LS.get("deviceId", ""),
+  syncKey: LS.get("syncKey", ""),
+  readSet: LS.get("readSet", []),
+  snoozeSet: LS.get("snoozeSet", []),
+  stocks: LS.get("stocks", ["sh600519"]),
+  aiMode: "custom", // E1：内置渠道已下线，固定自定义通道（旧 localStorage 值不再读取，保存时覆盖）
+  aiUrl: LS.get("aiUrl", ""),
+  aiKey: LS.get("aiKey", ""),
+  aiModel: LS.get("aiModel", ""),
+  model: LS.get("model", ""),
+  models: LS.get("models", [])
+};
+function saveState() {
+  LS.set("events", state.events); LS.set("cursor", state.cursor);
+  LS.set("relay", state.relay); LS.set("deviceToken", state.deviceToken);
+  LS.set("deviceId", state.deviceId); LS.set("syncKey", state.syncKey);
+  LS.set("readSet", state.readSet); LS.set("snoozeSet", state.snoozeSet);
+  LS.set("stocks", state.stocks); LS.set("aiMode", state.aiMode);
+  LS.set("aiUrl", state.aiUrl); LS.set("aiKey", state.aiKey); LS.set("aiModel", state.aiModel);
+  LS.set("model", state.model); LS.set("models", state.models);
+}
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+/* ===== 原生桥(多并发安全:cbId → resolver 映射,支持超时) ===== */
+var bridge = window.AndroidBridge || null;
+var bridgeSeq = 0;
+var pendingCbs = {};
+window.__bridgeDone = function (doneId, status, respBody) {
+  var f = pendingCbs[doneId];
+  if (f) { delete pendingCbs[doneId]; f({ status: status, body: respBody == null ? "" : respBody }); }
+};
+function bridgeCall(method, url, headers, body, timeoutMs) {
+  if (!bridge) return Promise.reject(new Error("原生桥不可用"));
+  var cbId = "cb" + (++bridgeSeq) + "_" + Date.now();
+  return new Promise(function (resolve, reject) {
+    pendingCbs[cbId] = resolve;
+    if (timeoutMs) {
+      setTimeout(function () {
+        if (pendingCbs[cbId]) { delete pendingCbs[cbId]; reject(new Error("请求超时(" + Math.round(timeoutMs / 1000) + "s)")); }
+      }, timeoutMs);
+    }
+    try { bridge.requestAsync(cbId, method, url, JSON.stringify(headers || {}), body || null); }
+    catch (e) { delete pendingCbs[cbId]; reject(e); }
+  });
+}
+
+/* ===== Fernet(Web Crypto,与 Python cryptography 互通) ===== */
+function b64urlToBytes(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  var bin = atob(s), out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function bytesToB64url(bytes) {
+  var bin = "";
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_"); // 保留 '=' padding,Fernet 规范需要
+}
+function subtle() {
+  if (!window.crypto || !window.crypto.subtle) throw new Error("WebView 不支持 WebCrypto");
+  return window.crypto.subtle;
+}
+function sealFernet(keyB64, plainBytes) {
+  var keyBytes = b64urlToBytes(keyB64);
+  if (keyBytes.length !== 32) return Promise.reject(new Error("同步密钥格式错误"));
+  var signKey = keyBytes.slice(0, 16), encKey = keyBytes.slice(16);
+  var iv = crypto.getRandomValues(new Uint8Array(16));
+  var ek = subtle().importKey("raw", encKey, { name: "AES-CBC" }, false, ["encrypt"]);
+  return subtle().encrypt({ name: "AES-CBC", iv: iv }, ek, plainBytes).then(function (ctBuf) {
+    var ct = new Uint8Array(ctBuf);
+    var now = Math.floor(Date.now() / 1000);
+    var head = new Uint8Array(9);
+    head[0] = 0x80;
+    head[5] = (now >>> 24) & 255; head[6] = (now >>> 16) & 255; head[7] = (now >>> 8) & 255; head[8] = now & 255;
+    var sk = subtle().importKey("raw", signKey, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    var macInput = new Uint8Array(head.length + iv.length + ct.length);
+    macInput.set(head, 0); macInput.set(iv, head.length); macInput.set(ct, head.length + iv.length);
+    return subtle().sign("HMAC", sk, macInput).then(function (macBuf) {
+      var mac = new Uint8Array(macBuf);
+      var out = new Uint8Array(macInput.length + mac.length);
+      out.set(macInput, 0); out.set(mac, macInput.length);
+      return bytesToB64url(out);
+    });
+  });
+}
+function openFernet(keyB64, tokenB64) {
+  var keyBytes = b64urlToBytes(keyB64);
+  if (keyBytes.length !== 32) return Promise.reject(new Error("同步密钥格式错误"));
+  var signKey = keyBytes.slice(0, 16), encKey = keyBytes.slice(16);
+  var token = b64urlToBytes(tokenB64);
+  if (token.length < 57 || token[0] !== 0x80) return Promise.reject(new Error("信封格式错误"));
+  var iv = token.slice(9, 25), ct = token.slice(25, token.length - 32), mac = token.slice(token.length - 32);
+  var sk = subtle().importKey("raw", signKey, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  var ek = subtle().importKey("raw", encKey, { name: "AES-CBC" }, false, ["decrypt"]);
+  return subtle().verify("HMAC", sk, mac, token.slice(0, token.length - 32)).then(function (ok) {
+    if (!ok) throw new Error("HMAC 校验失败");
+    return subtle().decrypt({ name: "AES-CBC", iv: iv }, ek, ct);
+  }).then(function (plain) {
+    var s = "", bytes = new Uint8Array(plain), chunk = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunk) s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    return JSON.parse(decodeURIComponent(escape(s)));
+  });
+}
+
+/* ===== 同步引擎 ===== */
+var syncBusy = false;
+function doSync(manual) {
+  if (syncBusy) return Promise.resolve("busy");
+  if (!state.relay || !state.deviceToken || !state.syncKey) {
+    if (manual) alert("先在「总览」完成配对接入");
+    return Promise.resolve("unconfigured");
+  }
+  syncBusy = true; renderChip("同步中…", false);
+  return bridgeCall("GET", state.relay + "/sync/events?cursor=" + state.cursor + "&limit=200", { "X-Relay-Token": state.deviceToken }, null, 20000)
+    .then(function (r) {
+      if (r.status === 401) { renderChip("令牌失效", false); throw new Error("设备令牌失效:请重新配对"); }
+      if (r.status !== 200) throw new Error("relay HTTP " + r.status);
+      var page = JSON.parse(r.body), pulled = 0, failed = 0;
+      var chain = Promise.resolve();
+      var seen = {};
+      state.events.forEach(function (e) { seen[e.idempotency_key] = e; });
+      (page.events || []).forEach(function (ev) {
+        chain = chain.then(function () {
+          return openFernet(state.syncKey, ev.payload).then(function (plain) {
+            var cur = seen[ev.idempotency_key];
+            var item = { kind: ev.kind, idempotency_key: ev.idempotency_key, plain: plain, event_id: ev.event_id };
+            if (cur) { Object.keys(item).forEach(function (k) { cur[k] = item[k]; }); }
+            else { state.events.push(item); seen[ev.idempotency_key] = item; }
+            pulled++;
+          }).catch(function () { failed++; });
+        });
+      });
+      return chain.then(function () {
+        state.cursor = page.cursor_max || state.cursor;
+        state.events.sort(function (a, b) { return (a.event_id || 0) - (b.event_id || 0); });
+        saveState(); syncBusy = false;
+        renderChip(pulled ? ("同步 +" + pulled) : "已同步", true);
+        renderAll();
+        return "ok";
+      });
+    })
+    .catch(function (e) { syncBusy = false; renderChip("同步失败", false); if (manual) alert("同步失败:" + e.message); return "error"; });
+}
+function renderChip(t, ok) { $("syncChipTxt").textContent = t; $("syncChip").className = ok ? "ok" : ""; }
+
+/* ===== 配对 ===== */
+function pairByCode() {
+  var code = $("inPairCode").value.trim().toUpperCase();
+  var out = $("pairMsg");
+  if (code.length !== 6) { out.innerHTML = '<p class="err">先输入 6 位配对码(Windows「Core 与连接 → 生成手机配对码」)</p>'; return; }
+  var relay = ($("inRelay").value.trim().replace(/\/+$/, "")) || "https://st.18257.xyz";
+  out.innerHTML = '<p class="note">领取凭据中…</p>';
+  bridgeCall("GET", relay + "/pairing/claim?code=" + encodeURIComponent(code), {}, null, 20000).then(function (r) {
+    if (r.status !== 200) {
+      out.innerHTML = '<p class="err">领取失败 HTTP ' + r.status + ":" + esc(r.body.slice(0, 120)) + "（配对码 10 分钟有效、只能用一次,请重新生成）</p>";
+      return null;
+    }
+    var cred = JSON.parse(r.body);
+    out.innerHTML = '<p class="note">注册本机设备中…</p>';
+    return bridgeCall("POST", relay + "/devices/attach", { "X-Relay-Token": cred.user_token, "Content-Type": "application/json" },
+      JSON.stringify({ label: "Android-" + (navigator.userAgent || "").slice(-6), public_key: "" }))
+      .then(function (r2) {
+        if (r2.status !== 201) { out.innerHTML = '<p class="err">注册失败 HTTP ' + r2.status + ":" + esc(r2.body.slice(0, 120)) + "</p>"; return; }
+        var d = JSON.parse(r2.body);
+        state.relay = relay; state.deviceToken = d.device_token; state.deviceId = d.device_id; state.syncKey = cred.sync_key;
+        saveState(); renderAll();
+        out.innerHTML = '<p class="okmsg">接入成功!正在首拉数据…</p>';
+        doSync(false);
+      });
+  }).catch(function (e) { out.innerHTML = '<p class="err">接入失败:' + esc(e.message) + "</p>"; });
+}
+function pair() {
+  var relay = $("inRelay").value.trim().replace(/\/+$/, "");
+  var token = $("inToken").value.trim();
+  var key = $("inKey").value.trim();
+  var out = $("pairMsg");
+  if (!relay || !token || !key) { out.innerHTML = '<p class="err">三项都要填</p>'; return; }
+  out.innerHTML = '<p class="note">注册中…</p>';
+  bridgeCall("POST", relay + "/devices/attach", { "X-Relay-Token": token, "Content-Type": "application/json" },
+    JSON.stringify({ label: "Android-" + (navigator.userAgent || "").slice(-6), public_key: "" }))
+    .then(function (r) {
+      if (r.status === 201) {
+        var d = JSON.parse(r.body);
+        state.relay = relay; state.deviceToken = d.device_token; state.deviceId = d.device_id; state.syncKey = key;
+        saveState(); renderAll();
+        out.innerHTML = '<p class="okmsg">接入成功!正在首拉…</p>';
+        doSync(false);
+      } else out.innerHTML = '<p class="err">接入失败 HTTP ' + r.status + "</p>";
+    }).catch(function (e) { out.innerHTML = '<p class="err">接入失败:' + esc(e.message) + "</p>"; });
+}
+function logout() {
+  if (!confirm("退出登录将清除本机的接入凭据与缓存(自选股/模型配置保留)?")) return;
+  state.events = []; state.cursor = 0; state.deviceToken = ""; state.deviceId = ""; state.syncKey = ""; state.readSet = []; state.snoozeSet = [];
+  saveState(); renderAll();
+}
+
+/* ===== 事件视图 ===== */
+function eventList(kinds) {
+  return state.events.filter(function (e) { return kinds.indexOf(e.kind) >= 0; }).slice().reverse();
+}
+function notifGrade(plain) {
+  var k = String(plain.condition_kind || plain.triggered_by || "");
+  if (k.indexOf("mobile_research") >= 0) return { g: "需要研究", b: "b-info" };
+  if (k.indexOf("mobile") >= 0) return { g: "手机消息", b: "b-info" };
+  if (String(plain.triggered_by || "").indexOf("计划") >= 0 || k.indexOf("plan") >= 0) return { g: "影响计划", b: "b-open" };
+  if (k.indexOf("invalid") >= 0 || k.indexOf("fail") >= 0 || String(plain.title || "").indexOf("失效") >= 0) return { g: "失效条件", b: "b-unread" };
+  return { g: "信息参考", b: "" };
+}
+
+/* ===== 总览渲染(生成报告 + 市场快讯;互传暂缓) ===== */
+function renderHome() {
+  renderHomeReports();
+  loadNews(false);
+}
+function renderHomeReports() {
+  var hist = LS.get("reports", []).slice(0, 3);
+  $("homeRpList").innerHTML = (hist.length
+    ? '<p class="note" style="margin-top:8px">最近研报:</p>' + hist.map(function (r) {
+        return '<div class="list-item" data-rid="' + esc(r.id) + '"><div class="t">' + esc(r.title) + '</div><div class="m">' + esc(r.at.slice(5, 16)) + " · 点击查看</div></div>";
+      }).join("")
+    : '<p class="note" style="margin-top:8px">还没有生成过研报;填代码去生成,或在「工作台」从自选股批量串行生成。</p>');
+}
+/* 东财 7x24 快讯(大新闻),5 分钟缓存 */
+function loadNews(force) {
+  var box = $("newsBox");
+  var cached = LS.get("newsCache", null);
+  if (!force && cached && cached.items && Date.now() - cached.at < 5 * 60 * 1000) { renderNews(cached.items); return; }
+  box.innerHTML = '<div class="empty">加载中…</div>';
+  bridgeCall("GET", "https://np-weblist.eastmoney.com/comm/web/getFastNewsList?client=web&biz=web_724&fastColumn=102&sortEnd=&pageSize=30&req_trace=" + Date.now(), {}, null, 15000)
+    .then(function (r) {
+      if (r.status !== 200) throw new Error("HTTP " + r.status);
+      var items = ((JSON.parse(r.body).data || {}).fastNewsList) || [];
+      if (!items.length) throw new Error("空列表");
+      LS.set("newsCache", { at: Date.now(), items: items.slice(0, 30) });
+      renderNews(items);
+    })
+    .catch(function (e) { box.innerHTML = '<div class="empty">快讯加载失败:' + esc(e.message) + "</div>"; });
+}
+function renderNews(items) {
+  $("newsBox").innerHTML = items.map(function (n) {
+    return '<div class="news-item"><span class="nt">' + esc(String(n.showTime || "").slice(5, 16)) + "</span><span class=\"ns\">" + esc(String(n.summary || n.title || "")) + "</span></div>";
+  }).join("");
+}
+
+/* ===== 通知(并入总览页) ===== */
+function renderNotifInto(elId) {
+  var items = eventList(["notification.raised", "mobile.note"]);
+  var box = $(elId);
+  if (!items.length) { box.innerHTML = '<div class="empty">暂无通知</div>'; return; }
+  box.innerHTML = items.map(function (e) {
+    var p = e.plain || {};
+    var idem = e.idempotency_key;
+    var read = state.readSet.indexOf(idem) >= 0, snoozed = state.snoozeSet.indexOf(idem) >= 0;
+    var g = notifGrade(p);
+    return '<div class="list-item" data-idem="' + esc(idem) + '">'
+      + '<span class="badge ' + g.b + '">' + esc(g.g) + "</span>"
+      + (snoozed ? '<span class="badge b-info">稍后</span>' : "")
+      + (read ? "" : '<span class="badge b-unread">未读</span>')
+      + '<div class="t" style="margin-top:4px">' + esc(String(p.title || p.question || "通知")) + '</div>'
+      + '<div class="m">' + esc(String(p.summary || "").slice(0, 80)) + '</div>'
+      + '<div class="m" style="margin-top:4px"><button class="btn ghost mini" data-act="read" data-idem="' + esc(idem) + '">标记已读</button> '
+      + '<button class="btn ghost mini" data-act="snooze" data-idem="' + esc(idem) + '">' + (snoozed ? "取消稍后" : "稍后处理") + "</button></div></div>";
+  }).join("");
+}
+
+/* ===== 自选股 ===== */
+function normalizeStock(input) {
+  var s = input.trim().toLowerCase();
+  if (!s) return "";
+  if (/^(sh|sz|bj|hk|us)[0-9a-z.]+$/.test(s)) return s;
+  if (/^\d{6}$/.test(s)) {
+    if (/^(5|6|9)/.test(s)) return "sh" + s;
+    if (/^(0|1|2|3)/.test(s)) return "sz" + s;
+    if (/^(4|8)/.test(s)) return "bj" + s;
+  }
+  return s;
+}
+/* 同花顺式自选列表:名称+代码 | 最新 | 涨幅(东财 ulist 批量报价,30s 缓存) */
+function renderStocks() {
+  renderStocksList();
+  if (Date.now() - (window.quoteAt || 0) > 30000) refreshQuotes();
+}
+function renderStocksList() {
+  var box = $("stockList");
+  if (!state.stocks.length) { box.innerHTML = '<div class="empty">还没有自选股,先添加一只</div>'; $("stockDetail").classList.add("hidden"); return; }
+  var q = window.quoteMap || {};
+  var rows = state.stocks.map(function (s) {
+    var info = q[s] || {}, hasP = info.price != null;
+    var pcls = hasP ? (info.chg >= 0 ? "up" : "down") : "";
+    return '<div class="stq"><span class="snm" data-stock="' + esc(s) + '"><b>' + esc(info.name || s) + "</b><i>" + esc(s.replace(/^(sh|sz)/, "")) + "</i></span>"
+      + '<span class="sp ' + pcls + '">' + (hasP ? info.price.toFixed(2) : "—") + "</span>"
+      + '<span class="sp ' + pcls + '">' + (hasP ? (info.chg >= 0 ? "+" : "") + info.chg.toFixed(2) + "%" : "—") + "</span>"
+      + '<button class="del" data-del="' + esc(s) + '">删除</button></div>';
+  }).join("");
+  box.innerHTML = '<div class="stq hd"><span class="snm">名称 / 代码</span><span class="sp">最新</span><span class="sp">涨幅</span><span style="width:30px"></span></div>' + rows;
+}
+function refreshQuotes() {
+  var secids = state.stocks.map(emSecid).filter(Boolean).join(",");
+  if (!secids) return;
+  window.quoteAt = Date.now();
+  bridgeCall("GET", "https://push2.eastmoney.com/api/qt/ulist.np/get?secids=" + secids + "&fields=f2,f3,f12,f13,f14&fltt=2", {}, null, 12000)
+    .then(function (r) {
+      if (r.status !== 200) throw new Error("HTTP " + r.status);
+      var diff = ((JSON.parse(r.body).data || {}).diff) || [];
+      var list = Array.isArray(diff) ? diff : Object.keys(diff).map(function (k) { return diff[k]; });
+      var m = {};
+      list.forEach(function (it) {
+        var sym = (it.f13 === 1 ? "sh" : "sz") + it.f12;
+        m[sym] = { name: it.f14, price: typeof it.f2 === "number" ? it.f2 : null, chg: typeof it.f3 === "number" ? it.f3 : null };
+      });
+      window.quoteMap = m;
+      renderStocksList();
+    })
+    .catch(function () { /* 报价失败保持 — 占位,下次再试 */ });
+}
+
+/* K线双源:记住上次成功的源(部分手机到腾讯链路不通),失败自动互切 */
+function emSecid(stock) {
+  var m = /^(sh|sz)(\d+)$/.exec(stock);
+  if (!m) return null;
+  return (m[1] === "sh" ? "1." : "0.") + m[2];
+}
+function klineFromTq(stock, n) {
+  return bridgeCall("GET", "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + stock + ",day,,," + n + ",qfq", {}, null, 10000)
+    .then(function (r) {
+      if (r.status !== 200) throw new Error("HTTP " + r.status);
+      var node = ((JSON.parse(r.body).data || {})[stock]) || {};
+      var days = node.qfqday || node.day || [];
+      if (!days.length) throw new Error("无数据");
+      return days.map(function (d) { return { date: d[0], open: +d[1], close: +d[2], high: +d[3], low: +d[4], vol: +d[5] }; });
+    });
+}
+function klineFromEm(stock, n) {
+  var sec = emSecid(stock);
+  if (!sec) return Promise.reject(new Error("不支持的市场"));
+  return bridgeCall("GET",
+    "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + sec + "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=101&fqt=1&end=20500101&lmt=" + n, {}, null, 12000)
+    .then(function (r) {
+      if (r.status !== 200) throw new Error("HTTP " + r.status);
+      var kl = ((JSON.parse(r.body).data || {}).klines) || [];
+      if (!kl.length) throw new Error("无数据");
+      return kl.map(function (s) { var p = s.split(","); return { date: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4], vol: +p[5] }; });
+    });
+}
+var klineSrcPref = LS.get("klineSrc", ""); // "" | "tq" | "em"
+function rememberKlineSrc(src) { if (src && klineSrcPref !== src) { klineSrcPref = src; LS.set("klineSrc", src); } }
+function fetchKline(stock, n) {
+  var order = klineSrcPref === "em"
+    ? [["东财", klineFromEm], ["腾讯", klineFromTq]]
+    : [["腾讯", klineFromTq], ["东财", klineFromEm]];
+  return order[0][1](stock, n).then(function (bars) {
+    rememberKlineSrc(order[0][0] === "腾讯" ? "tq" : "em");
+    return bars;
+  }).catch(function (e1) {
+    return order[1][1](stock, n).then(function (bars) {
+      rememberKlineSrc(order[1][0] === "腾讯" ? "tq" : "em");
+      return bars;
+    }).catch(function (e2) {
+      throw new Error(order[0][0] + "源:" + e1.message + " / " + order[1][0] + "源:" + e2.message);
+    });
+  });
+}
+function loadKline(stock) {
+  $("klineMeta").textContent = "加载K线…";
+  $("klineInfo").textContent = "—";
+  fetchKline(stock, 120).then(function (data) {
+    window.klineData = data;
+    window.klineView = { idx: null };
+    drawKline();
+    var last = data[data.length - 1];
+    $("klineMeta").textContent = "近 " + data.length + " 个交易日 · 最新收盘 " + last.close + " (" + last.date + ")" + (klineSrcPref === "em" ? " · 东财源" : " · 腾讯源");
+  }).catch(function (e) { $("klineMeta").textContent = "K线加载失败:" + e.message; });
+}
+/* 同花顺风格渲染:MA5/10/20 叠加、右轴虚线网格、空心阳线、最新价标签、触摸十字光标 */
+function maAt(closes, p, i) {
+  if (i < p - 1) return null;
+  var s = 0;
+  for (var j = i - p + 1; j <= i; j++) s += closes[j];
+  return s / p;
+}
+function drawKline() {
+  var cv = $("kline"), ctx = cv.getContext("2d");
+  var data = window.klineData; if (!data || !data.length) return;
+  var W = cv.width = cv.clientWidth * 2, H = 480;
+  var padL = 6, padR = 76, padT = 12, gap = 14, padB = 26;
+  var volH = H * 0.18, priceH = H - padT - padB - volH - gap;
+  var hi = -Infinity, lo = Infinity, vMax = 0;
+  data.forEach(function (d) { if (d.high > hi) hi = d.high; if (d.low < lo) lo = d.low; if (d.vol > vMax) vMax = d.vol; });
+  hi *= 1.002; lo *= 0.998;
+  var span = (hi - lo) || 1;
+  var iw = (W - padL - padR) / data.length;
+  window.klineLayout = { W: W, H: H, padL: padL, padR: padR, padT: padT, gap: gap, padB: padB, volH: volH, priceH: priceH, hi: hi, lo: lo, span: span, iw: iw, data: data, vMax: vMax };
+  renderKline();
+  updateKlineInfo();
+}
+function renderKline() {
+  var L = window.klineLayout; if (!L) return;
+  var cv = $("kline"), ctx = cv.getContext("2d");
+  var data = L.data, closes = data.map(function (d) { return d.close; });
+  ctx.clearRect(0, 0, L.W, L.H);
+  ctx.font = "15px monospace"; ctx.lineWidth = 1; ctx.textAlign = "left";
+  // 虚线网格 + 右侧价格刻度
+  ctx.strokeStyle = "#1C2634"; ctx.fillStyle = "#8B98AB"; ctx.setLineDash([3, 4]);
+  for (var g = 0; g <= 4; g++) {
+    var gy = L.padT + L.priceH * g / 4;
+    ctx.beginPath(); ctx.moveTo(L.padL, gy); ctx.lineTo(L.W - L.padR, gy); ctx.stroke();
+    ctx.fillText((L.hi - L.span * g / 4).toFixed(2), L.W - L.padR + 6, gy + 5);
+  }
+  ctx.setLineDash([]);
+  // MA5/10/20(同花顺配色:白/黄/紫)
+  var maDefs = [[5, "#F2F2F2"], [10, "#FFC53D"], [20, "#B48CFF"]];
+  maDefs.forEach(function (md) {
+    ctx.strokeStyle = md[1]; ctx.lineWidth = 1.4; ctx.beginPath();
+    var started = false;
+    for (var i = md[0] - 1; i < data.length; i++) {
+      var v = maAt(closes, md[0], i);
+      if (v == null) continue;
+      var x = L.padL + L.iw * i + L.iw / 2, y = L.padT + (L.hi - v) / L.span * L.priceH;
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  });
+  // 蜡烛:涨=空心红 / 跌=实心绿(A股口径)+ 成交量
+  data.forEach(function (d, i) {
+    var x = L.padL + L.iw * i + L.iw / 2;
+    var y = function (p) { return L.padT + (L.hi - p) / L.span * L.priceH; };
+    var up = d.close >= d.open;
+    var col = up ? "#E5484D" : "#46A758";
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x, y(d.high)); ctx.lineTo(x, y(d.low)); ctx.stroke();
+    var bw = Math.max(2, L.iw * 0.66);
+    var yo = y(d.open), yc = y(d.close);
+    var top = Math.min(yo, yc), h = Math.max(1.5, Math.abs(yc - yo));
+    if (up) ctx.strokeRect(x - bw / 2, top, bw, h); else ctx.fillRect(x - bw / 2, top, bw, h);
+    var vy = L.H - L.padB - (d.vol / (L.vMax || 1)) * L.volH;
+    ctx.fillStyle = up ? "rgba(229,72,77,.5)" : "rgba(70,167,88,.5)";
+    ctx.fillRect(x - bw / 2, vy, bw, L.H - L.padB - vy);
+  });
+  // 最新价虚线 + 右轴标签
+  var last = data[data.length - 1];
+  var prevClose = data.length > 1 ? data[data.length - 2].close : last.open;
+  var lcol = last.close >= prevClose ? "#E5484D" : "#46A758";
+  var ly = L.padT + (L.hi - last.close) / L.span * L.priceH;
+  ctx.strokeStyle = lcol; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(L.padL, ly); ctx.lineTo(L.W - L.padR, ly); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = lcol;
+  ctx.fillRect(L.W - L.padR + 2, ly - 10, L.padR - 8, 20);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(last.close.toFixed(2), L.W - L.padR + 7, ly + 5);
+  // 十字光标
+  if (window.klineView && window.klineView.idx != null) {
+    var i2 = window.klineView.idx;
+    if (i2 >= 0 && i2 < data.length) {
+      var cx = L.padL + L.iw * i2 + L.iw / 2;
+      ctx.strokeStyle = "#5B6B82"; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx, L.padT); ctx.lineTo(cx, L.H - L.padB); ctx.stroke();
+      var cy2 = L.padT + (L.hi - data[i2].close) / L.span * L.priceH;
+      ctx.beginPath(); ctx.moveTo(L.padL, cy2); ctx.lineTo(L.W - L.padR, cy2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+function updateKlineInfo() {
+  var data = window.klineData, el = $("klineInfo");
+  if (!data || !data.length) { el.textContent = ""; return; }
+  var i = (window.klineView && window.klineView.idx != null) ? window.klineView.idx : data.length - 1;
+  var d = data[i], pc = i > 0 ? data[i - 1].close : d.open;
+  var chg = pc ? (d.close - pc) / pc * 100 : 0;
+  var closes = data.map(function (x) { return x.close; });
+  function fm(v) { return v == null ? "—" : v.toFixed(2); }
+  var ccol = chg >= 0 ? "var(--up)" : "var(--down)";
+  el.innerHTML = esc(d.date) + " · 开 " + fm(d.open) + " 高 " + fm(d.high) + " 低 " + fm(d.low)
+    + ' · 收 <span style="color:' + ccol + '">' + fm(d.close) + " " + (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%</span>"
+    + ' <span style="color:#F2F2F2">MA5 ' + fm(maAt(closes, 5, i)) + "</span>"
+    + ' <span style="color:#FFC53D">MA10 ' + fm(maAt(closes, 10, i)) + "</span>"
+    + ' <span style="color:#B48CFF">MA20 ' + fm(maAt(closes, 20, i)) + "</span>";
+}
+function setInfoTab(tab) {
+  var code = (window.curStock || "").replace(/^(sh|sz|bj|hk)/, "");
+  var box = $("infoBox");
+  box.innerHTML = '<div class="empty">加载中…</div>';
+  if (tab === "ann") {
+    bridgeCall("GET", "https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=15&page_index=1&ann_type=A&client_source=web&stock_list=" + code + "&f_node=0&s_node=0", {}, null, 15000)
+      .then(function (r) {
+        var list = (JSON.parse(r.body).data || {}).list || [];
+        box.innerHTML = list.length ? list.map(function (a) {
+          return '<div class="list-item"><div class="t">' + esc(a.title) + '</div><div class="m">' + esc(String(a.eiTime || a.notice_date || "").slice(0, 10)) + "</div></div>";
+        }).join("") : '<div class="empty">暂无公告</div>';
+      }).catch(function (e) { box.innerHTML = '<div class="empty">加载失败:' + esc(e.message) + "</div>"; });
+  } else if (tab === "news") {
+    var param = encodeURIComponent(JSON.stringify({ uid: "", keyword: code, type: ["cmsArticleWebOld"], client: "web", clientType: "web", clientVersion: "curr",
+      param: { cmsArticleWebOld: { searchScope: "default", sort: "time", pageIndex: 1, pageSize: 15, preTag: "", postTag: "" } } }));
+    bridgeCall("GET", "https://search-api-web.eastmoney.com/search/jsonp?cb=jq&param=" + param, {}, null, 15000)
+      .then(function (r) {
+        var m = /^\w+\(([\s\S]*)\)\s*$/.exec(r.body.trim());
+        var arts = m ? (((JSON.parse(m[1]).result || {}).cmsArticleWebOld) || []) : [];
+        box.innerHTML = arts.length ? arts.map(function (a) {
+          return '<div class="list-item"><div class="t">' + esc(a.title) + '</div><div class="m">' + esc(a.date || "") + " · " + esc(a.mediaName || "") + "</div></div>";
+        }).join("") : '<div class="empty">暂无新闻</div>';
+      }).catch(function (e) { box.innerHTML = '<div class="empty">加载失败:' + esc(e.message) + "</div>"; });
+  } else {
+    bridgeCall("GET", "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_LICO_FN_CPD&columns=ALL&filter=(SECURITY_CODE%3D%22" + code + "%22)&pageSize=8&sortColumns=REPORTDATE&sortTypes=-1", {}, null, 15000)
+      .then(function (r) {
+        var rows = ((JSON.parse(r.body).result || {}).data) || [];
+        box.innerHTML = rows.length ? rows.map(function (d) {
+          return '<div class="list-item"><div class="t">' + esc(d.REPORT_DATE ? String(d.REPORT_DATE).slice(0, 10) : "") + (d.NOTICE_DATE ? " · 公告 " + String(d.NOTICE_DATE).slice(0, 10) : "") + '</div>'
+            + '<div class="m">营收 ' + esc(d.TOTAL_OPERATE_INCOME == null ? "—" : (d.TOTAL_OPERATE_INCOME / 1e8).toFixed(1) + "亿")
+            + " · 净利 " + esc(d.PARENT_NETPROFIT == null ? "—" : (d.PARENT_NETPROFIT / 1e8).toFixed(1) + "亿")
+            + " · 营收同比 " + esc(d.YSTZ == null ? "—" : d.YSTZ.toFixed(1) + "%") + "</div></div>";
+        }).join("") : '<div class="empty">暂无财报数据</div>';
+      }).catch(function (e) { box.innerHTML = '<div class="empty">加载失败:' + esc(e.message) + "</div>"; });
+  }
+}
+
+/* ===== 战法引擎(与 core tactics.py 同口径的 JS 移植) ===== */
+var UP = "bullish", DOWN = "bearish", NEU = "neutral";
+function tSMA(v, p) { var out = new Array(v.length).fill(null); for (var i = p - 1; i < v.length; i++) { var s = 0; for (var j = i - p + 1; j <= i; j++) s += v[j]; out[i] = s / p; } return out; }
+function tEMA(v, p) { var out = new Array(v.length).fill(null); if (v.length < p) return out; var s = 0; for (var i = 0; i < p; i++) s += v[i]; out[p - 1] = s / p; var a = 2 / (p + 1); for (i = p; i < v.length; i++) out[i] = a * v[i] + (1 - a) * out[i - 1]; return out; }
+function tRSI(c, p) {
+  p = p || 14; var out = new Array(c.length).fill(null); if (c.length <= p) return out;
+  var g = 0, l = 0, i, d;
+  for (i = 1; i <= p; i++) { d = c[i] - c[i - 1]; g += Math.max(d, 0); l += Math.max(-d, 0); }
+  var ag = g / p, al = l / p;
+  out[p] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  for (i = p + 1; i < c.length; i++) { d = c[i] - c[i - 1]; ag = (ag * (p - 1) + Math.max(d, 0)) / p; al = (al * (p - 1) + Math.max(-d, 0)) / p; out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al); }
+  return out;
+}
+function tMACD(c) {
+  var ef = tEMA(c, 12), es = tEMA(c, 26);
+  var dif = c.map(function (_, i) { return ef[i] != null && es[i] != null ? ef[i] - es[i] : null; });
+  var valid = dif.filter(function (v) { return v != null; });
+  var dv = tEMA(valid, 9), dea = new Array(c.length).fill(null), cur = 0;
+  dif.forEach(function (v, i) { if (v == null) return; dea[i] = cur < dv.length ? dv[cur] : null; cur++; });
+  var hist = dif.map(function (v, i) { return v != null && dea[i] != null ? (dea[i] - v) * -2 : null; });
+  return [dif, dea, hist];
+}
+function tKDJ(b) {
+  var k = new Array(b.length).fill(null), d = new Array(b.length).fill(null), j = new Array(b.length).fill(null);
+  var kp = 50, dp = 50;
+  for (var i = 8; i < b.length; i++) {
+    var hh = -Infinity, ll = Infinity;
+    for (var w = i - 8; w <= i; w++) { if (b[w].high > hh) hh = b[w].high; if (b[w].low < ll) ll = b[w].low; }
+    var rsv = hh === ll ? 50 : (b[i].close - ll) / (hh - ll) * 100;
+    kp = kp * 2 / 3 + rsv / 3; dp = dp * 2 / 3 + kp / 3;
+    k[i] = kp; d[i] = dp; j[i] = 3 * kp - 2 * dp;
+  }
+  return [k, d, j];
+}
+function xUp(a, b, i) { return i >= 1 && a[i] != null && b[i] != null && a[i - 1] != null && b[i - 1] != null && a[i - 1] <= b[i - 1] && a[i] > b[i]; }
+function xDn(a, b, i) { return i >= 1 && a[i] != null && b[i] != null && a[i - 1] != null && b[i - 1] != null && a[i - 1] >= b[i - 1] && a[i] < b[i]; }
+function aligned(st, i, asc) {
+  for (var x = 0; x < st.length - 1; x++) {
+    if (st[x][i] == null || st[x + 1][i] == null) return false;
+    if (asc && !(st[x][i] > st[x + 1][i])) return false;
+    if (!asc && !(st[x][i] < st[x + 1][i])) return false;
+  }
+  return true;
+}
+function risingV(v, i) { return i >= 1 && v[i] != null && v[i - 1] != null && v[i] > v[i - 1]; }
+function fallingV(v, i) { return i >= 1 && v[i] != null && v[i - 1] != null && v[i] < v[i - 1]; }
+function f2(x) { return x.toFixed(2); }
+function tacticCtx(bars) {
+  var o = bars.map(function (b) { return b.open; }), h = bars.map(function (b) { return b.high; }),
+      l = bars.map(function (b) { return b.low; }), c = bars.map(function (b) { return b.close; }),
+      v = bars.map(function (b) { return b.vol || 0; });
+  var mac = tMACD(c), kd = tKDJ(bars);
+  return { o: o, h: h, l: l, c: c, v: v, ma5: tSMA(c, 5), ma10: tSMA(c, 10), ma20: tSMA(c, 20),
+    dif: mac[0], dea: mac[1], hist: mac[2], k: kd[0], d: kd[1], j: kd[2],
+    rsi: tRSI(c, 14), volMa20: tSMA(v, 20) };
+}
+/* 支撑阻力位(support_resistance.py 同口径移植) */
+function detectLevels(bars) {
+  var W = 5, n = bars.length;
+  if (n < W * 4 + 2) return [];
+  var trs = [], i;
+  for (i = 1; i < n; i++) trs.push(Math.max(bars[i].high - bars[i].low, Math.abs(bars[i].high - bars[i - 1].close), Math.abs(bars[i].low - bars[i - 1].close)));
+  var atr = 0; var tw = trs.slice(-14); tw.forEach(function (x) { atr += x; }); atr /= tw.length || 1;
+  if (atr <= 0) return [];
+  var tol = atr * 0.8;
+  function cluster(pts) {
+    var out = [];
+    pts.slice().sort(function (a, b) { return a - b; }).forEach(function (p) {
+      if (out.length && Math.abs(p - out[out.length - 1].price) <= tol) {
+        var t = out[out.length - 1];
+        t.price = (t.price * t.touches + p) / (t.touches + 1); t.touches++;
+      } else out.push({ price: p, touches: 1 });
+    });
+    return out;
+  }
+  var highs = [], lows = [];
+  for (i = W; i < n - W; i++) {
+    var segH = -Infinity, segL = Infinity;
+    for (var w = i - W; w <= i + W; w++) { if (bars[w].high > segH) segH = bars[w].high; if (bars[w].low < segL) segL = bars[w].low; }
+    if (bars[i].high >= segH) highs.push(bars[i].high);
+    if (bars[i].low <= segL) lows.push(bars[i].low);
+  }
+  function holdStats(price, kind) {
+    var near = 0, held = 0;
+    for (var x = W; x < n; x++) {
+      var touched = kind === "support" ? bars[x].low <= price + tol / 2 : bars[x].high >= price - tol / 2;
+      var heldNow = kind === "support" ? bars[x].close >= price - tol / 2 : bars[x].close <= price + tol / 2;
+      if (touched) { near++; if (heldNow) held++; }
+    }
+    return near ? held / near : null;
+  }
+  var levels = [];
+  [["support", lows], ["resistance", highs]].forEach(function (pair) {
+    cluster(pair[1]).forEach(function (cl) {
+      var rate = holdStats(cl.price, pair[0]);
+      var samples = cl.touches;
+      if (rate == null && samples < 2) return;
+      levels.push({ kind: pair[0], price: cl.price });
+    });
+  });
+  return levels;
+}
+function swingPair(vals, lookback, i, find) {
+  var from = Math.max(0, i - lookback);
+  var window = vals.slice(from, i + 1);
+  if (window.length < 20) return null;
+  var earlier = window.slice(0, -10), later = window.slice(-10);
+  if (!earlier.length || !later.length) return null;
+  var first = find === "low" ? Math.min.apply(null, earlier) : Math.max.apply(null, earlier);
+  var second = find === "low" ? Math.min.apply(null, later) : Math.max.apply(null, later);
+  var i1 = from + earlier.indexOf(first), i2 = from + earlier.length + later.indexOf(second);
+  return i1 < i2 ? [i1, i2] : null;
+}
+/* 21 个探测器(ctx = tacticCtx 结果)。返回 [{index,dir,detail}] */
+var DETECT = {
+  ma_golden_cross: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) if (xUp(x.ma5, x.ma20, i)) s.push({ index: i, dir: UP, detail: "MA5 上穿 MA20（" + f2(x.ma5[i]) + " > " + f2(x.ma20[i]) + "）" }); return s; },
+  ma_death_cross: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) if (xDn(x.ma5, x.ma20, i)) s.push({ index: i, dir: DOWN, detail: "MA5 下穿 MA20（" + f2(x.ma5[i]) + " < " + f2(x.ma20[i]) + "）" }); return s; },
+  ma_bullish_alignment: function (x) { var st = [x.ma5, x.ma10, x.ma20], s = []; for (var i = 1; i < x.c.length; i++) if (aligned(st, i, true) && risingV(x.ma5, i) && risingV(x.ma10, i) && risingV(x.ma20, i)) s.push({ index: i, dir: UP, detail: "MA5 > MA10 > MA20 且三线向上" }); return s; },
+  ma_bearish_alignment: function (x) { var st = [x.ma5, x.ma10, x.ma20], s = []; for (var i = 1; i < x.c.length; i++) if (aligned(st, i, false) && fallingV(x.ma5, i) && fallingV(x.ma10, i) && fallingV(x.ma20, i)) s.push({ index: i, dir: DOWN, detail: "MA5 < MA10 < MA20 且三线向下" }); return s; },
+  macd_golden_cross: function (x) { var s = []; for (var i = 1; i < x.dif.length; i++) if (xUp(x.dif, x.dea, i)) s.push({ index: i, dir: UP, detail: "DIF 上穿 DEA" + (x.dea[i] < 0 ? "（零轴下方，超卖区金叉）" : "") }); return s; },
+  macd_death_cross: function (x) { var s = []; for (var i = 1; i < x.dif.length; i++) if (xDn(x.dif, x.dea, i)) s.push({ index: i, dir: DOWN, detail: "DIF 下穿 DEA" + (x.dea[i] > 0 ? "（零轴上方，高位死叉）" : "") }); return s; },
+  volume_breakout: function (x) { var s = []; for (var i = 21; i < x.c.length; i++) { if (x.volMa20[i] == null || x.volMa20[i] <= 0) continue; var ratio = x.v[i] / x.volMa20[i]; var ph = Math.max.apply(null, x.c.slice(i - 20, i)); if (ratio >= 2 && x.c[i] > ph) s.push({ index: i, dir: UP, detail: "成交量 " + ratio.toFixed(1) + " 倍于 20 日均量，收盘突破前 20 日收盘高点 " + f2(ph) }); } return s; },
+  support_hold: function (x, bars) {
+    var s = [], n = x.c.length; if (n < 25) return s;
+    var levels = detectLevels(bars.slice(0, bars.length - 3)).filter(function (lv) { return lv.kind === "support"; });
+    for (var i = n - 3; i < n; i++) {
+      if (x.c[i] <= x.o[i]) continue;
+      for (var w = 0; w < levels.length; w++) {
+        var lv = levels[w].price;
+        if (lv * 0.995 <= x.l[i] && x.l[i] <= lv * 1.005) { s.push({ index: i, dir: UP, detail: "回踩支撑位 " + f2(lv) + " 附近收阳企稳" }); break; }
+      }
+    }
+    return s;
+  },
+  kdj_golden_cross: function (x) { var s = []; for (var i = 1; i < x.k.length; i++) if (xUp(x.k, x.d, i) && x.k[i] < 30) s.push({ index: i, dir: UP, detail: "KDJ 低位金叉（K=" + x.k[i].toFixed(1) + " 上穿 D=" + x.d[i].toFixed(1) + "，K<30）" }); return s; },
+  kdj_death_cross: function (x) { var s = []; for (var i = 1; i < x.k.length; i++) if (xDn(x.k, x.d, i) && x.k[i] > 70) s.push({ index: i, dir: DOWN, detail: "KDJ 高位死叉（K=" + x.k[i].toFixed(1) + " 下穿 D=" + x.d[i].toFixed(1) + "，K>70）" }); return s; },
+  rsi_bullish_divergence: function (x) {
+    var s = []; for (var i = 20; i < x.c.length; i++) {
+      if (x.rsi[i] == null) continue;
+      var pair = swingPair(x.c, 60, i, "low"); if (!pair) continue;
+      var i1 = pair[0], i2 = pair[1];
+      if (i2 !== i || x.rsi[i1] == null || x.rsi[i2] == null) continue;
+      if (x.c[i2] < x.c[i1] && x.rsi[i2] > x.rsi[i1] + 2) s.push({ index: i, dir: UP, detail: "底背离：价创新低（" + f2(x.c[i2]) + " < " + f2(x.c[i1]) + "）而 RSI 抬高（" + x.rsi[i2].toFixed(1) + " > " + x.rsi[i1].toFixed(1) + "）" });
+    } return s;
+  },
+  rsi_bearish_divergence: function (x) {
+    var s = []; for (var i = 20; i < x.h.length; i++) {
+      if (x.rsi[i] == null) continue;
+      var pair = swingPair(x.h, 60, i, "high"); if (!pair) continue;
+      var i1 = pair[0], i2 = pair[1];
+      if (i2 !== i || x.rsi[i1] == null || x.rsi[i2] == null) continue;
+      if (x.h[i2] > x.h[i1] && x.rsi[i2] < x.rsi[i1] - 2) s.push({ index: i, dir: DOWN, detail: "顶背离：价创新高（" + f2(x.h[i2]) + " > " + f2(x.h[i1]) + "）而 RSI 走低（" + x.rsi[i2].toFixed(1) + " < " + x.rsi[i1].toFixed(1) + "）" });
+    } return s;
+  },
+  doji: function (x) { var s = []; for (var i = 0; i < x.c.length; i++) { var sp = x.h[i] - x.l[i]; if (sp <= 0) continue; if (Math.abs(x.c[i] - x.o[i]) <= sp / 3) s.push({ index: i, dir: NEU, detail: "十字星：多空拉锯，方向待选择" }); } return s; },
+  bullish_engulfing: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) if (x.c[i - 1] < x.o[i - 1] && x.c[i] > x.o[i] && x.c[i] >= x.o[i - 1] && x.o[i] <= x.c[i - 1]) s.push({ index: i, dir: UP, detail: "阳吞阴：阳线实体完全包住前一日阴线" }); return s; },
+  bearish_engulfing: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) if (x.c[i - 1] > x.o[i - 1] && x.c[i] < x.o[i] && x.c[i] <= x.o[i - 1] && x.o[i] >= x.c[i - 1]) s.push({ index: i, dir: DOWN, detail: "阴吞阳：阴线实体完全包住前一日阳线" }); return s; },
+  platform_breakout: function (x) { var s = []; for (var i = 20; i < x.c.length; i++) { var ph = Math.max.apply(null, x.c.slice(i - 20, i)); var gain = x.o[i] > 0 ? (x.c[i] - x.o[i]) / x.o[i] * 100 : 0; if (x.c[i] > ph && gain >= 3) s.push({ index: i, dir: UP, detail: "突破 20 日平台：收盘 " + f2(x.c[i]) + " 创 20 日新高，实体涨幅 " + gain.toFixed(1) + "%" }); } return s; },
+  n_shape_up: function (x) { var s = []; for (var i = 7; i < x.c.length; i++) if (x.c[i - 5] > x.c[i - 7] && x.c[i - 2] < x.c[i - 4] && x.c[i] > x.c[i - 2] && x.c[i] > x.o[i]) s.push({ index: i, dir: UP, detail: "N 字上涨：涨 → 回调 → 再收阳启动，回调未破前低结构" }); return s; },
+  ma20_support: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) { if (x.ma20[i] == null || x.ma20[i - 1] == null) continue; var ma = x.ma20[i]; if (!(x.ma20[i] > x.ma20[i - 1])) continue; var touched = x.l[i] <= ma * 1.015 && x.l[i] >= ma * 0.985; var held = x.c[i] > ma && x.c[i] > x.o[i]; if (touched && held) s.push({ index: i, dir: UP, detail: "均线辅助：回踩上行的 MA20（" + f2(ma) + "）后收阳企稳" }); } return s; },
+  swing_higher_low: function (x) { var s = []; for (var i = 20; i < x.l.length; i++) { if (x.ma20[i] == null || x.ma20[i - 1] == null) continue; var rl = Math.min.apply(null, x.l.slice(i - 10, i)), pl = Math.min.apply(null, x.l.slice(i - 20, i - 10)); if (rl > pl && x.ma20[i] > x.ma20[i - 1]) s.push({ index: i, dir: UP, detail: "波段低点抬高：近 10 日低点 " + f2(rl) + " > 前 10 日低点 " + f2(pl) + "，MA20 向上" }); } return s; },
+  weak_to_strong: function (x) { var s = []; for (var i = 1; i < x.c.length; i++) { var body = x.o[i - 1] - x.c[i - 1], shadow = x.h[i - 1] - x.o[i - 1]; var prev = x.c[i - 1] < x.o[i - 1] && body > 0 && shadow >= body * 2; var gap = x.c[i - 1] > 0 ? (x.o[i] - x.c[i - 1]) / x.c[i - 1] * 100 : 0; if (prev && gap >= 1.5 && x.c[i] > x.o[i]) s.push({ index: i, dir: UP, detail: "弱转强（K 线近似）：昨日长上影阴线，今日高开 " + gap.toFixed(1) + "% 收阳" }); } return s; },
+  reversal_after_crash: function (x) { var s = []; for (var i = 2; i < x.c.length; i++) { var drop = x.c[i - 2] > 0 ? (x.c[i - 1] - x.c[i - 2]) / x.c[i - 2] * 100 : 0; if (drop <= -5 && x.c[i] >= x.c[i - 1]) s.push({ index: i, dir: UP, detail: "反核修复（K 线近似）：昨日大跌 " + drop.toFixed(1) + "%，今日收复至 " + f2(x.c[i]) }); } return s; }
+};
+var TACTICS = [
+  { id: "ma_golden_cross", name: "均线金叉", dir: UP, cat: "ma", desc: "MA5 上穿 MA20，短线动能转强的经典起点信号。" },
+  { id: "ma_death_cross", name: "均线死叉", dir: DOWN, cat: "ma", desc: "MA5 下穿 MA20，短线动能转弱的经典起点信号。" },
+  { id: "ma_bullish_alignment", name: "均线多头排列", dir: UP, cat: "ma", desc: "MA5 > MA10 > MA20 且三线向上，趋势行情的持有确认形态。" },
+  { id: "ma_bearish_alignment", name: "均线空头排列", dir: DOWN, cat: "ma", desc: "MA5 < MA10 < MA20 且三线向下，下行趋势的规避信号。" },
+  { id: "macd_golden_cross", name: "MACD 金叉", dir: UP, cat: "momentum", desc: "DIF 上穿 DEA；零轴下方出现时代表超卖区修复，权重更高。" },
+  { id: "macd_death_cross", name: "MACD 死叉", dir: DOWN, cat: "momentum", desc: "DIF 下穿 DEA；零轴上方出现时代表高位转弱，需要警惕。" },
+  { id: "volume_breakout", name: "放量突破", dir: UP, cat: "volume_price", desc: "成交量 ≥ 2 倍 20 日均量且收盘突破前 20 日收盘高点，量价齐升。" },
+  { id: "support_hold", name: "回踩支撑企稳", dir: UP, cat: "volume_price", desc: "近 3 日回踩关键支撑位（摆动点聚类识别）±0.5% 后收阳，未破位。" },
+  { id: "kdj_golden_cross", name: "KDJ 低位金叉", dir: UP, cat: "momentum", desc: "K 值在 30 以下上穿 D 值，超卖区短线反转信号。" },
+  { id: "kdj_death_cross", name: "KDJ 高位死叉", dir: DOWN, cat: "momentum", desc: "K 值在 70 以上下穿 D 值，超买区短线回落信号。" },
+  { id: "rsi_bullish_divergence", name: "RSI 底背离", dir: UP, cat: "momentum", desc: "价格创阶段新低而 RSI 低点抬高，下跌动能衰竭（60 日窗口）。" },
+  { id: "rsi_bearish_divergence", name: "RSI 顶背离", dir: DOWN, cat: "momentum", desc: "价格创阶段新高而 RSI 高点走低，上涨动能衰竭（60 日窗口）。" },
+  { id: "doji", name: "十字星", dir: NEU, cat: "volume_price", desc: "实体 ≤ 全振幅 1/3，多空拉锯；趋势末端出现时观察方向选择。" },
+  { id: "bullish_engulfing", name: "阳吞阴", dir: UP, cat: "volume_price", desc: "阳线实体完全包住前一日阴线，短线做多动能占优。" },
+  { id: "bearish_engulfing", name: "阴吞阳", dir: DOWN, cat: "volume_price", desc: "阴线实体完全包住前一日阳线，短线做空动能占优。" },
+  { id: "platform_breakout", name: "突破平台", dir: UP, cat: "volume_price", desc: "收盘创近 20 日收盘新高且实体涨幅 ≥ 3%（纯价格突破口径，不要求放量）。" },
+  { id: "n_shape_up", name: "N 字上涨", dir: UP, cat: "structure", desc: "涨 → 回调 → 再收阳启动的 N 字结构，回调未破前低（固定 7 日窗口，可复现）。" },
+  { id: "ma20_support", name: "均线辅助回踩", dir: UP, cat: "ma", desc: "MA20 向上时回踩 MA20 ±1.5% 后收阳企稳——均线辅助买点的确定性口径。" },
+  { id: "swing_higher_low", name: "波段低点抬高", dir: UP, cat: "structure", desc: "近 10 日最低价高于前 10 日最低价且 MA20 向上，波段上行结构。" },
+  { id: "weak_to_strong", name: "弱转强（近似）", dir: UP, cat: "sentiment", desc: "昨日长上影阴线，今日高开 ≥ 1.5% 收阳。K 线近似口径。" },
+  { id: "reversal_after_crash", name: "反核修复（近似）", dir: UP, cat: "sentiment", desc: "昨日大跌 ≥ 5% 后今日收复昨收。K 线近似口径。" }
+];
+var TACTIC_BY_ID = {}; TACTICS.forEach(function (t) { TACTIC_BY_ID[t.id] = t; });
+function tacticSnapshot(bars, ids) {
+  if (bars.length < 35) return { sufficient: false, signals: [] };
+  var ctx = tacticCtx(bars), s = [];
+  TACTICS.forEach(function (t) {
+    if (ids && ids.indexOf(t.id) < 0) return;
+    var found;
+    try { found = DETECT[t.id](ctx, bars); } catch (e) { return; }
+    (found || []).forEach(function (sg) {
+      s.push({ tactic_id: t.id, tactic_name: t.name, direction: sg.dir, detail: sg.detail, date: String(bars[sg.index].date).slice(0, 10) });
+    });
+  });
+  s.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  return { sufficient: true, signals: s.slice(-120) };
+}
+
+/* ===== 战法雷达 UI ===== */
+var SECTS = [{ id: "all", name: "全部" }, { id: "main", name: "主板" }, { id: "cyb", name: "创业板" }, { id: "kcb", name: "科创板" }];
+var SCAN_BOARDS = [{ id: "gainers", name: "涨" }, { id: "turnover_rate", name: "换" }, { id: "turnover", name: "额" }];
+var scanState = { sect: "all", picked: null, running: false, stop: false };
+var SINA_URL = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num={top}&sort={sort}&asc={asc}&node=hs_a&symbol=&_s_r_a=auto";
+function sinaBoard(board, top) {
+  var map = { turnover: ["amount", 0], gainers: ["changepercent", 0], losers: ["changepercent", 1], turnover_rate: ["turnoverratio", 0] };
+  var url = SINA_URL.replace("{top}", top).replace("{sort}", map[board][0]).replace("{asc}", map[board][1]);
+  return bridgeCall("GET", url, { "Referer": "https://finance.sina.com.cn/", "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile", "Accept": "application/json" }, null, 15000)
+    .then(function (r) {
+      if (r.status !== 200) throw new Error("榜单 HTTP " + r.status);
+      var items = JSON.parse(r.body);
+      var rows = [];
+      (Array.isArray(items) ? items : []).forEach(function (it) {
+        var code = String(it.code || ""), name = String(it.name || "");
+        if (!code || !name || /^[489]/.test(code)) return;
+        var price = parseFloat(it.trade);
+        if (!(price > 0)) return;
+        rows.push({ symbol: (/^(6|5|9)/.test(code) ? "sh" : /^(0|1|2|3)/.test(code) ? "sz" : "") + code, code: code, name: name, price: price });
+      });
+      if (!rows.length) throw new Error("空榜单(可能被限流)");
+      return rows;
+    });
+}
+/* 东财 clist 榜单(push2 / push2delay 双主机);fs 覆盖沪深主板+创业板+科创板,无北交所 */
+function emBoardOn(host, board, top) {
+  var fid = { gainers: "f3", losers: "f3", turnover_rate: "f8", turnover: "f6" }[board];
+  var po = board === "losers" ? 0 : 1;
+  var url = "https://" + host + "/api/qt/clist/get?pn=1&pz=" + top + "&po=" + po + "&np=1&fltt=2&invt=2&fid=" + fid
+    + "&fs=" + encodeURIComponent("m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23")
+    + "&fields=f2,f3,f12,f13,f14";
+  return bridgeCall("GET", url, {}, null, 15000).then(function (r) {
+    if (r.status !== 200) throw new Error("HTTP " + r.status);
+    var diff = ((JSON.parse(r.body).data || {}).diff) || [];
+    var list = Array.isArray(diff) ? diff : Object.keys(diff).map(function (k) { return diff[k]; });
+    var rows = [];
+    list.forEach(function (it) {
+      var code = String(it.f12 || ""), name = String(it.f14 || ""), price = parseFloat(it.f2);
+      if (!code || !name || !(price > 0)) return;
+      rows.push({ symbol: (it.f13 === 1 ? "sh" : "sz") + code, code: code, name: name, price: price });
+    });
+    if (!rows.length) throw new Error("空榜单(可能被风控)");
+    return rows;
+  });
+}
+/* 榜单源三路互备:新浪 → 东财 push2 → 东财 push2delay;记住上次成功的源 */
+var BOARD_SRCS = [
+  { id: "sina", name: "新浪", fn: sinaBoard },
+  { id: "em", name: "东财", fn: function (b, t) { return emBoardOn("push2.eastmoney.com", b, t); } },
+  { id: "emd", name: "东财延迟", fn: function (b, t) { return emBoardOn("push2delay.eastmoney.com", b, t); } }
+];
+var boardSrcPref = LS.get("boardSrc", "");
+function boardWithFallback(board, top) {
+  var order = BOARD_SRCS.slice().sort(function (a, b) { return (b.id === boardSrcPref ? 1 : 0) - (a.id === boardSrcPref ? 1 : 0); });
+  var errs = [];
+  function tryAt(i) {
+    if (i >= order.length) return Promise.reject(new Error(errs.join(" / ") || "全部榜单源失败"));
+    return order[i].fn(board, top).then(function (rows) {
+      if (boardSrcPref !== order[i].id) { boardSrcPref = order[i].id; LS.set("boardSrc", order[i].id); }
+      return rows;
+    }).catch(function (e) {
+      errs.push(order[i].name + ":" + e.message);
+      return tryAt(i + 1);
+    });
+  }
+  return tryAt(0);
+}
+function sectFilter(rows) {
+  if (scanState.sect === "all") return rows;
+  return rows.filter(function (r) {
+    var c = r.code;
+    if (scanState.sect === "main") return /^60/.test(c) || /^00/.test(c);
+    if (scanState.sect === "cyb") return /^30/.test(c);
+    return /^68/.test(c);
+  });
+}
+function renderTacCatalog() {
+  var CATN = { ma: "均线", momentum: "动量", volume_price: "量价", structure: "结构", sentiment: "情绪" };
+  var byCat = {};
+  TACTICS.forEach(function (t) { (byCat[t.cat] = byCat[t.cat] || []).push(t); });
+  $("tacCatalog").innerHTML = Object.keys(byCat).map(function (cat) {
+    return '<p class="note" style="margin-top:6px">' + CATN[cat] + "</p>" + byCat[cat].map(function (t) {
+      var dcol = t.dir === UP ? "b-up" : t.dir === DOWN ? "b-down" : "";
+      return '<div class="tactic-row"><span class="nm ' + dcol + '">' + esc(t.name) + '</span> <span class="note" style="display:inline">' + esc(t.desc) + "</span></div>";
+    }).join("");
+  }).join("");
+  $("tacCount").textContent = TACTICS.length;
+}
+function buildTacChips() {
+  $("sectChips").innerHTML = SECTS.map(function (s) { return '<button type="button" class="chip-sel' + (s.id === scanState.sect ? " on" : "") + '" data-s="' + s.id + '">' + s.name + "</button>"; }).join("");
+  var allOn = !scanState.picked;
+  $("tacPickChips").innerHTML = '<button type="button" class="chip-sel tac-all' + (allOn ? " on" : "") + '">全部 (' + TACTICS.length + ")</button>"
+    + TACTICS.map(function (t) { var on = scanState.picked && scanState.picked.indexOf(t.id) >= 0; return '<button type="button" class="chip-sel tac-one' + (on ? " on" : "") + '" data-t="' + t.id + '">' + esc(t.name) + "</button>"; }).join("");
+}
+function scanTacticIds() {
+  if (!scanState.picked) return null;
+  return scanState.picked.slice();
+}
+function startScan() {
+  if (scanState.running) return;
+  var meta = $("scanMeta"), res = $("scanResults");
+  scanState.running = true; scanState.stop = false;
+  $("btnScan").disabled = true; $("btnScanStop").classList.remove("hidden");
+  res.innerHTML = ""; meta.textContent = "拉取三榜(涨幅/换手/成交额)…";
+  var top = +(document.querySelector("#scanTop button.on").dataset.v) || 40;
+  var pxMin = parseFloat($("pxMin").value), pxMax = parseFloat($("pxMax").value);
+  var bname = { gainers: "涨", turnover_rate: "换", turnover: "额" };
+  var fetches = SCAN_BOARDS.map(function (b) {
+    return boardWithFallback(b.id, top)
+      .then(function (rows) { return { label: bname[b.id], rows: rows, err: "" }; })
+      .catch(function (e) { return { label: bname[b.id], rows: [], err: bname[b.id] + ":" + e.message }; });
+  });
+  Promise.all(fetches).then(function (groups) {
+    var merged = [], seen = {}, errs = [];
+    var stat = groups.map(function (g) {
+      if (g.err) errs.push(g.err);
+      return g.label + " " + g.rows.length + (g.err ? "✕" : "");
+    }).join(" · ");
+    groups.forEach(function (g) {
+      (g.rows || []).forEach(function (r) { if (!seen[r.symbol]) { seen[r.symbol] = 1; merged.push(r); } });
+    });
+    var beforeN = merged.length;
+    merged = sectFilter(merged).filter(function (r) {
+      if (!isNaN(pxMin) && r.price < pxMin) return false;
+      if (!isNaN(pxMax) && r.price > pxMax) return false;
+      return true;
+    }).slice(0, 60);
+    if (!merged.length) {
+      meta.textContent = "候选为空:三榜获取 [" + stat + "]"
+        + (errs.length ? ";失败源:" + errs.join("; ") : "")
+        + (beforeN > 0 ? ";被板块/价格过滤清空,请放宽条件" : "");
+      scanDone(); return;
+    }
+    meta.textContent = "榜单 [" + stat + "] 合并 " + beforeN + " 只,过滤后 " + merged.length + " 只,开始逐票扫描…";
+    var ids = scanTacticIds(), out = [], sigCount = 0, i = 0;
+    function step() {
+      if (scanState.stop) { meta.textContent = "已停止(完成 " + i + "/" + merged.length + ")"; scanDone(); return; }
+      if (i >= merged.length) {
+        meta.textContent = "扫描完成:" + merged.length + " 只候选 · " + sigCount + " 个信号(按信号日期倒序)";
+        res.innerHTML = out.length ? out.join("") : '<div class="empty">无战法信号</div>';
+        scanDone(); return;
+      }
+      var row = merged[i++];
+      meta.textContent = "扫描中 " + i + "/" + merged.length + " · " + row.symbol + " " + row.name;
+      fetchKline(row.symbol, 90).then(function (bars) {
+        var snap = tacticSnapshot(bars, ids);
+        if (snap.sufficient && snap.signals.length) {
+          sigCount += snap.signals.length;
+          var recent = snap.signals.slice(-3).reverse();
+          var html = '<div class="scan-item"><div class="hd"><span class="nm">' + esc(row.name) + ' <span class="note" style="display:inline">' + esc(row.symbol) + "</span></span>"
+            + '<span class="note" style="display:inline">' + f2(row.price) + "</span></div>";
+          recent.forEach(function (sg) {
+            var dcol = sg.direction === UP ? "b-up" : sg.direction === DOWN ? "b-down" : "";
+            html += '<div class="sg">' + esc(sg.date) + ' · <span class="' + dcol + '">' + esc(sg.tactic_name) + "</span> · " + esc(sg.detail) + "</div>";
+          });
+          html += "</div>";
+          out.push(html);
+        }
+      }).catch(function () { /* 单票失败如实跳过 */ })
+      .then(function () { setTimeout(step, 120); });
+    }
+    step();
+  }).catch(function (e) { meta.textContent = "扫描失败:" + e.message; scanDone(); });
+}
+function scanDone() {
+  scanState.running = false;
+  $("btnScan").disabled = false; $("btnScanStop").classList.add("hidden");
+}
+
+/* ===== 研究工作台 ===== */
+var FOCUS_PRESETS = ["估值是否合理", "最近一个季度业绩", "近期催化与风险", "K线趋势与量价", "行业竞争格局", "资金面与筹码"];
+var RQ_PRESETS = ["未来一个季度,该标的核心矛盾是什么?", "该标的当前估值处于什么分位?", "该标的近 30 日有哪些未被消化的信息?", "证伪条件:哪些信号出现说明看错了?"];
+function buildChips() {
+  $("rpChips").innerHTML = FOCUS_PRESETS.map(function (f) { return '<button type="button" class="chip-sel" data-f="' + esc(f) + '">' + esc(f) + "</button>"; }).join("");
+  $("rqChips").innerHTML = RQ_PRESETS.map(function (f) { return '<button type="button" class="chip-sel" data-q="' + esc(f) + '">' + esc(f) + "</button>"; }).join("");
+}
+function selectedFocus() {
+  var arr = [].slice.call(document.querySelectorAll("#rpChips .chip-sel.on")).map(function (b) { return b.dataset.f; });
+  var custom = $("rpFocus").value.trim();
+  if (custom) arr.push(custom);
+  return arr.join("、");
+}
+function selectedRQ() {
+  return [].slice.call(document.querySelectorAll("#rqChips .chip-sel.on")).map(function (b) { return b.dataset.q; }).join(" ");
+}
+function rpDays() { var b = document.querySelector("#rpDays button.on"); return b ? b.dataset.v : "120"; }
+function aiBase() { return state.aiUrl.replace(/\/+$/, ""); }
+function aiModel() { return state.aiModel; }
+function buildPrompt(code, focus, days, question, klineText) {
+  var p = "你是资深股票研究员。请用简体中文,就标的「" + code + "」输出一份简明研报,重点回应关注点:"
+    + (focus || "综合基本面与技术面") + "。" + (question ? "同时回答研究问题:" + question + "。" : "")
+    + "技术面结论必须基于下方提供的【K线数据】(如已提供);若未提供或数据不足,请在【数据缺口】如实列出,不得编造任何行情数字。"
+    + "产出结构(严格用这些小标题):摘要(3 行内)→【核心结论】不超过3条,每条一句话→【关键逻辑】2-4条论据(注明引用来源)→"
+    + "【催化剂】未来1-2个季度可能事件→【风险提示】2-3条→【数据缺口】列出不掌握的数据及数据时间→"
+    + "末行单独一行:数据不足处请以官方披露为准;仅供参考,不构成投资建议。";
+  if (klineText) p += "\n\n" + klineText;
+  return p;
+}
+/* 生成前拉真实K线,拼装注入提示词的技术面数据块 */
+function technicalBlock(code, days) {
+  var sym = normalizeStock(code);
+  if (!sym || !/^(sh|sz)/.test(sym)) {
+    return Promise.resolve({ text: "", note: code + " 非 A 股,不注入K线数据" });
+  }
+  return fetchKline(sym, days).then(function (bars) {
+    if (!bars || bars.length < 5) throw new Error("K线数据不足(" + (bars ? bars.length : 0) + "根)");
+    var closes = bars.map(function (b) { return b.close; });
+    var n = closes.length, last = bars[n - 1];
+    var ma5 = maAt(closes, 5, n - 1), ma10 = maAt(closes, 10, n - 1), ma20 = maAt(closes, 20, n - 1);
+    var rsi = tacticCtx(bars).rsi[n - 1];
+    var hi20 = Math.max.apply(null, bars.slice(-20).map(function (b) { return b.high; }));
+    var lo20 = Math.min.apply(null, bars.slice(-20).map(function (b) { return b.low; }));
+    var chgRange = (last.close - closes[0]) / closes[0] * 100;
+    var rows = bars.slice(-10).map(function (b) {
+      return b.date + " 开" + b.open.toFixed(2) + " 高" + b.high.toFixed(2) + " 低" + b.low.toFixed(2) + " 收" + b.close.toFixed(2) + " 量" + Math.round(b.vol);
+    }).join("\n");
+    var text = "【K线数据(前复权,近 " + n + " 个交易日," + bars[0].date + " ~ " + last.date + ")】"
+      + "\n区间涨跌:" + chgRange.toFixed(1) + "%;最新收盘:" + last.close.toFixed(2)
+      + ";20日最高/最低:" + hi20.toFixed(2) + " / " + lo20.toFixed(2)
+      + "\nMA5:" + (ma5 == null ? "—" : ma5.toFixed(2)) + "  MA10:" + (ma10 == null ? "—" : ma10.toFixed(2)) + "  MA20:" + (ma20 == null ? "—" : ma20.toFixed(2))
+      + "  RSI14:" + (rsi == null ? "—" : rsi.toFixed(1))
+      + "\n近10个交易日明细(日期 开 高 低 收 量):\n" + rows
+      + "\n以上为真实行情数据,技术面分析必须引用它,不得虚构。";
+    return { text: text, note: "已注入近 " + n + " 日真实K线(" + sym + ")" };
+  }).catch(function (e) {
+    return { text: "", note: "K线获取失败(" + e.message + "),已要求模型如实标注数据缺口" };
+  });
+}
+function chatCompletion(prompt) {
+  var body = JSON.stringify({ model: aiModel(), messages: [{ role: "user", content: prompt }], temperature: 0.5 });
+  return bridgeCall("POST", aiBase() + "/v1/chat/completions", { "Content-Type": "application/json" }, body, 180000)
+    .then(function (r) {
+      if (r.status === 429) throw new Error("限速中(1 次/分钟),稍后再试");
+      if (r.status !== 200) throw new Error("HTTP " + r.status + ":" + r.body.slice(0, 150));
+      var data = JSON.parse(r.body);
+      var text = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
+      if (!text) throw new Error("空响应");
+      return text;
+    });
+}
+function renderOut(title, text) {
+  $("rpOutTitle").textContent = title;
+  $("rpOut").textContent = text;
+  $("rpOutCard").classList.remove("hidden");
+}
+/* 生成队列(串行):从自选股点选或手动加入,按顺序逐个生成 */
+var genQueue = LS.get("genQueue", []);
+function saveQueue() { LS.set("genQueue", genQueue); renderQueue(); }
+function codeOf(sym) { return String(sym).replace(/^(sh|sz|bj)/, ""); }
+function renderQueue() {
+  var inQ = {};
+  genQueue.forEach(function (c) { inQ[c] = 1; });
+  $("wlPick").innerHTML = state.stocks.length ? state.stocks.map(function (s) {
+    var c = codeOf(s), on = !!inQ[c];
+    var q = (window.quoteMap || {})[s];
+    return '<button type="button" class="chip-sel' + (on ? " on" : "") + '" data-wl="' + esc(c) + '">' + esc((q && q.name ? q.name + " " : "") + c) + "</button>";
+  }).join("") : '<span class="note">暂无自选股</span>';
+  $("queueBox").innerHTML = (genQueue.length
+    ? genQueue.map(function (c, i) {
+        return '<span class="qchip">' + (i + 1) + ". " + esc(c) + '<span class="x" data-qx="' + esc(c) + '">✕</span></span>';
+      }).join("") + '<button type="button" class="chip-sel" data-qclear="1">清空队列</button>'
+    : "");
+}
+function addToQueue(code) {
+  code = String(code || "").replace(/^(sh|sz|bj)/, "").trim();
+  if (!/^\d{6}$/.test(code)) return false;
+  if (genQueue.indexOf(code) < 0) { genQueue.push(code); saveQueue(); }
+  return true;
+}
+
+function generateReport(bg) {
+  var out = $("genMsg");
+  var codes = genQueue.slice();
+  if (!codes.length) {
+    var single = $("rpCode").value.trim();
+    if (!single) { out.innerHTML = '<p class="err">先填标的代码,或从自选股点选加入生成队列</p>'; return; }
+    codes = [single];
+  }
+  if (!aiModel()) { out.innerHTML = '<p class="err">模型未配置,去「设置 → 模型配置」</p>'; return; }
+  var focus = selectedFocus(), days = rpDays(), rq = selectedRQ();
+  if (bg) {
+    // 后台队列:逐票先拉K线再提交(原生 aiPool 本身串行,这里先补齐数据)
+    $("btnGenReport").disabled = true; $("btnGenBg").disabled = true;
+    var pending = LS.get("pendingTasks", []);
+    var chain = Promise.resolve(), notes = [];
+    codes.forEach(function (code) {
+      chain = chain.then(function () {
+        return technicalBlock(code, days).then(function (kb) {
+          notes.push(code + ":" + kb.note);
+          var taskId = "t" + Date.now() + "-" + code;
+          bridge.startAiTask(taskId, aiBase() + "/v1/chat/completions", aiModel(), buildPrompt(code, focus, days, rq, kb.text));
+          pending.push({ id: taskId, title: "研报:" + code + "(" + days + "日)", at: new Date().toISOString() });
+        });
+      });
+    });
+    chain.then(function () {
+      LS.set("pendingTasks", pending);
+      $("btnGenReport").disabled = false; $("btnGenBg").disabled = false;
+      out.innerHTML = '<p class="okmsg">已提交 ' + codes.length + " 个后台任务(原生侧串行执行)。" + esc(notes.join(";")) + "</p>";
+    }).catch(function (e) {
+      $("btnGenReport").disabled = false; $("btnGenBg").disabled = false;
+      out.innerHTML = '<p class="err">队列提交失败:' + esc(e.message) + "</p>";
+    });
+    return;
+  }
+  $("btnGenReport").disabled = true; $("btnGenBg").disabled = true;
+  var i = 0, okN = 0, fail = [];
+  function next() {
+    if (i >= codes.length) {
+      $("btnGenReport").disabled = false; $("btnGenBg").disabled = false;
+      out.innerHTML = '<p class="okmsg">串行生成完成:成功 ' + okN + "/" + codes.length
+        + (fail.length ? ';失败:' + esc(fail.join("; ")) : "") + "</p>";
+      return;
+    }
+    var code = codes[i++];
+    out.innerHTML = '<p class="note">串行生成中 第 ' + i + "/" + codes.length + " 个:" + esc(code) + " · 拉取K线…</p>";
+    technicalBlock(code, days).then(function (kb) {
+      out.innerHTML = '<p class="note">串行生成中 第 ' + i + "/" + codes.length + " 个:" + esc(code) + " · " + esc(kb.note) + ",AI 生成中…</p>";
+      return chatCompletion(buildPrompt(code, focus, days, rq, kb.text)).then(function (text) {
+        okN++;
+        var hist = LS.get("reports", []);
+        hist.unshift({ id: "r" + Date.now() + "-" + code, title: "研报:" + code + "(" + days + "日)", text: text, at: new Date().toISOString(), code: code, cat: "个股研报" });
+        LS.set("reports", hist.slice(0, 30));
+        renderOut("研报:" + code + "(" + days + "日)", text);
+        renderHistory();
+        renderHomeReports();
+      });
+    }).catch(function (e) {
+      fail.push(code + " " + e.message);
+    }).then(next);
+  }
+  next();
+}
+function renderHistory() {
+  var hist = LS.get("reports", []);
+  var counts = { "全部": hist.length, "个股研报": 0 };
+  hist.forEach(function (r) { if (r.cat === "个股研报") counts["个股研报"]++; });
+  $("histChips").innerHTML = ["全部", "个股研报"].map(function (c) {
+    return '<button type="button" class="chip-sel' + (c === "全部" ? " on" : "") + '" data-cat="' + c + '">' + c + " (" + counts[c] + ")</button>";
+  }).join("");
+  $("rpHistory").innerHTML = hist.length ? hist.map(function (r) {
+    return '<div class="list-item" data-rid="' + esc(r.id) + '"><div class="t">' + esc(r.title) + '</div><div class="m">' + esc((r.cat || "个股研报") + " · " + r.at.slice(5, 16)) + " · 点击查看</div></div>";
+  }).join("") : '<div class="empty">还没有生成过研报</div>';
+}
+function fetchPendingTasks() {
+  var pending = LS.get("pendingTasks", []);
+  if (!pending.length || !bridge || !bridge.getAiTask) return;
+  var remain = [];
+  pending.forEach(function (t) {
+    var raw = bridge.getAiTask(t.id);
+    if (raw) {
+      var r;
+      try { r = JSON.parse(raw); } catch (pe) { r = { status: "running" }; }
+      if (r.status === "done") {
+        var text = r.raw || "";
+        try {
+          var d = JSON.parse(r.raw);
+          text = (d.choices && d.choices[0] && d.choices[0].message) ? d.choices[0].message.content : r.raw;
+        } catch (e2) { /* raw 非 JSON 时原样展示 */ }
+        var hist = LS.get("reports", []);
+        hist.unshift({ id: "r" + t.id, title: t.title, text: text, at: t.at, code: "", cat: "个股研报" });
+        LS.set("reports", hist.slice(0, 30));
+        renderOut(t.title, text);
+        var msg = $("genMsg");
+        if (msg) msg.innerHTML = '<p class="okmsg">后台研报已生成,结果已归档。</p>';
+      } else if (r.status === "error") {
+        renderOut(t.title, "后台生成失败:" + (r.err || "未知错误"));
+      } else {
+        remain.push(t); // running / lost → 继续等
+      }
+    } else remain.push(t);
+  });
+  LS.set("pendingTasks", remain);
+  renderHistory();
+}
+/* 原生后台任务完成回调(通知栏点击进入或应用在前台时触发) */
+window.__aiTaskDone = function () { try { fetchPendingTasks(); } catch (e) { } };
+
+/* ===== 研报/消息加密上传 ===== */
+function sendReport(title, text) {
+  var out = $("rptMsg");
+  if (!state.relay || !state.deviceToken || !state.syncKey) { out.innerHTML = '<p class="err">先在「总览」完成设备接入</p>'; return; }
+  title = (title || "").trim() || "手机消息";
+  text = (text || "").trim();
+  if (!text) { out.innerHTML = '<p class="err">正文不能为空</p>'; return; }
+  if (text.length > 12000) { out.innerHTML = '<p class="err">正文超过 12000 字,请拆分</p>'; return; }
+  var payload = { title: title, text: text, device_id: state.deviceId, created_at: new Date().toISOString() };
+  var idem = "mobile_note:" + Date.now() + ":" + Math.floor(Math.random() * 1e6);
+  $("btnSendReport").disabled = true;
+  out.innerHTML = '<p class="note">加密上传中…</p>';
+  sealFernet(state.syncKey, new TextEncoder().encode(JSON.stringify(payload))).then(function (cipher) {
+    return bridgeCall("POST", state.relay + "/sync/events", { "X-Relay-Token": state.deviceToken, "Content-Type": "application/json" },
+      JSON.stringify({ device_id: state.deviceId, events: [{ kind: "mobile.note", idempotency_key: idem, version: 1, payload: cipher }]}));
+  }).then(function (r) {
+    $("btnSendReport").disabled = false;
+    if (r.status === 200) {
+      var sent = LS.get("sentNotes", []); sent.unshift({ title: title, at: new Date().toISOString() });
+      LS.set("sentNotes", sent.slice(0, 50));
+      $("rptText").value = "";
+      out.innerHTML = '<p class="okmsg">已加密上传。Windows 端「立即同步 → 应用收件箱」后可见。</p>';
+      renderSent();
+    } else out.innerHTML = '<p class="err">上传失败 HTTP ' + r.status + ":" + esc(r.body.slice(0, 120)) + "</p>";
+  }).catch(function (e) { $("btnSendReport").disabled = false; out.innerHTML = '<p class="err">失败:' + esc(e.message) + "</p>"; });
+}
+
+/* ===== 设置:模型配置 ===== */
+function renderAiCfg() {
+  $("cfgUrl").value = state.aiUrl; $("cfgKey").value = state.aiKey; $("cfgModel").value = state.aiModel;
+  $("genModelTxt").textContent = aiModel() ? "自定义·" + aiModel() : "未配置";
+}
+
+/* ===== 通知操作(总览页内委托) ===== */
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest ? e.target.closest("button[data-act]") : null;
+  if (btn) {
+    var idem = btn.dataset.idem, act = btn.dataset.act;
+    if (act === "read") {
+      if (state.readSet.indexOf(idem) < 0) { state.readSet.push(idem); saveState(); }
+      renderNotifInto("notifBox");
+    } else if (act === "snooze") {
+      var i = state.snoozeSet.indexOf(idem);
+      if (i >= 0) state.snoozeSet.splice(i, 1); else state.snoozeSet.push(idem);
+      saveState(); renderNotifInto("notifBox");
+    }
+    return;
+  }
+  var it = e.target.closest ? e.target.closest(".list-item[data-idem]") : null;
+  if (it) {
+    var ev = state.events.find(function (x) { return x.idempotency_key === it.dataset.idem; });
+    if (ev) {
+      var p = ev.plain || {};
+      renderOut(String(p.title || p.question || "详情"), String(p.text || p.summary || JSON.stringify(p, null, 2)));
+      document.querySelector("nav button[data-p='work']").click();
+    }
+  }
+});
+
+/* ===== 渲染总入口与导航 ===== */
+function renderAll() {
+  renderHome();
+  $("stDevice").textContent = state.deviceId || "—";
+  $("stCursor").textContent = state.cursor;
+  $("stCount").textContent = state.events.length;
+  renderStocks();
+  renderQueue();
+  renderHistory();
+  renderChip(state.deviceToken ? "已同步" : "未接入", !!state.deviceToken);
+  renderAiCfg();
+}
+document.querySelectorAll("nav button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll("nav button").forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    ["home", "stocks", "work", "set"].forEach(function (p) { $("page-" + p).classList.toggle("hidden", p !== b.dataset.p); });
+    if (b.dataset.p === "home") { doSync(false); renderHome(); }
+    if (b.dataset.p === "stocks") renderStocks();
+    if (b.dataset.p === "work") fetchPendingTasks();
+  });
+});
+
+/* ===== 事件绑定 ===== */
+$("btnPairCode").addEventListener("click", pairByCode);
+$("btnPair").addEventListener("click", pair);
+$("btnSyncSet").addEventListener("click", function () { doSync(true).then(function () { renderAll(); }); });
+$("btnLogoutSet").addEventListener("click", logout);
+$("btnReset").addEventListener("click", function () {
+  if (!confirm("清空本机缓存的事件与游标?(接入凭据保留)")) return;
+  state.events = []; state.cursor = 0; state.readSet = []; saveState(); renderAll();
+});
+$("btnNewsRefresh").addEventListener("click", function () { loadNews(true); });
+$("btnHomeReport").addEventListener("click", function () {
+  var code = $("homeCode").value.trim();
+  if (code) $("rpCode").value = code;
+  document.querySelector("nav button[data-p='work']").click();
+});
+$("homeRpList").addEventListener("click", function (e) {
+  var it = e.target.closest ? e.target.closest(".list-item[data-rid]") : null;
+  if (!it) return;
+  var r = LS.get("reports", []).filter(function (x) { return x.id === it.dataset.rid; })[0];
+  if (r) {
+    renderOut(r.title, r.text);
+    document.querySelector("nav button[data-p='work']").click();
+  }
+});
+$("btnTestCustom").addEventListener("click", function () {
+  var url = $("cfgUrl").value.trim().replace(/\/+$/, ""), key = $("cfgKey").value.trim(), model = $("cfgModel").value.trim();
+  var out = $("cfgMsg");
+  if (!url || !key || !model) { out.innerHTML = '<p class="err">地址/Key/模型名都要填</p>'; return; }
+  if (bridge.setAiCustom) bridge.setAiCustom(url, key); // 原生白名单+该域名 key 注入
+  var saved = { aiMode: state.aiMode, aiUrl: state.aiUrl, aiKey: state.aiKey, aiModel: state.aiModel };
+  state.aiUrl = url; state.aiKey = key; state.aiModel = model; state.aiMode = "custom";
+  out.innerHTML = '<p class="note">测试连接中…</p>';
+  bridgeCall("GET", url + "/v1/models", {}, null, 15000).then(function (r) {
+    if (r.status === 200) { saveState(); out.innerHTML = '<p class="okmsg">连接成功,自定义通道已保存。</p>'; }
+    else {
+      state.aiMode = saved.aiMode; state.aiUrl = saved.aiUrl; state.aiKey = saved.aiKey; state.aiModel = saved.aiModel;
+      out.innerHTML = '<p class="err">测试失败 HTTP ' + r.status + ",未保存</p>";
+    }
+    renderAiCfg();
+  }).catch(function (e) {
+    state.aiMode = saved.aiMode; state.aiUrl = saved.aiUrl; state.aiKey = saved.aiKey; state.aiModel = saved.aiModel;
+    out.innerHTML = '<p class="err">测试失败:' + esc(e.message) + "</p>";
+    renderAiCfg();
+  });
+});
+$("btnAddStock").addEventListener("click", function () {
+  var s = normalizeStock($("inStock").value);
+  if (!s) return;
+  if (state.stocks.indexOf(s) < 0) { state.stocks.push(s); saveState(); }
+  $("inStock").value = "";
+  renderStocks(); viewStock(s);
+});
+$("stockList").addEventListener("click", function (e) {
+  var delB = e.target.closest ? e.target.closest("[data-del]") : null;
+  if (delB) { var del = delB.dataset.del; state.stocks = state.stocks.filter(function (x) { return x !== del; }); saveState(); renderStocks(); return; }
+  var viewB = e.target.closest ? e.target.closest("[data-stock]") : null;
+  if (viewB) viewStock(viewB.dataset.stock);
+});
+function viewStock(s) {
+  window.curStock = s;
+  $("stockDetail").classList.remove("hidden");
+  var q = (window.quoteMap || {})[s];
+  $("stcTitle").textContent = (q && q.name ? q.name + " " : "") + s;
+  renderStocks();
+  loadKline(s);
+  setInfoTab("ann");
+  [].slice.call(document.querySelectorAll(".stock-tabs button")).forEach(function (b, i) { b.classList.toggle("on", i === 0); });
+}
+$("stockDetail").addEventListener("click", function (e) {
+  if (e.target.dataset.t) {
+    [].slice.call(document.querySelectorAll(".stock-tabs button")).forEach(function (b) { b.classList.toggle("on", b === e.target); });
+    setInfoTab(e.target.dataset.t);
+  }
+});
+/* 工作台页内 tab */
+document.querySelectorAll(".wb-tabs button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll(".wb-tabs button").forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    $("wb-report").classList.toggle("hidden", b.dataset.w !== "report");
+    $("wb-tactics").classList.toggle("hidden", b.dataset.w !== "tactics");
+  });
+});
+$("rpChips").addEventListener("click", function (e) { if (e.target.classList.contains("chip-sel")) e.target.classList.toggle("on"); });
+$("rqChips").addEventListener("click", function (e) { if (e.target.classList.contains("chip-sel")) e.target.classList.toggle("on"); });
+$("rpDays").addEventListener("click", function (e) {
+  if (e.target.dataset.v) [].slice.call(document.querySelectorAll("#rpDays button")).forEach(function (b) { b.classList.toggle("on", b === e.target); });
+});
+$("histChips").addEventListener("click", function (e) {
+  if (!e.target.dataset.cat) return;
+  [].slice.call(document.querySelectorAll("#histChips button")).forEach(function (b) { b.classList.toggle("on", b === e.target); });
+});
+$("btnGenReport").addEventListener("click", function () { generateReport(false); });
+$("btnGenBg").addEventListener("click", function () { generateReport(true); });
+$("btnQueueAdd").addEventListener("click", function () {
+  var ok = addToQueue($("qAddCode").value);
+  if (ok) $("qAddCode").value = "";
+});
+$("qAddCode").addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && addToQueue(this.value)) this.value = "";
+});
+$("wlPick").addEventListener("click", function (e) {
+  if (!e.target.dataset.wl) return;
+  var c = e.target.dataset.wl;
+  var ix = genQueue.indexOf(c);
+  if (ix >= 0) genQueue.splice(ix, 1); else genQueue.push(c);
+  saveQueue();
+});
+$("queueBox").addEventListener("click", function (e) {
+  if (e.target.dataset.qx) { genQueue = genQueue.filter(function (c) { return c !== e.target.dataset.qx; }); saveQueue(); }
+  else if (e.target.dataset.qclear != null) { genQueue = []; saveQueue(); }
+});
+$("btnRpCopy").addEventListener("click", function () {
+  if (navigator.clipboard) navigator.clipboard.writeText($("rpOut").textContent);
+});
+$("btnRpSave").addEventListener("click", function () {
+  if (!bridge || !bridge.saveTextFile) { alert("原生桥不支持保存"); return; }
+  bridge.saveTextFile(($("rpOutTitle").textContent || "研报") + ".txt", $("rpOut").textContent);
+});
+$("rpHistory").addEventListener("click", function (e) {
+  var it = e.target.closest ? e.target.closest(".list-item[data-rid]") : null;
+  if (!it) return;
+  var r = LS.get("reports", []).filter(function (x) { return x.id === it.dataset.rid; })[0];
+  if (r) renderOut(r.title, r.text);
+});
+/* 战法雷达绑定 */
+$("sectChips").addEventListener("click", function (e) {
+  if (!e.target.dataset.s) return;
+  scanState.sect = e.target.dataset.s;
+  [].slice.call(document.querySelectorAll("#sectChips button")).forEach(function (b) { b.classList.toggle("on", b === e.target); });
+});
+$("scanTop").addEventListener("click", function (e) {
+  if (!e.target.dataset.v) return;
+  [].slice.call(document.querySelectorAll("#scanTop button")).forEach(function (b) { b.classList.toggle("on", b === e.target); });
+});
+$("tacPickChips").addEventListener("click", function (e) {
+  if (e.target.classList.contains("tac-all")) { scanState.picked = null; buildTacChips(); return; }
+  if (!e.target.dataset.t) return;
+  var id = e.target.dataset.t;
+  if (!scanState.picked) scanState.picked = TACTICS.map(function (t) { return t.id; });
+  var ix = scanState.picked.indexOf(id);
+  if (ix >= 0) scanState.picked.splice(ix, 1); else scanState.picked.push(id);
+  if (scanState.picked.length === TACTICS.length) scanState.picked = null;
+  buildTacChips();
+});
+$("btnScan").addEventListener("click", startScan);
+$("btnScanStop").addEventListener("click", function () { scanState.stop = true; });
+
+/* K线十字光标触摸(同花顺式:按住拖动查看,松开回落到最新) */
+(function () {
+  var cv = $("kline");
+  function idxFromX(clientX) {
+    var L = window.klineLayout;
+    if (!L || !L.data) return null;
+    var rect = cv.getBoundingClientRect();
+    var x = (clientX - rect.left) * 2; // css px → canvas px
+    var i = Math.floor((x - L.padL) / L.iw);
+    if (i < 0) i = 0;
+    if (i >= L.data.length) i = L.data.length - 1;
+    return i;
+  }
+  function onMove(e) {
+    if (!window.klineLayout) return;
+    var t = e.touches ? e.touches[0] : e;
+    window.klineView = window.klineView || { idx: null };
+    window.klineView.idx = idxFromX(t.clientX);
+    renderKline();
+    updateKlineInfo();
+    if (e.touches && e.cancelable) e.preventDefault();
+  }
+  cv.addEventListener("touchstart", onMove, { passive: false });
+  cv.addEventListener("touchmove", onMove, { passive: false });
+  cv.addEventListener("touchend", function () {
+    window.klineView = { idx: null };
+    renderKline(); updateKlineInfo();
+  });
+})();
+
+/* ===== 启动 ===== */
+buildChips();
+buildTacChips();
+renderTacCatalog();
+renderAiCfg();
+renderQueue();
+renderAll();
+if (state.deviceToken && state.syncKey) doSync(false);
+</script>
+</body>
+</html>

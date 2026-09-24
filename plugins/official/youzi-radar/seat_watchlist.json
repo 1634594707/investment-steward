@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "watchlist_version": "2026-09-16",
+  "disclaimer": "本文件是观察名单，不是排行榜，也不构成投资建议。所有条目均为【通道名，非实名账户】：营业部席位是券商通道，席位上的交易不等于某个操盘手的实名账户操作。",
+  "verification": {
+    "verified_at": "2026-09-16",
+    "method": "对 RPT_OPERATEDEPT_TRADE_DETAILS / RPT_BILLBOARD_DAILYDETAILSBUY 按 OPERATEDEPT_NAME 精确名过滤，sortColumns=TRADE_DATE 降序取最近一次",
+    "rule": "每条 seat 的 name 必须能用精确名在上述 report 上查到；查不到即视为失效条目，测试直接失败",
+    "note": "东财不支持 like 查询（code=9501）；营业部更名/合并会让名字失效，因此主键一律用 operatedept_code，name 只是展示与核验用"
+  },
+  "seats": [
+    {
+      "operatedept_code": "10026937",
+      "name": "国泰海通证券股份有限公司武汉紫阳东路证券营业部",
+      "kind": "seat",
+      "aliases": ["武汉紫阳东路", "紫阳东路"],
+      "last_seen_trade_date": "2026-09-16",
+      "record_count": 1116,
+      "note": "通道名，非实名账户。方案原文写的『国盛证券宁波紫阳东路营业部』在数据源里查无此名，此处为逐字核验后的更正。"
+    },
+    {
+      "operatedept_code": "10456710",
+      "name": "国盛证券有限责任公司宁波桑田路证券营业部",
+      "kind": "seat",
+      "aliases": ["宁波桑田路"],
+      "last_seen_trade_date": "2026-01-21",
+      "record_count": 3951,
+      "note": "通道名，非实名账户。方案把『国盛 + 宁波』与『紫阳东路』拼在了一起，真实存在的是本条（桑田路）。"
+    },
+    {
+      "operatedept_code": "10142874",
+      "name": "华泰证券股份有限公司深圳益田路荣超商务中心证券营业部",
+      "kind": "seat",
+      "aliases": ["深圳益田路荣超商务中心", "益田路"],
+      "last_seen_trade_date": "2026-09-16",
+      "record_count": 3980,
+      "note": "通道名，非实名账户。"
+    },
+    {
+      "operatedept_code": "10066376",
+      "name": "中信证券股份有限公司上海淮海中路证券营业部",
+      "kind": "seat",
+      "aliases": ["上海淮海中路"],
+      "last_seen_trade_date": "2025-01-02",
+      "record_count": 1496,
+      "note": "通道名，非实名账户。最近一次上榜距今较久，活跃度需用户自行判断。"
+    },
+    {
+      "operatedept_code": "10484371",
+      "name": "东方财富证券股份有限公司拉萨团结路第一证券营业部",
+      "kind": "seat",
+      "aliases": ["拉萨团结路第一"],
+      "last_seen_trade_date": "2026-09-16",
+      "record_count": 17028,
+      "note": "通道名，非实名账户。拉萨系为互联网开户集中通道，出现频率高不代表单一主体在交易。"
+    },
+    {
+      "operatedept_code": "10495103",
+      "name": "东方财富证券股份有限公司拉萨团结路第二证券营业部",
+      "kind": "seat",
+      "aliases": ["拉萨团结路第二"],
+      "last_seen_trade_date": "2026-09-16",
+      "record_count": 21896,
+      "note": "通道名，非实名账户。同上。"
+    },
+    {
+      "operatedept_code": "10582975",
+      "name": "华鑫证券有限责任公司上海红宝石路证券营业部",
+      "kind": "seat",
+      "aliases": ["上海红宝石路"],
+      "last_seen_trade_date": "2026-02-13",
+      "record_count": 653,
+      "note": "通道名，非实名账户。"
+    },
+    {
+      "operatedept_code": "10023543",
+      "name": "中国银河证券股份有限公司绍兴证券营业部",
+      "kind": "seat",
+      "aliases": ["绍兴"],
+      "last_seen_trade_date": "2026-04-07",
+      "record_count": 4839,
+      "note": "通道名，非实名账户。"
+    }
+  ],
+  "buckets": [
+    {
+      "name": "机构专用",
+      "kind": "bucket",
+      "note": "交易所对机构席位的匿名汇总桶，不是某家营业部。可展示为『机构』，但【绝不】计入游资观察命中。按名单独查营业部维度表返回 code=9201（返回数据为空）。"
+    },
+    {
+      "name": "沪股通专用",
+      "kind": "bucket",
+      "note": "沪深港通通道桶，非营业部。不计入游资命中。"
+    },
+    {
+      "name": "深股通专用",
+      "kind": "bucket",
+      "note": "沪深港通通道桶，非营业部。不计入游资命中。"
+    }
+  ],
+  "bucket_name_suffixes": ["总部"],
+  "bucket_name_suffix_note": "形如『国泰海通证券股份有限公司总部』『华泰证券股份有限公司总部』的券商总部自营/汇总桶，按后缀识别，不计入游资命中。"
+}

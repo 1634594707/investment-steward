@@ -1,0 +1,471 @@
+/* P3-D03 游资雷达（official.youzi-radar）样式。
+   沿用既有路由样式语言（tactics.css / macro.css）：卡片头部 + 表格 + 徽章。
+
+   颜色语义固定：命中=强调色（mint），匿名汇总桶=中性灰（刻意不与命中同色，
+   避免把「机构专用」看成游资）。涨跌沿用 CN 约定：负值/跌 = --mkt-down（绿）。
+
+   ⚠ 本文件此前按**浅色主题**写（fallback 全是浅色 hex、alert 写死 #fffaf0），
+   而应用是纯深色主题，导致「浅字压浅底」的隐形文本。现已全部改回令牌，
+   fallback 与 :root 实际取值一致（深色），防止令牌改名后再出一次同样的事故。
+   —— 2026-09-17 修复。 */
+
+.youzi-page {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-3) * var(--density-scale));
+  padding: calc(var(--space-4) * var(--density-scale)) calc(var(--space-5) * var(--density-scale)) calc(var(--space-7) * var(--density-scale));
+}
+
+.youzi-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: calc(var(--space-3) * var(--density-scale));
+  border-bottom: 1px solid var(--line, #2a3833);
+  padding-bottom: calc(var(--space-2) * var(--density-scale));
+}
+
+.youzi-header h2 {
+  margin: calc(var(--space-1) * var(--density-scale)) 0 0;
+  font-size: 20px;
+  color: var(--ink, #e7f0ea);
+}
+
+.youzi-header > span {
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-3);
+}
+
+.youzi-tag {
+  font-size: var(--text-2);
+  letter-spacing: 0.06em;
+  color: var(--muted, #9baaa3);
+  text-transform: uppercase;
+}
+
+.youzi-tabs {
+  display: flex;
+  gap: calc(var(--space-1) * var(--density-scale));
+  flex-wrap: wrap;
+}
+
+.youzi-tab {
+  border: 1px solid var(--line, #2a3833);
+  background: transparent;
+  border-radius: var(--radius-pill, 999px);
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  font-size: var(--text-4);
+  cursor: pointer;
+  color: var(--muted, #9baaa3);
+}
+
+.youzi-tab:hover {
+  color: var(--ink, #e7f0ea);
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+}
+
+/* 活跃标签沿用 .wb-tabs button.active 的强调口径（mint 文字 + mint 底），
+   不要用 color:#fff 压在浅薄荷底上（对比度约 1.6:1）。 */
+.youzi-tab.active {
+  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  color: var(--mint, #9be3bc);
+}
+
+.youzi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-4);
+}
+
+.youzi-table th,
+.youzi-table td {
+  border-bottom: 1px solid var(--line, #2a3833);
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  text-align: left;
+  vertical-align: top;
+}
+
+.youzi-table th {
+  font-weight: 600;
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-3);
+  white-space: nowrap;
+}
+
+.youzi-table td.num,
+.youzi-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.youzi-table td.mono {
+  font-family: var(--font-data, "JetBrains Mono", ui-monospace, monospace);
+  color: var(--ink, #e7f0ea);
+}
+
+/* 净额为负（净卖出）：CN 约定「跌/卖」用绿。 */
+.youzi-table td.neg {
+  color: var(--mkt-down, #5fb389);
+}
+
+/* 观察名单命中行：mint 极淡底，与命中徽章同色系。 */
+.youzi-table tr.hl {
+  background: var(--mint-a04, rgba(155, 227, 188, 0.04));
+}
+
+.youzi-reason {
+  max-width: 320px;
+  color: var(--muted, #9baaa3);
+}
+
+.youzi-badge {
+  display: inline-block;
+  font-size: var(--text-2);
+  line-height: 1.6;
+  padding: 0 calc(var(--space-1) * var(--density-scale));
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--line, #2a3833);
+  color: var(--muted, #9baaa3);
+  margin-left: calc(var(--space-1) * var(--density-scale));
+  white-space: nowrap;
+}
+
+/* 观察名单命中：强调色 */
+.youzi-badge.hit {
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  color: var(--mint, #9be3bc);
+  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
+}
+
+/* 匿名汇总桶：中性灰，刻意不与命中同色（别把「机构专用」看成游资）。
+   此处原为浅色写死的 #f3f4f6/#6b7280，在深色底上是灰字浅底——改走 white-alpha 令牌。 */
+.youzi-badge.bucket {
+  border-color: var(--line, #2a3833);
+  color: var(--faint, #899b92);
+  background: var(--white-a04, rgba(255, 255, 255, 0.04));
+}
+
+.youzi-note,
+.youzi-muted {
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-4);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* 取数失败提示。原实现 border/background 写死浅色（#f0c36d/#fffaf0），
+   文字却继承 --ink（浅色）→ 整块几乎不可见。改按 .load-error-banner 口径：
+   amber 左边框 + amber 极淡底 + amber 标题，正文用 --ink 保证可读。 */
+.youzi-alert {
+  border: 1px solid var(--amber-a40, rgba(241, 189, 116, 0.4));
+  border-left: 2px solid var(--amber, #f1bd74);
+  background: var(--amber-a07, rgba(241, 189, 116, 0.07));
+  border-radius: var(--radius-2, 8px);
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) * var(--density-scale));
+  align-items: flex-start;
+  font-size: var(--text-4);
+  color: var(--ink, #e7f0ea);
+}
+
+.youzi-alert strong {
+  color: var(--amber, #f1bd74);
+  font-size: var(--text-4);
+}
+
+.youzi-alert > span {
+  color: var(--ink, #e7f0ea);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.youzi-detail {
+  border: 1px solid var(--line, #2a3833);
+  border-radius: 10px;
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-2) * var(--density-scale));
+}
+
+.youzi-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.youzi-detail h3 {
+  margin: 0;
+  font-size: var(--text-5);
+  color: var(--ink, #e7f0ea);
+}
+
+.youzi-seat-block h4 {
+  margin: 0 0 calc(var(--space-1) * var(--density-scale));
+  font-size: var(--text-4);
+  color: var(--muted, #9baaa3);
+}
+
+/* D04（2026-09-19 用户走查）：案例复盘的快捷区间与表单同行基线。 */
+.youzi-range-chips { display: inline-flex; align-items: center; gap: calc(var(--space-1) * var(--density-scale)); }
+
+.youzi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-1) * var(--density-scale));
+}
+
+/* 名单原文块：原来用 var(--code-bg, #f8fafc)，而 --code-bg 全仓未定义 →
+   落到近白底，深色主题下整块文字不可见。改走 surface-raised。 */
+.youzi-pre {
+  white-space: pre-wrap;
+  background: var(--surface-raised, #17211f);
+  border: 1px solid var(--line, #2a3833);
+  border-radius: var(--radius-2, 8px);
+  padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  color: var(--ink, #e7f0ea);
+  font-size: var(--text-3);
+  line-height: 1.6;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.youzi-limits {
+  margin: 0;
+  padding-left: calc(var(--space-4) * var(--density-scale));
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-4);
+  line-height: 1.7;
+}
+
+.youzi-lessons {
+  margin: 0;
+  padding-left: calc(var(--space-4) * var(--density-scale));
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-3) * var(--density-scale));
+}
+
+.youzi-lessons p {
+  margin: calc(var(--space-1) * var(--density-scale)) 0 0;
+  font-size: var(--text-4);
+  line-height: 1.7;
+  color: var(--ink, #e7f0ea);
+}
+
+.youzi-lesson-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-1) * var(--density-scale));
+}
+
+.youzi-footer {
+  border-top: 1px solid var(--line, #2a3833);
+  padding-top: calc(var(--space-2) * var(--density-scale));
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-3);
+}
+
+.youzi-page .ghost-btn.small {
+  font-size: var(--text-3);
+  padding: 3px calc(var(--space-2) * var(--density-scale));
+}
+
+/* 事实类型筛选：选中的 chip 走高亮口径（不是浏览器默认的灰底）。 */
+.youzi-page .ghost-btn.small.active {
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
+  color: var(--mint, #9be3bc);
+}
+
+/* 逐日覆盖状态徽章在事实面板里成排出现：允许换行、彼此留 4px。 */
+.youzi-chips .youzi-badge {
+  margin-left: 0;
+}
+
+/* 证据详情嵌在表格行内：去掉外层缩进造成的错位。 */
+.youzi-table td > .youzi-detail {
+  margin: calc(var(--space-1) * var(--density-scale)) 0 2px;
+}
+
+/* —— Y3-07 案例复盘 —— */
+
+/* 查询表单：代码 + 起止日 + 按钮。窄屏折行，输入框不撑破容器。 */
+.youzi-page .youzi-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  align-items: flex-end;
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border: 1px solid var(--line, #2a3833);
+  border-radius: 10px;
+}
+
+.youzi-page .youzi-form label {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) * var(--density-scale));
+  font-size: var(--text-3);
+  color: var(--muted, #9baaa3);
+}
+
+.youzi-page .youzi-form input {
+  width: 132px;
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  border-radius: 6px;
+  border: 1px solid var(--line, #2a3833);
+  background: var(--surface-raised, #17211f);
+  color: var(--ink, #e7f0ea);
+  font-size: var(--text-4);
+}
+
+.youzi-page .youzi-form input:focus {
+  outline: none;
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+}
+
+/* 摘要条：代码 / 区间 / 事件数。用 token 而非写死颜色，浅深主题都成立。 */
+.youzi-page .youzi-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-1) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
+  font-size: var(--text-4);
+  color: var(--muted, #9baaa3);
+}
+
+.youzi-page .youzi-summary strong {
+  color: var(--ink, #e7f0ea);
+}
+
+/* 截短是「有损但不致命」的提示，与取数失败的 amber 区分开：用 muted 描边。 */
+.youzi-page .youzi-alert.warn {
+  border-color: var(--line, #2a3833);
+  border-left-color: var(--muted, #9baaa3);
+  background: transparent;
+}
+
+.youzi-page .youzi-alert.warn strong {
+  color: var(--ink, #e7f0ea);
+}
+
+/* —— Y4-03 / Y4-04 练习 —— */
+
+/* 模式切换 chip：与事实筛选的 ghost-btn.small.active 同一高亮口径，
+   但独立成类，避免改筛选样式时连带改动练习。 */
+.youzi-page .youzi-chip {
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border-radius: 999px;
+  border: 1px solid var(--line, #2a3833);
+  background: transparent;
+  color: var(--muted, #9baaa3);
+  font-size: var(--text-3);
+  cursor: pointer;
+}
+
+.youzi-page .youzi-chip.active {
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
+  color: var(--mint, #9be3bc);
+}
+
+/* 竖排表单：练习作答的三栏是长文本，横排会把每栏挤到不可读。 */
+.youzi-page .youzi-form.column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.youzi-page .youzi-form.column label {
+  width: 100%;
+}
+
+.youzi-page .youzi-form .youzi-textarea {
+  width: 100%;
+  min-height: 62px;
+  padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  border-radius: 6px;
+  border: 1px solid var(--line, #2a3833);
+  background: var(--surface-raised, #17211f);
+  color: var(--ink, #e7f0ea);
+  font-size: var(--text-4);
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.youzi-page .youzi-form .youzi-textarea:focus {
+  outline: none;
+  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+}
+
+/* 禁用的「揭示结果」按钮要与可点状态明显不同——否则会被当成静默无响应。 */
+.youzi-page .youzi-detail .primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 席位列里「名称 + 代码」上下叠放：代码不参与名称的语义。 */
+.youzi-page .youzi-code {
+  display: block;
+  font-size: var(--text-3);
+  color: var(--muted, #9baaa3);
+}
+
+/* 64 位 ID 必须能断行，否则会把表格撑出横向滚动。 */
+.youzi-page .youzi-break {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: var(--text-3);
+}
+
+/* 展开行：去掉 hover 高亮与指针，避免让人以为还能再点一层。 */
+.youzi-page .youzi-table tr.youzi-detail-row,
+.youzi-page .youzi-table tr.youzi-detail-row:hover {
+  background: transparent;
+  cursor: default;
+}
+
+/* 期限 / 定位子表比主表更紧凑。 */
+.youzi-page .youzi-table.compact td,
+.youzi-page .youzi-table.compact th {
+  padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  font-size: var(--text-3);
+}
+
+.youzi-page .youzi-detail h4 {
+  margin: 2px 0 0;
+  font-size: var(--text-4);
+  color: var(--ink, #e7f0ea);
+}
+
+/* —— K06（2026-09-18 排版与研报呈现一致性路线图）：游资页此前 0 条 @media、也不随宽度档变。
+   窄档（<1024，与 shell narrow / body[data-width-tier=xs|sm] 同阈值）让宽表横向滚动、页头可换行，
+   补上 V02 记录的「游资席位表无横向滚动容器」缺口。沿用仓内既有 `table{display:block;overflow-x:auto}` 约定。 —— */
+@media (max-width: 1023px) {
+  .youzi-header { flex-wrap: wrap; }
+  .youzi-page .youzi-table { display: block; max-width: 100%; overflow-x: auto; }
+}
+body[data-width-tier="xs"] .youzi-header,
+body[data-width-tier="sm"] .youzi-header { flex-wrap: wrap; }
+body[data-width-tier="xs"] .youzi-page .youzi-table,
+body[data-width-tier="sm"] .youzi-page .youzi-table { display: block; max-width: 100%; overflow-x: auto; }
+
+
+/* G03（2026-09-18 桌面端路线图）：披露事实的原始页回链。
+   刻意做成「文字外链 + 点状下划线」而不是按钮：它只跳转到原始来源，不改变任何本机状态。 */
+.youzi-src-link {
+  display: inline-block;
+  margin-left: calc(var(--space-1) * var(--density-scale));
+  font-size: var(--text-2);
+  color: var(--blue, #7db6ff);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--blue-a35, rgba(125, 182, 255, 0.35));
+  white-space: nowrap;
+}
+.youzi-src-link:hover {
+  color: var(--ink, #e6efe9);
+  border-bottom-color: var(--ink, #e6efe9);
+}

@@ -1,0 +1,34 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.stock-tactics",
+  "release_version": "0.1.0",
+  "display_name": "战法雷达",
+  "description": "互联网经典股票战法的确定性识别引擎：均线/MACD/KDJ 金叉死叉、多空排列、放量突破、回踩支撑企稳、RSI 背离、十字星与吞没形态。支持按观察清单+持仓+手动列表扫描，记录观察与笔记；信号只描述图形事实，不构成买卖建议。",
+  "plugin_type": "evidence_app",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_market_data",
+    "run_analysis"
+  ],
+  "ui_slots": [
+    {
+      "slot": "app.tactics",
+      "level": "L3"
+    }
+  ],
+  "mount": "own_page",
+  "schema_versions": {
+    "OHLCV": "1.0"
+  },
+  "entrypoint": "tactics.radar",
+  "artifact_sha256": "7009d179d7392c55baaa7c10abcd0bcb8b29813b3709fbb0a1810f3eaaebbce2",
+  "signature": "xEdE34Jann1zkmhA389k+sVZubmDMIiek2Sk1KDPiShDJa2w25JrrB24MDDUM5I9Uoo4Q8dNzWChoZaCNqOiAg==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

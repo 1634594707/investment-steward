@@ -1,0 +1,65 @@
+{
+  "schema": "investment-steward.learning.curriculum",
+  "schema_version": "1.0",
+  "version": "2026-09-03-v2",
+  "updated_at": "2026-09-03T00:00:00Z",
+  "source": "docs/personal-study-route.zh-CN.md",
+  "purpose": "推荐书目 + 个人研读路线(静态学习素材,不进业务数据库);按 investment-steward 产品能力反向匹配——一本书须能解释或支撑产品某机制才入选。",
+  "disclosure": "读书是建立认知,不构成投资建议。",
+  "evidence_trace": "每条书目保留版本/译者/持有状态;书目内容为静态素材,带版本与时间,学习完成后可再修订。",
+  "priority_labels": { "P0": "必读", "P1": "重点", "P2": "选读" },
+  "reading_plan": {
+    "program_a_weeks": "用现有藏书即可启动,约 12–14 周;入口(L0)→ 一手文本(L1)→ 风险与周期(L3)→ 原则化(L2)→ 行为收束(L5)",
+    "schedule": [
+      { "weeks": "1–2", "book": "《李大霄投资战略》视频主线(8 周完成)", "why": "心态底座/政策市" },
+      { "weeks": "3–4", "book": "《巴菲特致股东的信》", "why": "一手文本,最轻,可并行视频" },
+      { "weeks": "5–6", "book": "《周期》(马克斯)", "why": "现在市场在周期哪里?直接服务行动模式" },
+      { "weeks": "7–8", "book": "《证券分析》精读选章(第1/7/20章等)", "why": "深度财务分析源" },
+      { "weeks": "9", "book": "《安全边际》(卡拉曼)", "why": "风险优先,现金也是仓位" },
+      { "weeks": "10", "book": "《拯救华尔街》", "why": "LTCM:聪明人怎么毁于杠杆,复盘案例库" },
+      { "weeks": "11", "book": "《时势》(小Lin)", "why": "宏观周期语感,政策/宏观事件解读补课" },
+      { "weeks": "12–14", "book": "《原则》选章(生活原则+工作原则)", "why": "把前面所有书沉淀成自己的原则版本" }
+    ],
+    "swap_notes": [
+      "第 5–6 周《周期》和第 11 周《时势》可互换——若更缺宏观语感就先读《时势》。",
+      "若《证券分析》太重,可用《聪明的投资者》(格雷厄姆导读版)替代精读,证券分析留作工具书。",
+      "《持续买入》作「每周随手翻一章」伴读(定投纪律),不必排期。"
+    ],
+    "program_b_supplements": [
+      { "book": "《聪明的投资者》(格雷厄姆)", "why": "价值投资地基,建议《证券分析》前读完导读" },
+      { "book": "《投资最重要的事》(马克斯)", "why": "与《周期》同作者,钟摆/第二层思维" },
+      { "book": "《思考,快与慢》(卡尼曼)", "why": "evidence「相反证据」字段的理论根源" },
+      { "book": "《穷查理宝典》(芒格)", "why": "学习闭环练习设计" },
+      { "book": "《随机漫步的傻瓜》(塔勒布)", "why": "区分好决策与好结果(决策日志)" },
+      { "book": "《投资中最简单的事》(邱国鹭)", "why": "A 股桥梁,贴近目标用户语言" }
+    ]
+  },
+  "books": [
+    { "level": "L0", "title": "《李大霄投资战略》第三版", "author": "李大霄", "priority": "P0", "held": true, "why": "中国式价值投资 + 政策市 + 散户心态;视频主线已规划" },
+    { "level": "L0", "title": "《时势》", "author": "小Lin", "priority": "P1", "held": true, "version": "中信出版社 2023.12", "why": "用日本/韩国/印度/欧盟等经济史建立宏观周期语感" },
+    { "level": "L0", "title": "《投资中最简单的事》", "author": "邱国鹭", "priority": "P0", "held": false, "why": "A 股最接近「格雷厄姆本地化」的通俗表达(高毅资产创始人)" },
+    { "level": "L0", "title": "《文明、现代化、价值投资与中国》", "author": "李录", "priority": "P1", "held": false, "why": "中国视角的长期价值投资世界观(偏宏观长文)" },
+    { "level": "L1", "title": "《聪明的投资者》", "author": "格雷厄姆", "priority": "P0", "held": false, "why": "价值投资与安全边际的「圣经」,防御型投资者路线" },
+    { "level": "L1", "title": "《安全边际》", "author": "塞斯·卡拉曼", "priority": "P0", "held": true, "why": "「风险优先、现金也是仓位」,现代实战版格雷厄姆;注意版本来源标注" },
+    { "level": "L1", "title": "《投资最重要的事》", "author": "霍华德·马克斯", "priority": "P0", "held": false, "why": "第二层思维 + 风险认知,每章一个决策检查点" },
+    { "level": "L1", "title": "《巴菲特致股东的信》", "author": "巴菲特(坎宁安编)", "priority": "P1", "held": true, "version": "机械工业出版社(杨天南译)", "why": "一手文本,比二手解读可靠" },
+    { "level": "L1", "title": "《证券分析》", "author": "格雷厄姆/多德", "priority": "P1", "held": true, "version": "建议第七版(巴曙松领衔译,上下册)", "why": "深度财务分析源头(精读选章,当工具书)" },
+    { "level": "L2", "title": "《原则》", "author": "瑞·达利欧", "priority": "P0", "held": true, "version": "中信出版社", "why": "极度求真、可信度加权、把决策变成可迭代的原则(对应 InvestmentPolicyVersion/explicit_ui)" },
+    { "level": "L2", "title": "《穷查理宝典》", "author": "芒格", "priority": "P0", "held": false, "why": "多元思维格栅,逆向思考(学习闭环练习设计)" },
+    { "level": "L2", "title": "《清单革命》", "author": "阿图·葛文德", "priority": "P1", "held": false, "why": "复杂决策靠清单(决策日志/复盘流程)" },
+    { "level": "L2", "title": "《错误的行为》", "author": "塞勒", "priority": "P2", "held": false, "why": "行为经济学全景(行为偏差库来源)" },
+    { "level": "L3", "title": "《周期》", "author": "霍华德·马克斯", "priority": "P0", "held": true, "version": "中信出版社(刘建位译,2019)", "why": "知道自己站在周期哪里,决定进攻还是防御(对应 action_mode/freshness 位置感)" },
+    { "level": "L3", "title": "《随机漫步的傻瓜》", "author": "塔勒布", "priority": "P0", "held": false, "why": "从结果反推能力的错误(对应 DecisionEntry 决定与结果对照)" },
+    { "level": "L3", "title": "《拯救华尔街》", "author": "罗杰·洛温斯坦", "priority": "P1", "held": true, "version": "广东经济出版社 2009(孟立慧译)", "why": "LTCM:数学天才 × 高杠杆 × 模型失效完整尸检;风险教育,「远离杠杆」实证" },
+    { "level": "L3", "title": "《金融炼金术》", "author": "索罗斯", "priority": "P1", "held": false, "why": "反身性:市场永远可能错(对应 relation=contradicting 背书)" },
+    { "level": "L3", "title": "《非对称风险》", "author": "塔勒布", "priority": "P2", "held": false, "why": "风险承担与责任的对称性(分享池「口径+风险披露」)" },
+    { "level": "L4", "title": "《打开量化投资的黑箱》", "author": "里什·纳兰", "priority": "P0", "held": false, "why": "量化流程全景(分享池阶段 A 参数集理解)" },
+    { "level": "L4", "title": "《海龟交易法则》", "author": "柯蒂斯·费斯", "priority": "P0", "held": false, "why": "完整交易系统(分享池阶段 A 回测内核思路)" },
+    { "level": "L4", "title": "《因子投资:方法与实践》", "author": "石川等", "priority": "P1", "held": false, "why": "中文界最扎实因子教科书(分享池阶段 B 策略包基准)" },
+    { "level": "L4", "title": "《主动投资组合管理》", "author": "格林诺德、卡恩", "priority": "P2", "held": false, "why": "信息比率与 alpha 学术框架(分享池阶段 D 模型权重评估)" },
+    { "level": "L5", "title": "《持续买入》", "author": "尼克·马吉奥利", "priority": "P1", "held": true, "version": "中信出版社 2025.1(阿加嘉译)", "why": "「买入要快、卖出要慢」,定投胜过抄底的数据实证(伴读)" },
+    { "level": "L5", "title": "《金钱心理学》", "author": "摩根·豪泽尔", "priority": "P0", "held": false, "why": "理财更靠行为而非智力,故事化范本(日常陪伴基调)" },
+    { "level": "L5", "title": "《更富有、更睿智、更快乐》", "author": "威廉·格林", "priority": "P1", "held": false, "why": "40 位大师实操习惯访谈" },
+    { "level": "L5", "title": "《巴菲特与索罗斯的投资习惯》", "author": "马克·泰尔", "priority": "P2", "held": false, "why": "23 个习惯清单,可自测(与李大霄 15 条件对照)" }
+  ]
+}

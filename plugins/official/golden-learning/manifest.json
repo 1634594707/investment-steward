@@ -1,0 +1,26 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.golden-learning",
+  "release_version": "0.1.0",
+  "display_name": "学习样例提供器",
+  "description": "用于契约测试的学习单元输出插件。",
+  "plugin_type": "learning_provider",
+  "license": "internal-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "submit_learning_unit"
+  ],
+  "schema_versions": {
+    "LearningUnit": "0.1"
+  },
+  "entrypoint": "golden.learning",
+  "artifact_sha256": "63bc3b5050e8b850dd5c72d86b520a6fa901998940abda9d5aa8b96d008b54ff",
+  "signature": "KLY+4f/JUqNco+3t0JnfKs1FkWtKoN8eyz2RbqtIwmcRy9Zeter48HjGj1Ymk3EyhIDR84xdEH3+X5bbqSl+Bg==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

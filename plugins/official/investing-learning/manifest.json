@@ -1,0 +1,32 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.investing-learning",
+  "release_version": "0.1.0",
+  "display_name": "投资学习教练",
+  "description": "提供课程、练习与反思任务，不改变投资原则。",
+  "plugin_type": "learning_provider",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "submit_learning_unit"
+  ],
+  "ui_slots": [
+    {
+      "slot": "today.learning",
+      "level": "L2"
+    }
+  ],
+  "schema_versions": {
+    "LearningUnit": "1.0"
+  },
+  "entrypoint": "learning.unit",
+  "artifact_sha256": "79579e3617d09357105d7313ec4a4dce4647f4ce108b8a676063b0ce6d19772b",
+  "signature": "bm4kEkraGS7UfScfaTcWGLWCB3Kt+HScp2G3sFLtoNJ+l4l3jxI3raWJ9xVRUmqZKj52Wvwg3IpuT9djK5jQCg==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

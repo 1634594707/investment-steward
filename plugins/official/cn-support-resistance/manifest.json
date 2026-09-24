@@ -1,0 +1,33 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.support-resistance",
+  "release_version": "0.1.0",
+  "display_name": "支撑阻力位识别",
+  "description": "基于摆动高低点聚类与触碰/守住统计的支撑阻力位识别(分析器),数据来自本机行情缓存。",
+  "plugin_type": "analyzer",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_market_data",
+    "run_analysis"
+  ],
+  "ui_slots": [
+    {
+      "slot": "invest.market_view",
+      "level": "L3"
+    }
+  ],
+  "schema_versions": {
+    "Analysis": "1.0"
+  },
+  "entrypoint": "support.resistance",
+  "artifact_sha256": "f52e6148e3ee98fd0281aeaf4039a8a82fe4d8187d4db755fcbd0df44e4dc687",
+  "signature": "9LLQJGW2HDjGtmS8jDXRs8WexYIvbr9VsuQO3lZbgzTMU8Rm/BjMIlG/NS7UGrRqVOvvdJA3flMviu0NPUWABw==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

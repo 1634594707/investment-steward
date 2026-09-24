@@ -1,0 +1,12 @@
+team: investment-steward
+mode: self
+description: TeamAI single-repo (knowledge on main, reports on teamai-reports)
+repo: https://github.com/1634594707/investment-steward.git
+provider: github
+sharing:
+  rules:
+    enforced: []
+  docs:
+    localDir: ./.teamai/docs
+  env:
+    injectShellProfile: true

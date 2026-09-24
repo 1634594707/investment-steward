@@ -1,0 +1,41 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.youzi-radar",
+  "release_version": "0.2.0",
+  "display_name": "游资雷达",
+  "description": "席位证据与游资学习：读中金所股指期货会员席位（谁在增仓/减仓）与 A 股龙虎榜营业部席位（谁在买卖），把「谁在交易」做成可追溯证据，并用当天真实上榜记录当教材。只识别席位事实、不做胜率排行、不构成买卖建议。",
+  "plugin_type": "evidence_app",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_market_data",
+    "read_public_evidence",
+    "submit_evidence",
+    "submit_learning_unit"
+  ],
+  "ui_slots": [
+    {
+      "slot": "app.youzi",
+      "level": "L3"
+    }
+  ],
+  "mount": "own_page",
+  "schema_versions": {
+    "Evidence": "1.0",
+    "LearningUnit": "1.0"
+  },
+  "entrypoint": "youzi.radar",
+  "artifact_sha256": "0483664a34d4dce573b7a675e9008893e9474d178e27d1bb96b7f80cb6c2c780",
+  "signature": "kzqzDnJPorka7W2Gyi5jya4GA8AivPln09qvc260AWE20rEFWVE/xqX3CNAU/XC3H9AQa6JHjV+ncx6QMo/xCg==",
+  "network_allowlist": [
+    "www.cffex.com.cn",
+    "datacenter-web.eastmoney.com",
+    "data.eastmoney.com"
+  ],
+  "side_effects": [],
+  "requires_confirmation": true,
+  "supports_markets": [
+    "CN"
+  ]
+}

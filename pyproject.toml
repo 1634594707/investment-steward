@@ -1,0 +1,26 @@
+[project]
+name = "investment-steward-workspace"
+version = "0.1.0"
+description = "AI Investment Steward workspace"
+requires-python = ">=3.12,<3.15"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+  "apps/core-api",
+  "apps/agent-worker",
+  "apps/plugin-runner"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/core-api/tests"]

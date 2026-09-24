@@ -1,0 +1,476 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AI 投资管家 · 高层系统架构",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "output": "system-architecture-2026-09-20.html",
+    "repository": {
+      "url": "https://github.com/1634594707/investment-steward",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "98995fad4cc338ca4fc0d540593624a4519ac3bf"
+    }
+  },
+  "components": [
+    {
+      "id": "web-shell",
+      "type": "frontend",
+      "label": "Web Shell",
+      "sublabel": "React 19 · file://",
+      "pos": [
+        60,
+        60
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/web-shell/src/state/coreClient.ts",
+          "line": 97,
+          "label": "唯一 Core 客户端工厂"
+        }
+      ]
+    },
+    {
+      "id": "host-bridge",
+      "type": "security",
+      "label": "Host Bridge",
+      "sublabel": "contextBridge · v1.0",
+      "pos": [
+        60,
+        226
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "packages/host-bridge/src/index.ts",
+          "line": 1,
+          "label": "桥类型与版本常量"
+        },
+        {
+          "path": "apps/desktop-host/src/preload.ts",
+          "line": 3,
+          "label": "固定通道名暴露"
+        }
+      ]
+    },
+    {
+      "id": "plugin-runner",
+      "type": "security",
+      "label": "Plugin Runner",
+      "sublabel": "stdio JSON-RPC · 无端口",
+      "pos": [
+        400,
+        60
+      ],
+      "size": [
+        200,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/plugin-runner/src/investment_steward_plugin_runner/protocol.py",
+          "line": 64,
+          "label": "出口白名单再校验"
+        }
+      ]
+    },
+    {
+      "id": "desktop-host",
+      "type": "backend",
+      "label": "Desktop Host",
+      "sublabel": "Electron 主进程 · 令牌签发",
+      "pos": [
+        400,
+        226
+      ],
+      "size": [
+        200,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/desktop-host/src/main.ts",
+          "line": 26,
+          "label": "randomBytes(32) 会话令牌"
+        },
+        {
+          "path": "apps/desktop-host/src/main.ts",
+          "line": 394,
+          "label": "Core 路径白名单正则"
+        }
+      ]
+    },
+    {
+      "id": "pack-sandbox",
+      "type": "security",
+      "label": "策略包执行器",
+      "sublabel": "python -I · PEP 578",
+      "pos": [
+        400,
+        408
+      ],
+      "size": [
+        200,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/quant_pack_runner.py",
+          "line": 39,
+          "label": "BLOCKED_EVENTS 审计钩子"
+        },
+        {
+          "path": "apps/core-api/src/investment_steward_core/signing.py",
+          "line": 59,
+          "label": "Ed25519 清单校验"
+        }
+      ]
+    },
+    {
+      "id": "agent-worker",
+      "type": "backend",
+      "label": "Agent Worker",
+      "sublabel": "60s tick · 独立进程",
+      "pos": [
+        760,
+        60
+      ],
+      "size": [
+        220,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/agent-worker/src/investment_steward_agent_worker/scheduler.py",
+          "line": 58,
+          "label": "三个定时任务"
+        }
+      ]
+    },
+    {
+      "id": "core-api",
+      "type": "backend",
+      "label": "Core API",
+      "sublabel": "FastAPI · loopback 随机端口",
+      "pos": [
+        760,
+        216
+      ],
+      "size": [
+        220,
+        100
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/api/app.py",
+          "line": 817,
+          "label": "_require_session 401"
+        },
+        {
+          "path": "apps/core-api/src/investment_steward_core/api/app.py",
+          "line": 1387,
+          "label": "create_app：~220 路由"
+        }
+      ]
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "steward.sqlite3",
+      "sublabel": "45 表 · WAL · v31",
+      "pos": [
+        760,
+        408
+      ],
+      "size": [
+        220,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/storage/database.py",
+          "line": 111,
+          "label": "_migrate 手管迁移阶梯"
+        },
+        {
+          "path": "apps/core-api/src/investment_steward_core/storage/paths.py",
+          "line": 103,
+          "label": "数据目录解析优先级"
+        }
+      ]
+    },
+    {
+      "id": "feeds",
+      "type": "external",
+      "label": "公开行情与宏观源",
+      "sublabel": "东财 · 腾讯 · FRED",
+      "pos": [
+        1140,
+        60
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/market_feed.py",
+          "line": 46,
+          "label": "tencent→eastmoney 回落"
+        },
+        {
+          "path": "apps/core-api/src/investment_steward_core/feed_health.py",
+          "line": 35,
+          "label": "数据源注册表"
+        }
+      ]
+    },
+    {
+      "id": "llm-gateway",
+      "type": "cloud",
+      "label": "模型网关",
+      "sublabel": "OpenAI 兼容端点",
+      "pos": [
+        1140,
+        226
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/model_client.py",
+          "line": 167,
+          "label": "唯一的模型请求处"
+        }
+      ]
+    },
+    {
+      "id": "relay",
+      "type": "cloud",
+      "label": "同步中继 relay",
+      "sublabel": "外部部署 · 端到端加密",
+      "pos": [
+        1140,
+        408
+      ],
+      "size": [
+        180,
+        74
+      ],
+      "sources": [
+        {
+          "path": "apps/core-api/src/investment_steward_core/sync_client.py",
+          "line": 62,
+          "label": "httpx trust_env=False"
+        },
+        {
+          "path": "apps/relay/src/relay_server/app.py",
+          "line": 1,
+          "label": "设备注册 / 游标 / 包中继"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "渲染沙箱 · 无 Node",
+      "wraps": [
+        "web-shell",
+        "host-bridge"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "本机 · loopback 私有内核，数据不出本机",
+      "wraps": [
+        "plugin-runner",
+        "agent-worker",
+        "desktop-host",
+        "core-api",
+        "pack-sandbox",
+        "sqlite"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "公网出口",
+      "wraps": [
+        "feeds",
+        "llm-gateway"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "运营方服务器",
+      "wraps": [
+        "relay"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ui-to-bridge",
+      "from": "web-shell",
+      "to": "host-bridge",
+      "label": "coreRequest()",
+      "variant": "emphasis",
+      "labelAt": [
+        150,
+        180
+      ]
+    },
+    {
+      "id": "bridge-to-host",
+      "from": "host-bridge",
+      "to": "desktop-host",
+      "label": "invoke host:*",
+      "variant": "emphasis"
+    },
+    {
+      "id": "host-to-core",
+      "from": "desktop-host",
+      "to": "core-api",
+      "label": "loopback + 令牌",
+      "variant": "emphasis"
+    },
+    {
+      "id": "host-spawns-runner",
+      "from": "desktop-host",
+      "to": "plugin-runner",
+      "label": "spawn · stdio"
+    },
+    {
+      "id": "worker-callback",
+      "from": "agent-worker",
+      "to": "core-api",
+      "label": "60s tick 回调",
+      "labelAt": [
+        870,
+        175
+      ]
+    },
+    {
+      "id": "core-fetch-feeds",
+      "from": "core-api",
+      "to": "feeds",
+      "label": "urllib 取数",
+      "fromSide": "top",
+      "toSide": "left",
+      "variant": "emphasis",
+      "labelAt": [
+        1040,
+        97
+      ]
+    },
+    {
+      "id": "core-call-model",
+      "from": "core-api",
+      "to": "llm-gateway",
+      "label": "POST /chat/completions",
+      "variant": "emphasis"
+    },
+    {
+      "id": "core-write-db",
+      "from": "core-api",
+      "to": "sqlite",
+      "label": "研报落库",
+      "variant": "emphasis",
+      "labelAt": [
+        870,
+        362
+      ]
+    },
+    {
+      "id": "core-run-pack",
+      "from": "core-api",
+      "to": "pack-sandbox",
+      "label": "签名通过才执行",
+      "fromSide": "left",
+      "toSide": "top",
+      "labelAt": [
+        665,
+        375
+      ]
+    },
+    {
+      "id": "core-to-relay",
+      "from": "core-api",
+      "to": "relay",
+      "label": "httpx · 可选",
+      "fromSide": "right",
+      "toSide": "top",
+      "variant": "dashed",
+      "labelAt": [
+        1230,
+        362
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "信任边界与归属",
+      "items": [
+        "令牌 randomBytes(32) 只在主进程，渲染层拿不到密钥",
+        "217/220 路由比对 X-Core-Session-Token，仅 /health 免鉴权",
+        "桥路径白名单 ~110 条，check:bridge 是打包硬门禁"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "主链路：一份研报",
+      "items": [
+        "host:core-request 校验路径并注入令牌",
+        "逐源失败写进 source_errors，不留空不臆测",
+        "call_active_model 单次阻塞，stream=False"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "外部依赖",
+      "items": [
+        "行情公告：东方财富 · 腾讯 · 新浪",
+        "宏观商品：FRED · 世行 · OKX · 中金所",
+        "模型：任意 OpenAI 兼容端点，密钥进凭据管理器"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "受限执行",
+      "items": [
+        "清单走 Ed25519 校验，拒收 unsigned fixture",
+        "一次性子进程 + PEP 578，封 open/socket/fork",
+        "30s 强杀；自陈非容器级隔离"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "数据落点",
+      "items": [
+        "steward.sqlite3 45 表 · WAL，手管 user_version 31",
+        "macro_cache 12h/7d，排除在导出与同步之外",
+        "/export/all 默认不含密钥与设备态"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "休眠面与偏差",
+      "items": [
+        "relay 不被桌面端拉起，未配置 /sync 即 409",
+        "core 不直连 runner，插件引擎在内核内直跑",
+        "httpx 只在 sync_client 用，却仅声明为 dev 依赖"
+      ]
+    }
+  ]
+}

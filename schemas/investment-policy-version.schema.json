@@ -1,0 +1,253 @@
+{
+  "$defs": {
+    "ConfirmationMethod": {
+      "enum": [
+        "explicit_ui",
+        "imported"
+      ],
+      "title": "ConfirmationMethod",
+      "type": "string"
+    },
+    "PolicyStatus": {
+      "enum": [
+        "draft",
+        "active",
+        "superseded",
+        "archived"
+      ],
+      "title": "PolicyStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "policy_id": {
+      "format": "uuid",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/PolicyStatus",
+      "default": "draft"
+    },
+    "investment_goal": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Investment Goal",
+      "type": "string"
+    },
+    "horizon_years": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Horizon Years"
+    },
+    "liquidity_needs": {
+      "default": "",
+      "maxLength": 2000,
+      "title": "Liquidity Needs",
+      "type": "string"
+    },
+    "allowed_markets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Markets",
+      "type": "array"
+    },
+    "allowed_asset_classes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Asset Classes",
+      "type": "array"
+    },
+    "risk_boundaries": {
+      "additionalProperties": true,
+      "title": "Risk Boundaries",
+      "type": "object"
+    },
+    "preferred_methods": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Preferred Methods",
+      "type": "array"
+    },
+    "excluded_methods": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Excluded Methods",
+      "type": "array"
+    },
+    "observation_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observation Conditions",
+      "type": "array"
+    },
+    "invalidation_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Invalidation Conditions",
+      "type": "array"
+    },
+    "review_due_at": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Due At"
+    },
+    "change_reason": {
+      "default": "initial",
+      "maxLength": 2000,
+      "title": "Change Reason",
+      "type": "string"
+    },
+    "source_learning_activity_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Source Learning Activity Ids",
+      "type": "array"
+    },
+    "supersedes_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Id"
+    },
+    "confirmed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmed At"
+    },
+    "confirmation_method": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfirmationMethod"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "confirmation_summary": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Summary"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "revision": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "device_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device Id"
+    },
+    "change_event_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Event Id"
+    },
+    "conflict_policy": {
+      "default": "append_only_versioning",
+      "title": "Conflict Policy",
+      "type": "string"
+    }
+  },
+  "required": [
+    "policy_id",
+    "user_id",
+    "version",
+    "investment_goal"
+  ],
+  "title": "InvestmentPolicyVersion",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/investment-policy-version/1.0"
+}

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Investment Steward</title>
+<style>
+:root{color-scheme:dark;--bg:#0B1018;--panel:#111826;--panel2:#151F30;--line:#2A3546;--txt:#E6ECF5;--dim:#8B98AB;--red:#E5484D;--green:#46A758;--amber:#FFB224;--blue:#5B9BD5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.55 -apple-system,"HarmonyOS Sans","MiSans",system-ui,sans-serif;padding-bottom:64px}
+header{position:sticky;top:0;background:rgba(11,16,24,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+header h1{font-size:17px;font-weight:600}
+header .chip{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+main{padding:14px 14px 8px;max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--dim);font-size:11px;padding:8px 0 9px;cursor:pointer}
+nav button .ic{display:block;font-size:19px;margin-bottom:2px}
+nav button.on{color:var(--txt)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:10px}
+.card h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.card .meta{font-size:11.5px;color:var(--dim);margin-top:6px}
+.badge{display:inline-block;font-size:10.5px;border-radius:6px;padding:1px 8px;margin-right:6px;vertical-align:1px}
+.b-open{background:#3B2A1A;color:var(--amber)}.b-done{background:#1B2E22;color:var(--green)}.b-info{background:#1A2739;color:var(--blue)}.b-unread{background:#33161A;color:var(--red)}
+.empty{color:var(--dim);text-align:center;padding:36px 0;font-size:13px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--dim)}
+input,textarea,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:14px;margin:5px 0 10px}
+textarea{resize:vertical;min-height:70px}
+.btn{display:inline-block;background:#2E5AAC;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
+.btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+.btn.block{display:block;width:100%}
+.btn:disabled{opacity:.5}
+.note{font-size:12px;color:var(--dim);margin:6px 0}
+.err{color:var(--red);font-size:12.5px;margin:6px 0}
+.okmsg{color:var(--green);font-size:12.5px;margin:6px 0}
+.hidden{display:none}
+/* AI 聊天 */
+#chat{display:flex;flex-direction:column;min-height:60vh}
+#msgs{flex:1;overflow-y:auto;margin-bottom:10px}
+.msg{max-width:86%;padding:9px 12px;border-radius:12px;margin-bottom:8px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.msg.u{background:#2E5AAC;margin-left:auto;border-bottom-right-radius:3px}
+.msg.a{background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:3px}
+.msg.sys{background:none;color:var(--dim);font-size:11.5px;text-align:center;max-width:100%}
+.tabbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.tabbar select{flex:1;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>投资管家</h1>
+  <span class="chip" id="syncChip">未同步</span>
+</header>
+<main>
+  <!-- 今日 -->
+  <section id="page-today">
+    <div class="card" id="todayStatus"></div>
+    <div id="todayFeed"></div>
+  </section>
+  <!-- 通知 -->
+  <section id="page-notif" class="hidden">
+    <div id="notifList"></div>
+  </section>
+  <!-- 观察 -->
+  <section id="page-watch" class="hidden">
+    <div id="watchList"></div>
+  </section>
+  <!-- AI -->
+  <section id="page-ai" class="hidden">
+    <div id="chat">
+      <div class="tabbar">
+        <select id="modelSel"><option value="">内置免费AI · 点击右侧拉取模型</option></select>
+        <button class="btn ghost" id="btnModels" style="white-space:nowrap">拉取模型</button>
+      </div>
+      <div id="msgs"><div class="msg sys">内置免费AI（svc-k7p4 中转 · 限速 1 次/分钟）</div></div>
+      <textarea id="aiInput" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button class="btn block" id="btnSend">发送</button>
+    </div>
+  </section>
+  <!-- 设置 -->
+  <section id="page-set" class="hidden">
+    <div class="card">
+      <h3>设备接入（一次性）</h3>
+      <p class="note">在 Windows 端「设置 → 多设备同步 → 手机接入」复制中转地址、用户令牌、同步密钥，粘贴到下面。手机将注册专属设备令牌（可随时在 Windows 端撤销）。</p>
+      <label class="note">中转地址</label><input id="inRelay" placeholder="https://st.18257.xyz">
+      <label class="note">用户令牌（主 token，仅接入瞬间使用，用后即弃）</label><textarea id="inToken" placeholder="粘贴 user_token"></textarea>
+      <label class="note">同步密钥（Fernet，用于端到端解密，仅存本机）</label><textarea id="inKey" placeholder="粘贴 sync_key"></textarea>
+      <button class="btn block" id="btnPair">注册本设备并保存</button>
+      <div id="pairMsg"></div>
+    </div>
+    <div class="card">
+      <h3>同步</h3>
+      <div class="kv"><span class="k">设备</span><span id="stDevice">—</span></div>
+      <div class="kv"><span class="k">游标</span><span id="stCursor">—</span></div>
+      <div class="kv"><span class="k">已缓存事件</span><span id="stCount">—</span></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn" style="flex:1" id="btnSync">立即同步</button>
+        <button class="btn ghost" style="flex:1" id="btnReset">清空本机缓存</button>
+      </div>
+    </div>
+    <p class="note" style="text-align:center">Investment Steward Mobile v0.1 · 数据来自同步白名单，完整证据仅存 Windows 本机</p>
+  </section>
+</main>
+<nav>
+  <button data-p="today" class="on"><span class="ic">🏠</span>今日</button>
+  <button data-p="notif"><span class="ic">🔔</span>通知</button>
+  <button data-p="watch"><span class="ic">👁</span>观察</button>
+  <button data-p="ai"><span class="ic">🤖</span>AI</button>
+  <button data-p="set"><span class="ic">⚙️</span>设置</button>
+</nav>
+<script>
+"use strict";
+/* ===== 常量与状态 ===== */
+var AI_BASE = "https://svc-k7p4.18257.xyz"; // AI key 在原生层,JS 不可见
+var LS = {
+  get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set: function (k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  del: function (k) { localStorage.removeItem(k); }
+};
+var state = {
+  events: LS.get("events", []),
+  cursor: LS.get("cursor", 0),
+  relay: LS.get("relay", ""),
+  deviceToken: LS.get("deviceToken", ""),
+  deviceId: LS.get("deviceId", ""),
+  syncKey: LS.get("syncKey", ""),
+  readSet: LS.get("readSet", []),
+  model: LS.get("model", "")
+};
+function saveState() {
+  LS.set("events", state.events); LS.set("cursor", state.cursor);
+  LS.set("relay", state.relay); LS.set("deviceToken", state.deviceToken);
+  LS.set("deviceId", state.deviceId); LS.set("syncKey", state.syncKey);
+  LS.set("readSet", state.readSet); LS.set("model", state.model);
+}
+function $(id) { return document.getElementById(id); }
+function esc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function fmtTime(s) { return s ? String(s).replace("T", " ").slice(0, 16) : "—"; }
+
+/* ===== 原生桥（网络全部走 Kotlin/Java 层:域名白名单 + AI key 注入） ===== */
+var bridge = window.AndroidBridge || null;
+var callSeq = 0, pending = {};
+function bridgeCall(method, url, headers, body) {
+  return new Promise(function (resolve, reject) {
+    if (!bridge) { reject(new Error("原生桥不可用")); return; }
+    var cb = "c" + (++callSeq);
+    pending[cb] = { resolve: resolve, reject: reject };
+    bridge.requestAsync(cb, method, url, JSON.stringify(headers || {}), body || null);
+    setTimeout(function () { if (pending[cb]) { delete pending[cb]; reject(new Error("请求超时")); } }, 60000);
+  });
+}
+window.__bridgeDone = function (cb, status, body) {
+  var p = pending[cb]; if (!p) return; delete pending[cb];
+  p.resolve({ status: status, body: body });
+};
+
+/* ===== Fernet 解密（Web Crypto:AES-128-CBC + HMAC-SHA256） ===== */
+function b64urlToBytes(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  var bin = atob(s), out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function subtle() {
+  if (!window.crypto || !window.crypto.subtle) throw new Error("WebView 不支持 WebCrypto（需 HTTPS 上下文或 Android Bridge）");
+  return window.crypto.subtle;
+}
+function openFernet(keyB64, tokenB64) {
+  var keyBytes = b64urlToBytes(keyB64);
+  if (keyBytes.length !== 32) return Promise.reject(new Error("同步密钥格式错误"));
+  var signKey = keyBytes.slice(0, 16), encKey = keyBytes.slice(16);
+  var token = b64urlToBytes(tokenB64);
+  if (token.length < 57 || token[0] !== 0x80) return Promise.reject(new Error("信封格式错误"));
+  var iv = token.slice(9, 25), ct = token.slice(25, token.length - 32), mac = token.slice(token.length - 32);
+  var sk = subtle().importKey("raw", signKey, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  var ek = subtle().importKey("raw", encKey, { name: "AES-CBC" }, false, ["decrypt"]);
+  return subtle().verify("HMAC", sk, mac, token.slice(0, token.length - 32)).then(function (ok) {
+    if (!ok) throw new Error("HMAC 校验失败:密钥不符或密文被篡改");
+    return subtle().decrypt({ name: "AES-CBC", iv: iv }, ek, ct);
+  }).then(function (plain) {
+    var s = "", bytes = new Uint8Array(plain), chunk = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunk) s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    return JSON.parse(decodeURIComponent(escape(s)));
+  });
+}
+
+/* ===== 同步:拉取 + 解密 + 落缓存 ===== */
+var syncBusy = false;
+function doSync(manual) {
+  if (syncBusy) return Promise.resolve("busy");
+  if (!state.relay || !state.deviceToken || !state.syncKey) {
+    if (manual) alert("先在「设置」完成设备接入（中转地址 / 用户令牌 / 同步密钥）");
+    return Promise.resolve("unconfigured");
+  }
+  syncBusy = true; renderChip("同步中…");
+  return bridgeCall("GET", state.relay + "/sync/events?cursor=" + state.cursor + "&limit=200", { "X-Relay-Token": state.deviceToken }, null)
+    .then(function (r) {
+      if (r.status === 401) { renderChip("令牌失效"); throw new Error("设备令牌失效:请在 Windows 端重新接入"); }
+      if (r.status !== 200) throw new Error("relay HTTP " + r.status);
+      var data = JSON.parse(r.body);
+      var fails = 0;
+      var chain = Promise.resolve();
+      (data.events || []).forEach(function (ev) {
+        chain = chain.then(function () {
+          return openFernet(state.syncKey, ev.payload).then(function (plain) {
+            state.events.push({ id: ev.event_id, kind: ev.kind, device: ev.device_id, at: ev.created_at, data: plain });
+          }).catch(function () { fails++; });
+        });
+      });
+      return chain.then(function () {
+        state.cursor = data.cursor_max || state.cursor;
+        if (state.events.length > 2000) state.events = state.events.slice(-2000);
+        saveState();
+        renderAll();
+        var msg = "同步完成:新增 " + (data.events || []).length + " 条" + (fails ? "，解密失败 " + fails + " 条（密钥不符,已如实跳过）" : "");
+        renderChip("已同步"); syncBusy = false;
+        if (manual) alert(msg);
+        return msg;
+      });
+    })
+    .catch(function (err) { syncBusy = false; renderChip("同步失败"); if (manual) alert("同步失败:" + err.message); return err.message; });
+}
+function renderChip(t) { $("syncChip").textContent = t; }
+
+/* ===== 渲染 ===== */
+function sortedEvents() { return state.events.slice().sort(function (a, b) { return b.id - a.id; }); }
+function kindBadge(kind) {
+  if (kind === "notification.raised") return '<span class="badge b-unread">通知</span>';
+  if (kind === "watch_item.updated") return '<span class="badge b-open">观察</span>';
+  if (kind === "plan.status") return '<span class="badge b-info">计划</span>';
+  if (kind === "research.summary") return '<span class="badge b-info">研究</span>';
+  return '<span class="badge b-info">' + esc(kind) + "</span>";
+}
+function renderToday() {
+  var cfg = state.deviceToken && state.syncKey;
+  $("todayStatus").innerHTML =
+    '<h3>同步状态</h3>' +
+    '<div class="kv"><span class="k">设备</span><span>' + esc(state.deviceId || "未接入") + "</span></div>" +
+    '<div class="kv"><span class="k">拉取游标</span><span>' + state.cursor + "</span></div>" +
+    '<div class="kv"><span class="k">缓存事件</span><span>' + state.events.length + "</span></div>" +
+    '<div class="kv"><span class="k">AI 通道</span><span>官方免费AI（内置）</span></div>';
+  var feed = sortedEvents().slice(0, 30);
+  $("todayFeed").innerHTML = feed.length
+    ? feed.map(function (ev) {
+        var line = ev.data.title || ev.data.question || ev.data.summary || ev.data.status || "";
+        return '<div class="card"><h3>' + kindBadge(ev.kind) + esc(line || ev.kind) + "</h3>" +
+          (ev.data.summary ? '<div style="font-size:13px;color:var(--dim)">' + esc(ev.data.summary) + "</div>" : "") +
+          '<div class="meta">' + fmtTime(ev.at) + " · #" + ev.id + "</div></div>";
+      }).join("")
+    : '<div class="empty">' + (cfg ? "暂无同步内容——在 Windows 端「立即同步」后，这里会看到观察/通知/研究摘要" : "先到「设置」完成设备接入") + "</div>";
+}
+function renderNotif() {
+  var list = sortedEvents().filter(function (e) { return e.kind === "notification.raised"; });
+  $("notifList").innerHTML = list.length
+    ? list.map(function (ev) {
+        var read = state.readSet.indexOf(String(ev.data.notification_id)) >= 0;
+        return '<div class="card" onclick="markRead(\'' + esc(String(ev.data.notification_id)) + '\')"><h3>' +
+          (read ? '<span class="badge b-done">已读</span>' : '<span class="badge b-unread">未读</span>') + esc(ev.data.title || "") + "</h3>" +
+          '<div style="font-size:13.5px">' + esc(ev.data.summary || "") + "</div>" +
+          '<div class="meta">' + fmtTime(ev.data.created_at || ev.at) + " · 点击标记已读</div></div>";
+      }).join("")
+    : '<div class="empty">暂无通知</div>';
+}
+window.markRead = function (nid) {
+  if (state.readSet.indexOf(nid) < 0) { state.readSet.push(nid); saveState(); renderNotif(); }
+};
+function renderWatch() {
+  var latest = {};
+  state.events.forEach(function (ev) {
+    if (ev.kind !== "watch_item.updated" || !ev.data.watch_id) return;
+    var k = ev.data.watch_id;
+    if (!latest[k] || latest[k].id < ev.id) latest[k] = ev;
+  });
+  var list = Object.keys(latest).map(function (k) { return latest[k]; }).sort(function (a, b) { return b.id - a.id; });
+  $("watchList").innerHTML = list.length
+    ? list.map(function (ev) {
+        var d = ev.data;
+        return '<div class="card"><h3><span class="badge ' + (d.status === "open" ? "b-open" : "b-done") + '">' + esc(d.status || "") + "</span>" + esc(d.title || "") + "</h3>" +
+          '<div style="font-size:13px">' + esc(d.indicator || "") + (d.condition_text ? " · " + esc(d.condition_text) : "") + "</div>" +
+          '<div class="meta">检查周期 ' + esc(d.check_cycle || "—") + " · 更新 " + fmtTime(ev.at) + "</div></div>";
+      }).join("")
+    : '<div class="empty">暂无观察事项</div>';
+}
+
+/* ===== AI ===== */
+function loadModels() {
+  $("btnModels").disabled = true;
+  bridgeCall("GET", AI_BASE + "/v1/models", {}, null).then(function (r) {
+    $("btnModels").disabled = false;
+    if (r.status !== 200) { alert("模型拉取失败:HTTP " + r.status); return; }
+    var data = JSON.parse(r.body), ids = (data.data || []).map(function (m) { return m.id; });
+    if (!ids.length) { alert("通道未返回模型"); return; }
+    var sel = $("modelSel");
+    sel.innerHTML = ids.map(function (id) { return '<option value="' + esc(id) + '">' + esc(id) + "</option>"; }).join("");
+    if (state.model && ids.indexOf(state.model) >= 0) sel.value = state.model;
+    else { state.model = ids[0]; saveState(); }
+  }).catch(function (e) { $("btnModels").disabled = false; alert("模型拉取失败:" + e.message); });
+}
+function addMsg(cls, text) {
+  var d = document.createElement("div");
+  d.className = "msg " + cls; d.textContent = text;
+  $("msgs").appendChild(d); $("msgs").scrollTop = $("msgs").scrollHeight;
+  return d;
+}
+function aiChat() {
+  var q = $("aiInput").value.trim();
+  if (!q) return;
+  if (!state.model) { alert("先点「拉取模型」选择模型"); return; }
+  $("aiInput").value = "";
+  addMsg("u", q);
+  var his = LS.get("aiHis", []);
+  his.push({ role: "user", content: q });
+  if (his.length > 20) his = his.slice(-20);
+  var busyMsg = addMsg("sys", "思考中…（免费通道限速 1 次/分钟）");
+  $("btnSend").disabled = true;
+  bridgeCall("POST", AI_BASE + "/v1/chat/completions", { "Content-Type": "application/json" },
+    JSON.stringify({ model: state.model, messages: his, temperature: 0.7 }))
+    .then(function (r) {
+      $("btnSend").disabled = false; busyMsg.remove();
+      if (r.status === 429) { addMsg("a", "限速中（免费通道 1 次/分钟），稍后再试。"); return; }
+      if (r.status !== 200) { addMsg("a", "请求失败 HTTP " + r.status + ": " + r.body.slice(0, 200)); return; }
+      var data = JSON.parse(r.body);
+      var text = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "(空响应)";
+      addMsg("a", text);
+      his.push({ role: "assistant", content: text });
+      LS.set("aiHis", his);
+    })
+    .catch(function (e) { $("btnSend").disabled = false; busyMsg.remove(); addMsg("a", "请求失败:" + e.message); });
+}
+
+/* ===== 设备接入 ===== */
+function pair() {
+  var relay = $("inRelay").value.trim().replace(/\/+$/, "");
+  var token = $("inToken").value.trim();
+  var key = $("inKey").value.trim();
+  var out = $("pairMsg");
+  if (!relay || !token || !key) { out.innerHTML = '<p class="err">三项都要填</p>'; return; }
+  out.innerHTML = '<p class="note">注册中…</p>';
+  bridgeCall("POST", relay + "/devices/attach", { "X-Relay-Token": token, "Content-Type": "application/json" },
+    JSON.stringify({ label: "Android-" + (navigator.userAgent || "").slice(-6), public_key: "" }))
+    .then(function (r) {
+      if (r.status === 201) {
+        var d = JSON.parse(r.body);
+        state.relay = relay; state.deviceToken = d.device_token; state.deviceId = d.device_id; state.syncKey = key;
+        saveState(); renderAll();
+        out.innerHTML = '<p class="okmsg">接入成功!设备 ' + esc(d.device_id) + " 已注册（可在 Windows 端撤销）。正在首拉…</p>";
+        doSync(false);
+      } else {
+        out.innerHTML = '<p class="err">接入失败 HTTP ' + r.status + ": " + esc(r.body.slice(0, 150)) + "</p>";
+      }
+    })
+    .catch(function (e) { out.innerHTML = '<p class="err">接入失败:' + esc(e.message) + "</p>"; });
+}
+function renderSettings() {
+  $("inRelay").value = state.relay || "https://st.18257.xyz";
+  $("stDevice").textContent = state.deviceId || "未接入";
+  $("stCursor").textContent = state.cursor;
+  $("stCount").textContent = state.events.length;
+}
+
+function renderAll() { renderToday(); renderNotif(); renderWatch(); renderSettings(); renderChip(state.deviceToken ? "已同步" : "未接入"); }
+
+/* ===== 导航与事件 ===== */
+document.querySelectorAll("nav button").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.querySelectorAll("nav button").forEach(function (x) { x.classList.remove("on"); });
+    b.classList.add("on");
+    ["today", "notif", "watch", "ai", "set"].forEach(function (p) { $("page-" + p).classList.toggle("hidden", p !== b.dataset.p); });
+    if (b.dataset.p === "today") doSync(false);
+  });
+});
+$("btnSync").addEventListener("click", function () { doSync(true).then(function () { renderSettings(); }); });
+$("btnReset").addEventListener("click", function () {
+  if (!confirm("清空本机缓存的事件与游标？（接入凭据保留）")) return;
+  state.events = []; state.cursor = 0; state.readSet = []; saveState(); renderAll();
+});
+$("btnPair").addEventListener("click", pair);
+$("btnModels").addEventListener("click", loadModels);
+$("btnSend").addEventListener("click", aiChat);
+$("aiInput").addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); aiChat(); }
+});
+$("modelSel").addEventListener("change", function () { state.model = this.value; saveState(); });
+
+renderAll();
+if (state.deviceToken && state.syncKey) doSync(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "publisher": "investment-steward",
+  "plugin_id": "official.portfolio-health",
+  "release_version": "0.1.0",
+  "display_name": "组合健康检查",
+  "description": "分析集中度、资产暴露和已确认投资逻辑的观察条件。",
+  "plugin_type": "analyzer",
+  "license": "official-fixture",
+  "sdk_min": "1.0",
+  "sdk_max": "1.x",
+  "capabilities": [
+    "read_portfolio",
+    "read_thesis",
+    "run_analysis"
+  ],
+  "ui_slots": [
+    {
+      "slot": "today.brief",
+      "level": "L3"
+    }
+  ],
+  "schema_versions": {
+    "Analysis": "1.0"
+  },
+  "entrypoint": "portfolio.health",
+  "artifact_sha256": "f6fa86a81dfcc5ae2c0cd4bbafbdc3ccefd07051861e7eb11651358bce517f1a",
+  "signature": "bmk4M21ztyE7gZV1mTqLWRE1ZRaQdNwMpriQXtvA3MHoKLCQkNGqsEEwQfqD/z20YPb1gWiXMbMBU4f2CzqUCQ==",
+  "network_allowlist": [],
+  "side_effects": [],
+  "requires_confirmation": false,
+  "supports_markets": [
+    "CN"
+  ]
+}

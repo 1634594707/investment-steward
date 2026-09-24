@@ -1,0 +1,241 @@
+{
+  "$defs": {
+    "EvidenceRelation": {
+      "enum": [
+        "supporting",
+        "contradicting",
+        "unknown"
+      ],
+      "title": "EvidenceRelation",
+      "type": "string"
+    },
+    "EvidenceStatus": {
+      "enum": [
+        "active",
+        "stale",
+        "retracted"
+      ],
+      "title": "EvidenceStatus",
+      "type": "string"
+    },
+    "EvidenceType": {
+      "enum": [
+        "quote",
+        "financial",
+        "announcement",
+        "macro",
+        "analysis",
+        "learning"
+      ],
+      "title": "EvidenceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "evidence_id": {
+      "format": "uuid",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "subject_refs": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Subject Refs",
+      "type": "array"
+    },
+    "evidence_type": {
+      "$ref": "#/$defs/EvidenceType"
+    },
+    "source_name": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_uri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Uri"
+    },
+    "license_status": {
+      "default": "unknown",
+      "title": "License Status",
+      "type": "string"
+    },
+    "source_trust_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Trust Note"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    },
+    "observed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observed At"
+    },
+    "collected_at": {
+      "format": "date-time",
+      "title": "Collected At",
+      "type": "string"
+    },
+    "valid_until": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid Until"
+    },
+    "source_dataset_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Dataset Version"
+    },
+    "producer_plugin_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Producer Plugin Id"
+    },
+    "producer_release": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Producer Release"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "raw_locator": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Locator"
+    },
+    "content_hash": {
+      "maxLength": 256,
+      "minLength": 16,
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "relation": {
+      "$ref": "#/$defs/EvidenceRelation",
+      "default": "unknown"
+    },
+    "freshness": {
+      "default": "unknown",
+      "title": "Freshness",
+      "type": "string"
+    },
+    "quality_flags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Quality Flags",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/EvidenceStatus",
+      "default": "active"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "tenant_id",
+    "subject_refs",
+    "evidence_type",
+    "source_name",
+    "summary",
+    "content_hash"
+  ],
+  "title": "Evidence",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/evidence/1.0"
+}

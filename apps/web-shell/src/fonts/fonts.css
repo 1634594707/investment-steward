@@ -1,0 +1,27 @@
+/* A3 字体子集化（frontend-optimization-roadmap-2026-09-12）：
+   Noto Sans SC 三个字重（400/500/600）按 UI 字符集（font-src/charset.txt，1371 字，含 ASCII 与常用标点）
+   子集化为单文件 woff2（合计 591KB，原 @fontsource 分片 8.2MB）。
+   生成管线：scripts/font-subset.py（fontsource 分片合并 → pyftsubset）。
+   字形覆盖校验：scripts/font-coverage-check.py（src 全量字符 ⊆ 子集 cmap，缺字即失败）。
+   缺字安全网：各 font-family 栈尾部已有系统字体回落（Windows → Microsoft YaHei），用户自填内容缺字不出现豆腐。 */
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/noto-sans-sc-400-subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/noto-sans-sc-500-subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/noto-sans-sc-600-subset.woff2") format("woff2");
+}

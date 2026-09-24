@@ -1,0 +1,6 @@
+{
+  "name": "steward-desktop-preview",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js"
+}
