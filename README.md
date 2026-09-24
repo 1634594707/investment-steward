@@ -83,7 +83,7 @@ Tactics-radar rule scores, report citation support, and notification priority ar
 
 Main path in one line: UI → versioned IPC bridge → Electron main process (injects a random session token) → FastAPI core → data fetching / model calls → local SQLite.
 
-| View | Location |
+| View |Path|
 | --- | --- |
 | Interactive system architecture diagram (zoom, edge tracing, dark/light themes, PNG/SVG export) | [docs/architecture/system-architecture-2026-09-20.html](docs/architecture/system-architecture-2026-09-20.html) |
 | Maintainable spec source for the same diagram (18 `file:line` citations, pinned to commit `98995fa`) | [docs/architecture/system-architecture-2026-09-20.json](docs/architecture/system-architecture-2026-09-20.json) |
@@ -130,7 +130,7 @@ graph LR
 
 ## Technology Stack
 
-| Layer | Technology | Location |
+| Layer | Technology |地址|
 | --- | --- | --- |
 | Desktop host | Electron (tray, single instance, window management, sidecar orchestration) | `apps/desktop-host` |
 | UI | React 19 + TypeScript + Vite | `apps/web-shell` |
