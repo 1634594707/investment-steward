@@ -64,7 +64,9 @@
         }
       ],
       "icon": "resources/icon.ico",
-      "signExecutable": false
+      "signtoolOptions": {
+        "certificateSubjectName": "Investment Steward Dev"
+      }
     },
     "nsis": {
       "oneClick": false,
