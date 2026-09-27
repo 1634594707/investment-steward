@@ -7,11 +7,10 @@
 
 [English](README.md) · **简体中文**
 
-  <a href="https://1634594707.github.io/investment-steward/assets/demo-zh.mp4">
-    <img src="docs/assets/demo-poster.jpg" width="920" alt="AI Investment Steward 产品演示">
-  </a>
+  <img src="docs/assets/demo-preview-zh.webp" width="920" alt="AI Investment Steward 演示循环——55 条在案证据，四种建议动作">
 
-  ▶ 87 秒无声演示 · 全部为本地真实数据，非示意图
+  ▶ 6 秒循环自动播放 · 全部为本地真实数据，非示意图
+  完整 87 秒演示：[在新标签页打开](https://1634594707.github.io/investment-steward/assets/demo-zh.mp4)
 
 </div>
 
