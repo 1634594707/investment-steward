@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "ThesisStatus": {
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "title": "ThesisStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "thesis_id": {
+      "format": "uuid",
+      "title": "Thesis Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "instrument": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Instrument",
+      "type": "string"
+    },
+    "original_statement": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Original Statement",
+      "type": "string"
+    },
+    "core_assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Core Assumptions",
+      "type": "array"
+    },
+    "supporting_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Supporting Conditions",
+      "type": "array"
+    },
+    "invalidation_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Invalidation Conditions",
+      "type": "array"
+    },
+    "observation_metrics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observation Metrics",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/ThesisStatus",
+      "default": "active"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "thesis_id",
+    "user_id",
+    "instrument",
+    "original_statement"
+  ],
+  "title": "Thesis",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/thesis/1.0"
+}

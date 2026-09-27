@@ -1,0 +1,41 @@
+/* QL10/QL11/QL12 横截面研究区块（量化研究实验室质量提升路线图 2026-09-22，P2）
+   与 quant.css 同用一套设计令牌：颜色/间距/字号一律取自 var(...)，不写死数值。 */
+
+.cross-section { margin-top: calc(var(--space-8, 40px) * var(--density-scale)); padding-top: calc(var(--space-6) * var(--density-scale)); border-top: 1px solid var(--line); }
+.cross-head { display: flex; align-items: flex-end; justify-content: space-between; gap: calc(var(--space-4) * var(--density-scale)); flex-wrap: wrap; margin-bottom: calc(var(--space-3) * var(--density-scale)); }
+.cross-head h3 { margin: calc(var(--space-1, 4px) * var(--density-scale)) 0 0; font-size: var(--text-4, 1.05rem); }
+.cross-progress { display: flex; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); font-size: var(--text-3); color: var(--muted); font-variant-numeric: tabular-nums; }
+.cross-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: calc(var(--space-4) * var(--density-scale)); align-items: start; }
+.cross-card { border: 1px solid var(--line); border-left: 2px solid var(--mint); padding: calc(var(--space-4) * var(--density-scale)); margin-bottom: calc(var(--space-4) * var(--density-scale)); }
+.cross-card h4 { margin: 0 0 calc(var(--space-3) * var(--density-scale)); font-size: var(--text-3); }
+.cross-card h5 { margin: calc(var(--space-3) * var(--density-scale)) 0 calc(var(--space-2) * var(--density-scale)); font-size: var(--text-3); font-weight: 500; color: var(--muted); }
+.cross-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: calc(var(--space-3) * var(--density-scale)); margin-bottom: calc(var(--space-3) * var(--density-scale)); }
+.cross-fields label { display: flex; flex-direction: column; gap: calc(var(--space-1, 4px) * var(--density-scale)); font-size: var(--text-2); color: var(--muted); }
+.cross-fields input, .cross-fields select { padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--panel-2, #14161a); color: var(--ink); font-size: var(--text-3); }
+.cross-fields .cross-check { flex-direction: row; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); }
+.cross-hint { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font-size: var(--text-2); color: var(--faint); line-height: 1.7; }
+.cross-warn { margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding: calc(var(--space-2) * var(--density-scale)); border-left: 2px solid var(--amber, #b8860b); background: color-mix(in srgb, var(--amber, #b8860b) 8%, transparent); font-size: var(--text-2); line-height: 1.7; }
+.cross-summary { margin-top: calc(var(--space-3) * var(--density-scale)); }
+.cross-summary .ps-metrics span, .cross-result .ps-metrics span, .cross-report .ps-metrics span { font-variant-numeric: tabular-nums; }
+.cross-details { margin-top: calc(var(--space-2) * var(--density-scale)); border-top: 1px solid var(--line); padding-top: calc(var(--space-2) * var(--density-scale)); font-size: var(--text-2); }
+.cross-details summary { cursor: pointer; color: var(--muted); }
+.cross-details ul { margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding-left: calc(var(--space-4) * var(--density-scale)); color: var(--faint); }
+.cross-snapshots { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.cross-snapshots li { border-top: 1px solid var(--line); padding: calc(var(--space-2) * var(--density-scale)) 0; }
+.cross-snapshots li.on { border-left: 2px solid var(--mint); padding-left: calc(var(--space-2) * var(--density-scale)); }
+.cross-snapshots .ps-meta { margin-top: calc(var(--space-1, 4px) * var(--density-scale)); }
+.cross-result { margin-top: calc(var(--space-3) * var(--density-scale)); }
+.cross-table-wrap { margin-top: calc(var(--space-3) * var(--density-scale)); overflow-x: auto; }
+.cross-table-wrap.muted { opacity: 0.72; }
+.cross-table { width: 100%; border-collapse: collapse; font-size: var(--text-2); }
+.cross-table th, .cross-table td { text-align: right; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cross-table th:first-child, .cross-table td:first-child { text-align: left; }
+.cross-table th { color: var(--muted); font-weight: 500; }
+.cross-table td.mono { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.cross-report { margin-top: calc(var(--space-3) * var(--density-scale)); }
+.cross-hash { font-size: var(--text-2); color: var(--faint); }
+
+@media (max-width: 720px) {
+  .cross-grid { grid-template-columns: 1fr; }
+  .cross-head { flex-direction: column; align-items: flex-start; }
+}

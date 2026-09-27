@@ -161,17 +161,44 @@ export function useSteward(client: CoreClient, aiReady: boolean) {
   }
 
   /** v23 历史重复证据清理：按（类型+标题+发布日期）分组保留最早一条；有清理则刷新证据账本。 */
-  async function dedupEvidence(): Promise<{ removed: number } | null> {
-    const response = await client.request<{ ok: boolean; removed: number }>({
+  /** 重复证据清理的待删清单条目（预览阶段返回，供用户过目后再确认）。 */
+  interface DedupCandidate {
+    evidence_id: string;
+    summary: string;
+    type: string;
+    collected_at: string;
+  }
+
+  /**
+   * 清理历史重复证据。**两段式**（第四轮审计 api-7）。
+   *
+   * 改造前点一下就直接硬删除：无确认、无预览、无清单，界面只回「已清理 N 条」，
+   * 而分组键只靠标题，会把同公司同日同标题的**不同**公告误判为重复而删掉；
+   * 审计只记 count，误删后无法逐条追溯。
+   *
+   * 现在：`confirm=false`（默认）只**预览**待删清单，一条都不删；必须 `confirm=true`
+   * 才真执行。Core 侧另已把 `content_hash` 并入分组键，标题相同但内容不同的不再误伤。
+   */
+  async function dedupEvidence(
+    options: { confirm?: boolean } = {},
+  ): Promise<{ removed: number; would_remove: number; candidates: DedupCandidate[] } | null> {
+    const response = await client.request<{
+      ok: boolean; removed: number; would_remove?: number; candidates?: DedupCandidate[];
+    }>({
       method: "POST",
       path: "/evidence/dedup",
+      body: { dry_run: !options.confirm, confirm: options.confirm === true },
     });
     if (response.status >= 400 || !response.data || !response.data.ok) return null;
     if (response.data.removed > 0) {
       const listResponse = await client.request<Evidence[]>({ method: "GET", path: "/evidence" });
       if (listResponse.status < 400 && listResponse.data) setEvidence(listResponse.data);
     }
-    return { removed: response.data.removed };
+    return {
+      removed: response.data.removed,
+      would_remove: response.data.would_remove ?? response.data.removed,
+      candidates: response.data.candidates ?? [],
+    };
   }
 
   async function submitLearningActivity(input: {

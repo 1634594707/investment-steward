@@ -531,13 +531,51 @@ export interface ReportValuation {
   valuation_evidence?: ValuationEvidenceView;
 }
 
-/** v21 AI 个股研究报告（POST /evidence/stock-research-report 即时返回，不落库）。 */
+/**
+ * T10：个股研报**任务**状态（GET /evidence/stock-research-report/{job_id}）。
+ *
+ * 关键：这里有两个不同的「阶段」，不能混用——
+ * - `job_stage` 是任务生命周期（fetching_evidence / saving），只用于进度展示；
+ * - `stage` 是**业务**失败原因（evidence_unavailable / parse / citation …），
+ *   沿用改造前同步响应里的同名字段，前端失败渲染据此分流，二者不可互相覆盖。
+ *
+ * 终态（done / error）时响应体会并入报告体本身（`report` / `title` / `source_errors` …），
+ * 形状与改造前的同步 POST 响应一致，因此可整体当作 `StockReport` 使用。
+ */
+export interface StockReportJobStatus {
+  ok: boolean;
+  job_id: string;
+  state: "running" | "done" | "error" | "cancelled";
+  job_stage?: string | null;
+  done?: number;
+  total?: number;
+  /** 业务失败阶段（非任务生命周期）。 */
+  stage?: string | null;
+  detail?: string | null;
+  source_errors?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/** v21 AI 个股研究报告（POST /evidence/stock-research-report）。
+ *
+ *  注：原注释「即时返回，不落库」**已过期**——v22 起成功即落库（Core 侧
+ *  `insert_ai_research_report`，见 `api/app.py`），`report_id` 落库成功才有值。
+ *  S3（用户视角路线图 2026-09-26）起 Core 在响应中显式给出 `persisted`：
+ *  落库失败时为 `false` 且**没有** `report_id`，此时必须提示用户「本次未保存」，
+ *  否则已付费的报告读完即丢且毫无痕迹。
+ *
+ *  T10（用户视角路线图 2026-09-26）起该端点改为**后台任务**：POST 只建任务并返回
+ *  job_id，报告经 `GET /evidence/stock-research-report/{job_id}` 取回（见
+ *  `StockReportJobStatus`）。 */
 export interface StockReport {
   ok: true;
   symbol: string;
   title: string;
   /** v22 持久化后的报告 id（落库成功才有；协同装配稿可能缺失 → 追问页签按需降级）。 */
   report_id?: string;
+  /** S3：本次结果是否已落库。`false` = 已交付但**未保存**（磁盘满/锁超时/schema 漂移），
+   *  读完后无法回看、无法追问。缺省视为已保存（兼容旧响应）。 */
+  persisted?: boolean;
   /** v22 质量升级：结论先行的执行摘要（模型未给时为空串）。 */
   executive_summary?: string;
   report: string;

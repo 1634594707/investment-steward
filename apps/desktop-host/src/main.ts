@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
+import { allowedMethodsFor, isBridgeAllowed } from "./bridge.js";
 import { SidecarProcess } from "./processManager.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
 
@@ -27,6 +28,9 @@ const sessionToken = randomBytes(32).toString("base64url");
 let corePort = 0;
 let core: SidecarProcess | undefined;
 let worker: SidecarProcess | undefined;
+// A05（架构改进路线图 2026-09-25）：worker 的状态文件路径——IPC 读它呈现
+// 「最近成功 / 最近失败 / 下一次运行」，避免后台巡查对用户完全不可见。
+let workerStatusPath = "";
 let runner: SidecarProcess | undefined;
 let mainWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
@@ -190,6 +194,7 @@ async function startSidecars(): Promise<void> {
     networkAllowlist = [];
   }
 
+  workerStatusPath = join(dataDir, "agent-worker.status.json");
   const workerSpec = packaged
     ? {
         command: packagedBackend,
@@ -370,6 +375,16 @@ function buildApplicationMenu(): void {
   Menu.setApplicationMenu(menu);
 }
 
+/** A05：读取 agent-worker 状态文件；不存在或损坏返回 null（IPC 不应因此失败）。 */
+function readWorkerStatus(): unknown {
+  if (!workerStatusPath) return null;
+  try {
+    return JSON.parse(readFileSync(workerStatusPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function registerBridge(): void {  ipcMain.handle("host:get-info", () => ({
     host_version: app.getVersion(),
     bridge_version: "1.0",
@@ -382,6 +397,7 @@ function registerBridge(): void {  ipcMain.handle("host:get-info", () => ({
     version: "0.1.0",
     pid: core?.pid,
     last_error: core?.error ?? null,
+    worker: readWorkerStatus(),
   }));
   ipcMain.handle("host:restart-core", async () => {
     await core?.stop();
@@ -391,9 +407,17 @@ function registerBridge(): void {  ipcMain.handle("host:get-info", () => ({
   });
   ipcMain.handle("host:core-request", async (_event, request: { method: "GET" | "POST" | "PUT" | "DELETE"; path: string; body?: unknown; timeoutMs?: number; reqId?: string }) => {
     const requestPath = request.path.split("?", 1)[0]!;
-    const corePath = /^\/(?:health|session|slots|cards\/slots\/[^/]+|instruments\/(?:resolve|lookup)|investment-policies(?:\/[^/]+\/confirm)?|investor\/profile|evidence(?:\/(?:announcements|news|financials)\/[^/]+|\/macro\/(?:events|releases|trade|impacts|calendar|weights(?:\/ai-proposal)?)|\/macro\/[^/]+(?:\/(?:anomalies|analysis|my-view|pricing|signals(?:\/[^/]+\/interpret)?))?|\/[^/]+)?|capabilities|audit|plugins\/(?:catalog|[^/]+\/(?:install|disable|update|revoke|app))|market\/candles\/[^/]+|holdings(?:\/[^/]+)?|thesis(?:\/[^/]+)?|plans(?:\/[^/]+\/transition)?|decisions|research\/runs(?:\/[^/]+(?:\/(?:transition|run|response))?)?|research\/questions\/latest|research\/snapshots(?:\/[^/]+)?|research\/templates(?:\/[^/]+)?|brief\/today(?:\/generate)?|review\/weekly|portfolio\/risk|notifications\/(?:pending|triage|evaluate|channels|graded|[^/]+\/read)|data-source\/(?:quality|failures|retry)|decisions(?:\/inaction-stats)?|evidence\/freshness\/patrol|learning\/(?:unit\/today|goals\/current|activities(?:\/[^/]+(?:\/propose-policy-change)?)?|reflections\/export)|channels|credentials(?:\/[^/]+(?:\/test)?)?|model-profiles(?:\/[^/]+(?:\/(?:activate|test))?)?|model-usage|jev\/(?:config|probe|models)|library\/(?:books(?:\/[^/]+(?:\/[^/]+)?)?|plan\/generate|annotations\/[^/]+\/to-research|insights)|quant\/(?:artifacts|runs|experiments(?:\/[^/]+\/(?:reproduce|leakage-check|walk-forward))?|lineage\/.+|factors\/(?:compute|mine)\/[^/]+|parameter-sets(?:\/[^/]+\/(?:lineage|replay|fork|track-records(?:\/verify)?))?|stages|models\/[^/]+|strategy-packs(?:\/[^/]+\/run)?|portfolio\/backtest)|runner\/config|export\/all|import\/(?:preview|apply)|personal\/settings|storage\/(?:layout(?:\/(?:migrate(?:\/preview)?|verify|reset-default))?|lifecycle|backups(?:\/[^/]+\/restore)?)|timeline\/decision\/[^/]+|sync\/(?:config(?:\/reveal)?|pairing-code|status|run|inbox|apply)|transfer\/requests(?:\/[^/]+(?:\/(?:decide|send|receive))?)?|market\/(?:catalog|install)|judgments(?:\/[^/]+(?:\/verify)?)?|watch-items(?:\/[^/]+(?:\/(?:checks|transition))?)?|tactics\/(?:catalog|sectors|signals\/[^/]+|scan|scan-market(?:\/[^/]+(?:\/cancel)?)?|ai-review(?:s(?:\/[^/]+)?)?|watchlist(?:\/[^/]+(?:\/notes)?)?|notes\/[^/]+)|youzi\/(?:today|watchlist|cross-check|cffex|curriculum|tactics(?:\/[^/]+)?|replay\/[^/]+|seats\/[^/]+|profile\/[^/]+)|ai-research\/(?:review-queue|reports(?:\/[^/]+(?:\/follow-ups)?)?))$/.test(requestPath);
-    if (!corePath) {
-      throw new Error(`Core path is not exposed through Host Bridge: ${requestPath}`);
+    // A02（架构改进路线图 2026-09-25）：暴露判定改为消费**生成的**桥清单（方法 + 路径模板），
+    // 不再在此手写 600+ 字符大正则。清单由 scripts/generate_bridge_manifest.mjs 生成，
+    // 生成源是 Core 运行时路由表 + apps/desktop-host/bridge-exposure.json（默认拒绝 + 显式豁免）。
+    // 与旧正则的差异：现在同时校验方法——以前只比路径，GET 与 POST 同路径无法区分。
+    if (!isBridgeAllowed(request.method, requestPath)) {
+      const allowed = allowedMethodsFor(requestPath);
+      throw new Error(
+        allowed.length
+          ? `Core path is not exposed through Host Bridge: ${request.method} ${requestPath}（该路径仅允许 ${allowed.join("/")}）`
+          : `Core path is not exposed through Host Bridge: ${request.method} ${requestPath}`,
+      );
     }
     const hasBody = request.method === "POST" || request.method === "PUT";
     // A02（2026-09-15）：此前用 Node 全局 fetch（undici），其默认 headersTimeout=300s 会切断

@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "ModelProfileStatus": {
+      "description": "模型服务多方案的当前生效态：同一时刻恰好一个「使用中」。",
+      "enum": [
+        "未启用",
+        "使用中"
+      ],
+      "title": "ModelProfileStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "模型服务多方案（CC Switch 式）。\n\n`credential_ref` 引用凭据库中的某条密钥 key_id；`model_access` 能力出网一律经\n`status=使用中` 的当前方案代理。",
+  "properties": {
+    "profile_id": {
+      "format": "uuid",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "base_url": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Base Url",
+      "type": "string"
+    },
+    "model": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "credential_ref": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Credential Ref",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ModelProfileStatus",
+      "default": "未启用"
+    },
+    "timeout_secs": {
+      "anyOf": [
+        {
+          "maximum": 1800,
+          "minimum": 30,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timeout Secs"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "name",
+    "base_url",
+    "model",
+    "credential_ref"
+  ],
+  "title": "ModelProfile",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/model-profile/1.0"
+}

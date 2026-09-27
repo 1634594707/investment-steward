@@ -1,0 +1,134 @@
+{
+  "additionalProperties": false,
+  "description": "发言人信号（§3.5 段一/段二，D-13：官方优先、转载降级并明示）。\n\nexcerpt 必须是官方原文粘贴（本地优先，用户手动录入来源可跳转）；\ndirection/ai_rationale 由 AI 解读回填——rationale 必须引用原文句子，\n无引用不回填（ADR-0006）；信号流只提供「哪类信号更重要」的依据，\n权重调整仍走 M5.5 提议卡确认或用户手动滑杆。",
+  "properties": {
+    "signal_id": {
+      "maxLength": 64,
+      "minLength": 8,
+      "title": "Signal Id",
+      "type": "string"
+    },
+    "region": {
+      "maxLength": 20,
+      "minLength": 1,
+      "title": "Region",
+      "type": "string"
+    },
+    "speaker": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Speaker",
+      "type": "string"
+    },
+    "event_type": {
+      "default": "",
+      "maxLength": 40,
+      "title": "Event Type",
+      "type": "string"
+    },
+    "event_date": {
+      "maxLength": 10,
+      "minLength": 10,
+      "title": "Event Date",
+      "type": "string"
+    },
+    "source_name": {
+      "pattern": "^(官方|转载)$",
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_url": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Source Url",
+      "type": "string"
+    },
+    "excerpt": {
+      "maxLength": 8000,
+      "minLength": 10,
+      "title": "Excerpt",
+      "type": "string"
+    },
+    "direction": {
+      "anyOf": [
+        {
+          "pattern": "^(鹰派|鸽派|中性)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Direction"
+    },
+    "ai_rationale": {
+      "anyOf": [
+        {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ai Rationale"
+    },
+    "focus_shift": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Focus Shift"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "interpreted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interpreted At"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "signal_id",
+    "region",
+    "speaker",
+    "event_date",
+    "source_name",
+    "excerpt"
+  ],
+  "title": "SpeakerSignal",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/speaker-signal/1.0"
+}

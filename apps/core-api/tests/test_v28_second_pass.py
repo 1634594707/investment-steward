@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -536,7 +536,7 @@ def test_stock_report_exposes_v28_decision_card_and_support_chain(client, tmp_pa
     fake, calls = _model_with_calls(report, counter)
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = test_client.post("/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
     assert len(calls) == 2                                    # 报告 + 反方检查
 

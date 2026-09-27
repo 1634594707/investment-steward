@@ -42,3 +42,44 @@ def client(tmp_path: Path):
 
     app = create_app(CoreSettings(session_token=token, data_dir=tmp_path))
     return TestClient(app), {"X-Core-Session-Token": token}
+
+
+# T10（用户视角路线图 2026-09-26）：个股深研改后台任务后，测试侧的统一入口。
+#
+# 端点语义变了：POST /evidence/stock-research-report 现在**只建任务并返回 job_id**，
+# 结果经 GET /evidence/stock-research-report/{job_id} 取。以前 20 多个测试文件直接把
+# POST 的响应体当报告断言，现在改用本 helper：建任务 → 轮询到终态 → 返回与旧 POST
+# 同形状的报告体。这样测试断言基本不用改，轮询细节集中在这一个地方。
+JOB_POLL_INTERVAL_S = 0.02
+JOB_POLL_TIMEOUT_S = 60.0
+
+
+def start_stock_report_job(test_client, headers, **body):
+    """建研报任务；返回 POST 的建任务响应（应含 job_id）。"""
+    response = test_client.post("/evidence/stock-research-report", json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "job_id" in payload, f"建任务响应缺 job_id：{payload}"
+    return payload
+
+
+def await_stock_report_job(test_client, headers, job_id):
+    """轮询到终态，返回终态响应体（与改造前 POST 的报告体同形状 + job_id/state/stage）。"""
+    import time
+
+    deadline = time.monotonic() + JOB_POLL_TIMEOUT_S
+    while True:
+        response = test_client.get(f"/evidence/stock-research-report/{job_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        if payload.get("state") in ("done", "error", "cancelled"):
+            return payload
+        if time.monotonic() > deadline:
+            raise AssertionError(f"研报任务在 {JOB_POLL_TIMEOUT_S}s 内未到终态：{payload}")
+        time.sleep(JOB_POLL_INTERVAL_S)
+
+
+def run_stock_report(test_client, headers, **body):
+    """建任务 + 轮询终态，一步到位。测试里绝大多数场景用这个。"""
+    started = start_stock_report_job(test_client, headers, **body)
+    return await_stock_report_job(test_client, headers, started["job_id"])

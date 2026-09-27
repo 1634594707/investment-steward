@@ -1,0 +1,85 @@
+{
+  "additionalProperties": false,
+  "description": "研读图书馆书目（G5-1）：全本机存储，data_leaves_device=false。",
+  "properties": {
+    "book_id": {
+      "format": "uuid",
+      "title": "Book Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "author": {
+      "maxLength": 200,
+      "minLength": 0,
+      "title": "Author",
+      "type": "string"
+    },
+    "progress": {
+      "default": 0.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Progress",
+      "type": "number"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "isbn": {
+      "anyOf": [
+        {
+          "maxLength": 32,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Isbn"
+    },
+    "status": {
+      "default": "reading",
+      "pattern": "^(reading|finished|wishlist)$",
+      "title": "Status",
+      "type": "string"
+    },
+    "source": {
+      "default": "user",
+      "pattern": "^(ai|user|manual)$",
+      "title": "Source",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "data_leaves_device": {
+      "default": false,
+      "title": "Data Leaves Device",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "book_id",
+    "title",
+    "author"
+  ],
+  "title": "Book",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/book/1.0"
+}

@@ -1,0 +1,78 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "investment_goal": {
+      "default": "",
+      "title": "Investment Goal",
+      "type": "string"
+    },
+    "horizon_years": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Horizon Years"
+    },
+    "liquidity_needs": {
+      "default": "",
+      "title": "Liquidity Needs",
+      "type": "string"
+    },
+    "knowledge_self_assessment": {
+      "default": "",
+      "title": "Knowledge Self Assessment",
+      "type": "string"
+    },
+    "markets_and_assets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Markets And Assets",
+      "type": "array"
+    },
+    "consent": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "title": "Consent",
+      "type": "object"
+    },
+    "privacy_settings": {
+      "additionalProperties": true,
+      "title": "Privacy Settings",
+      "type": "object"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id"
+  ],
+  "title": "InvestorProfile",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/investor-profile/1.0"
+}

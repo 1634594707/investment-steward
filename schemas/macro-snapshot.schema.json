@@ -1,0 +1,393 @@
+{
+  "$defs": {
+    "MacroBackgroundRow": {
+      "additionalProperties": false,
+      "description": "背景层行（货币指数 / 油价 / 金价）：单列展示，不进国别四维打分。",
+      "properties": {
+        "key": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "pattern": "^(ok|pending|degraded)$",
+          "title": "Status",
+          "type": "string"
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest"
+        },
+        "obs_date": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Obs Date"
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of"
+        },
+        "source": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Source",
+          "type": "string"
+        },
+        "dataset_version": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Version"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 400,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "title": "MacroBackgroundRow",
+      "type": "object"
+    },
+    "MacroDimScore": {
+      "additionalProperties": false,
+      "description": "单维打分（M5）：score=None 表示该维无 ok 指标、未参与加权；rules_fired 逐条记录命中规则与实际值。",
+      "properties": {
+        "dim": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Dim",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "rules_fired": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rules Fired",
+          "type": "array"
+        },
+        "indicators_used": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Indicators Used",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dim"
+      ],
+      "title": "MacroDimScore",
+      "type": "object"
+    },
+    "MacroIndicatorReading": {
+      "additionalProperties": false,
+      "description": "宏观雷达单指标读数（M4）：pending=未接入/无数据，绝不编造数值（ADR-0006）。",
+      "properties": {
+        "indicator": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Indicator",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "dim": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Dim",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "pattern": "^(ok|pending|degraded)$",
+          "title": "Status",
+          "type": "string"
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest"
+        },
+        "obs_date": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Obs Date"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of"
+        },
+        "source": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Source",
+          "type": "string"
+        },
+        "dataset_version": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Version"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 400,
+          "title": "Note",
+          "type": "string"
+        },
+        "frequency": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frequency"
+        }
+      },
+      "required": [
+        "indicator",
+        "label",
+        "dim"
+      ],
+      "title": "MacroIndicatorReading",
+      "type": "object"
+    },
+    "MacroPositioning": {
+      "additionalProperties": false,
+      "description": "规则基线定位（M5，方案 §3）：确定性规则可复算；weight_version 固定 v1（用户自定义 M5.5）。",
+      "properties": {
+        "region": {
+          "maxLength": 20,
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "weight_version": {
+          "default": "v1",
+          "maxLength": 20,
+          "title": "Weight Version",
+          "type": "string"
+        },
+        "composite": {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Composite",
+          "type": "number"
+        },
+        "band": {
+          "pattern": "^(扩张|放缓|承压|衰退风险)$",
+          "title": "Band",
+          "type": "string"
+        },
+        "near_boundary_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Near Boundary Note"
+        },
+        "dims": {
+          "items": {
+            "$ref": "#/$defs/MacroDimScore"
+          },
+          "title": "Dims",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region",
+        "composite",
+        "band"
+      ],
+      "title": "MacroPositioning",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`/evidence/macro/{region}` 响应：region=国别（us/cn/eu/jp/in）或 global（背景层）。",
+  "properties": {
+    "region": {
+      "maxLength": 20,
+      "minLength": 1,
+      "title": "Region",
+      "type": "string"
+    },
+    "label": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "indicators": {
+      "items": {
+        "$ref": "#/$defs/MacroIndicatorReading"
+      },
+      "title": "Indicators",
+      "type": "array"
+    },
+    "background": {
+      "items": {
+        "$ref": "#/$defs/MacroBackgroundRow"
+      },
+      "title": "Background",
+      "type": "array"
+    },
+    "positioning": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MacroPositioning"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "degraded_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Degraded Reason"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "region",
+    "label"
+  ],
+  "title": "MacroSnapshot",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/macro-snapshot/1.0"
+}

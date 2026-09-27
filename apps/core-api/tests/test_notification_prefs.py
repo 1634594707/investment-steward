@@ -92,7 +92,13 @@ def test_quiet_hours_holds_delivery_and_hides_in_app(client, monkeypatch):
     assert item["next_retry_at"] is None
     assert "免打扰" in (item["last_delivery_error"] or "")
 
-    assert test_client.get("/notifications/pending", headers=headers).json() == []
+    # 第四轮审计（api-5）：免打扰期间不能只返回空列表——必须如实带上
+    # 「被静音 + 本来有几条」，否则界面把免打扰呈现成「一条提醒都没有」。
+    quiet_page = test_client.get("/notifications/pending", headers=headers).json()
+    assert quiet_page["items"] == []
+    assert quiet_page["muted"] is True
+    assert "免打扰" in quiet_page["mute_reason"]
+    assert quiet_page["hidden_count"] >= 1
 
 
 def test_outside_quiet_hours_delivery_attempted_and_in_app_visible(client, monkeypatch):
@@ -114,7 +120,7 @@ def test_outside_quiet_hours_delivery_attempted_and_in_app_visible(client, monke
     evaluated = test_client.post("/notifications/evaluate", headers=headers).json()
     assert evaluated[0]["delivery_status"] == "failed"  # 未配置通道按 E4 原语义，不受免打扰影响
 
-    pending = test_client.get("/notifications/pending", headers=headers).json()
+    pending = test_client.get("/notifications/pending", headers=headers).json()["items"]
     assert len(pending) == 1
 
 
@@ -134,7 +140,13 @@ def test_in_app_disabled_hides_pending_but_external_still_tried(client, monkeypa
 
     evaluated = test_client.post("/notifications/evaluate", headers=headers).json()
     assert evaluated[0]["delivery_status"] == "failed"  # 站内开关不影响外部投递
-    assert test_client.get("/notifications/pending", headers=headers).json() == []
+    # 第四轮审计（api-5）：静音不能只返回空列表——必须如实带上「被静音 + 本来有几条」，
+    # 否则界面把用户自己设的偏好呈现成「一条提醒都没有」。
+    off_page = test_client.get("/notifications/pending", headers=headers).json()
+    assert off_page["items"] == []
+    assert off_page["muted"] is True
+    assert "站内提醒已关闭" in off_page["mute_reason"]
+    assert off_page["hidden_count"] >= 1
 
 
 def test_external_disabled_skips_delivery_without_backoff(client, monkeypatch):

@@ -1,0 +1,195 @@
+{
+  "$defs": {
+    "MacroPricingRow": {
+      "additionalProperties": false,
+      "description": "市场定价层单行（D-14）：FRED 公开序列代理指标，背景参考，不进四维打分。",
+      "properties": {
+        "key": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "pattern": "^(ok|pending|degraded)$",
+          "title": "Status",
+          "type": "string"
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latest"
+        },
+        "obs_date": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Obs Date"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        },
+        "trend_5d": {
+          "anyOf": [
+            {
+              "maxLength": 10,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend 5D"
+        },
+        "ref_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref Value"
+        },
+        "ref_date": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref Date"
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of"
+        },
+        "source": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Source",
+          "type": "string"
+        },
+        "dataset_version": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Version"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 400,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "kind"
+      ],
+      "title": "MacroPricingRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`/evidence/macro/{region}/pricing` 响应：市场定价对照层（D-14）。\n\n序列缓存于 macro_cache 但用独立 `pricing:` 前缀，不与指标层混存（方案 §2）；\n日度序列缓存 24h 过期重拉，拉取失败回退旧缓存（as_of 如实标注陈旧）。",
+  "properties": {
+    "region": {
+      "maxLength": 20,
+      "minLength": 1,
+      "title": "Region",
+      "type": "string"
+    },
+    "label": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/MacroPricingRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "degraded_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Degraded Reason"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "region",
+    "label"
+  ],
+  "title": "MacroPricingSnapshot",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/macro-pricing-snapshot/1.0"
+}

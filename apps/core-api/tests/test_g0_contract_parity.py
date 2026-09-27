@@ -1,11 +1,13 @@
-"""G0-5 契约一致性：TS↔Python 字段清单比对，防止再次漂移（本期缺口 1/2 正是漂移产物）。
+"""G0-5 契约一致性：TS↔Python 逐项比对，防止再次漂移（本期缺口 1/2 正是漂移产物）。
 
-把 packages/domain-contracts/src/index.ts 与 packages/ui-card-schemas/src/index.ts 中的
-枚举字面量与接口字段名编码为基线清单，与 Python 模型逐项比对。基线与 TS 源码一一对应，
-禁止凭空增改；改契约时需同步维护本清单。
+A03（架构改进路线图 2026-09-25）改造：原实现把 `packages/domain-contracts/src/index.ts`
+与 `packages/ui-card-schemas/src/index.ts` 的枚举字面量与接口字段名**手抄**进本文件当基线，
+再与 Python 比对。手抄基线的问题与它要防的漂移是同一类：TS 源改了、这里没改，
+测试照样绿。现在改为**直接解析真实 TypeScript 源文件**，两侧都从各自源码读出来。
 """
-
 from __future__ import annotations
+
+from pathlib import Path
 
 from investment_steward_core.domain import (
     ActionMode,
@@ -15,36 +17,43 @@ from investment_steward_core.domain import (
     UICard,
     UiCardRenderer,
 )
+from test_a03_contract_parity import parse_interfaces, parse_union_types
 
-# —— 来自 packages/domain-contracts/src/index.ts ——
-TS_PLUGIN_INSTALLATION_STATE = ["available", "installed", "enabled", "disabled", "revoked"]
-TS_ACTION_MODE = ["observe", "research", "review_plan", "no_action"]
-# —— 来自 packages/ui-card-schemas/src/index.ts ——
-TS_CARD_SEVERITY = ["info", "attention", "warning"]
-TS_UI_CARD_RENDERER = ["card", "summary_row", "inline", "silent"]
+ROOT = Path(__file__).resolve().parents[3]
+DOMAIN_TS = ROOT / "packages" / "domain-contracts" / "src" / "index.ts"
+UI_CARD_TS = ROOT / "packages" / "ui-card-schemas" / "src" / "index.ts"
 
-# 注意：即使 Python 枚举多出成员，也以 TS 基线为准做超集判定？不 —— 负漂移（TS 少了）
-# 与正漂移（Python 私有扩展）都要拦住：这里做精确相等，任一侧新增都必须同步另一侧。
-PY_PLUGIN_INSTALLATION_STATE = [s.value for s in PluginInstallationState]
-PY_ACTION_MODE = [s.value for s in ActionMode]
-PY_CARD_SEVERITY = [s.value for s in CardSeverity]
-PY_UI_CARD_RENDERER = [s.value for s in UiCardRenderer]
+
+def _ts_enum(path: Path, name: str) -> list[str]:
+    values = parse_union_types(path).get(name)
+    assert values is not None, f"{path.name} 里找不到枚举 {name}"
+    return values
+
+
+def _ts_fields(path: Path, name: str) -> set[str]:
+    fields = parse_interfaces(path).get(name)
+    assert fields is not None, f"{path.name} 里找不到接口 {name}"
+    return set(fields)
 
 
 def test_plugin_installation_state_values_match_ts():
-    assert sorted(PY_PLUGIN_INSTALLATION_STATE) == sorted(TS_PLUGIN_INSTALLATION_STATE)
+    assert sorted(s.value for s in PluginInstallationState) == sorted(
+        _ts_enum(DOMAIN_TS, "PluginInstallationState")
+    )
 
 
 def test_action_mode_values_match_ts():
-    assert sorted(PY_ACTION_MODE) == sorted(TS_ACTION_MODE)
+    assert sorted(s.value for s in ActionMode) == sorted(_ts_enum(DOMAIN_TS, "ActionMode"))
 
 
 def test_card_severity_values_match_ts():
-    assert sorted(PY_CARD_SEVERITY) == sorted(TS_CARD_SEVERITY)
+    assert sorted(s.value for s in CardSeverity) == sorted(_ts_enum(UI_CARD_TS, "CardSeverity"))
 
 
 def test_ui_card_renderer_values_match_ts():
-    assert sorted(PY_UI_CARD_RENDERER) == sorted(TS_UI_CARD_RENDERER)
+    assert sorted(s.value for s in UiCardRenderer) == sorted(
+        _ts_enum(UI_CARD_TS, "UiCardRenderer")
+    )
 
 
 def test_plugin_manifest_has_mount_field_with_default_in_page():
@@ -69,24 +78,10 @@ def test_plugin_manifest_has_mount_field_with_default_in_page():
     )
     assert manifest.mount == "in_page"
     assert PluginManifest(**(manifest.model_dump() | {"mount": "own_page"})).mount == "own_page"
+    # TS 侧必须同步声明 mount 及其取值域（否则前端读 manifest.mount 会报类型错）。
+    assert "mount" in _ts_fields(DOMAIN_TS, "PluginManifest")
 
 
 def test_uicard_fields_match_ts():
     """G0-3：Python UICard 字段名与 ui-card-schemas UICard 完全一致。"""
-    ts_fields = {
-        "card_id",
-        "title",
-        "summary",
-        "severity",
-        "evidence_refs",
-        "source_plugin",
-        "slot",
-        "renderer",
-        "created_at",
-        "valid_until",
-        "action_mode",
-        "supported_actions",
-        "limitations",
-    }
-    py_fields = set(UICard.model_fields)
-    assert py_fields == ts_fields
+    assert set(UICard.model_fields) == _ts_fields(UI_CARD_TS, "UICard")

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 from investment_steward_core import analysis_followup, counter_check, report_quality
 
 # ---------------------------------------------------------------------------
@@ -376,11 +376,7 @@ def test_report_exposes_cockpit_and_normalized_valuation(client, tmp_path, monke
     """研报端点下发驾驶舱三行结论词 + 正常化估值五字段；决策卡带估值状态与期限。"""
     _CannedModel(monkeypatch, report=_v28_report_payload())
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     assert body["ok"] is True
     cockpit = body["pillar_verdicts"]
     assert cockpit["fundamental"] == "偏强"
@@ -408,11 +404,7 @@ def test_report_downgrades_low_pe_undervalued_without_normalization(client, tmp_
     }
     _CannedModel(monkeypatch, report=payload)
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     assert body["valuation"]["valuation_status"] == "undetermined"
     assert body["valuation"]["valuation_status_raw"] == "undervalued"
     assert any("估值状态降级" in warning for warning in body["quality_warnings"])
@@ -434,11 +426,7 @@ def test_followup_appends_immutable_turn_and_gates_inputs(client, tmp_path, monk
     """追问链路：附录 append-only、原报告 payload 逐字不变、补充材料未验证标签、claim 闸门。"""
     canned = _CannedModel(monkeypatch, report=_v28_report_payload(), followup=_followup_payload())
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    report = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    report = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     report_id = report["report_id"]
     before = test_client.get(f"/ai-research/reports/{report_id}", headers=headers).json()["item"]
 
@@ -513,11 +501,7 @@ def test_followup_drops_fabricated_claim_ids(client, tmp_path, monkeypatch):
     ]
     _CannedModel(monkeypatch, report=_v28_report_payload(), followup=followup)
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    report = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    report = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     response = test_client.post(
         f"/ai-research/reports/{report['report_id']}/follow-ups",
         json={"question": "现金流是否支持营收判断？"},
@@ -532,11 +516,7 @@ def test_followup_parse_failure_returns_honest_error(client, tmp_path, monkeypat
     """追问输出不可解析（缺 answer）→ 如实返回失败，不生成附录。"""
     _CannedModel(monkeypatch, report=_v28_report_payload(), followup={"affected_claims": []})
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    report = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    report = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     response = test_client.post(
         f"/ai-research/reports/{report['report_id']}/follow-ups",
         json={"question": "随便追问"},

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MacroSnapshot } from "@investment-steward/domain-contracts";
 import type { CoreClient } from "../state/coreClient";
+import { classifyCoreError, detailOf } from "../state/coreClient";
 
 /**
  * B2（frontend-optimization-roadmap-2026-09-12）：宏观雷达领域数据，自 AppShell 原样下沉。
@@ -316,12 +317,25 @@ export function useMacro(client: CoreClient, active: boolean, aiReady: boolean) 
     return response.status === 409 ? { ok: false, detail: "没有「使用中」的模型方案：先在设置页把一个方案置为使用中" } : response.data;
   }
 
+  /**
+   * 读取用户自己写的宏观判断。**第四轮审计修正：失败必须与「没写过」区分开。**
+   *
+   * 此前失败也返回 `null`，而 `null` 在 `MacroPage` 里表示「还没写过」——于是某次
+   * 超时/401/502 之后，页面按钮变成「写下我的判断」、表单里是默认值
+   * （放缓 / 3 个月 / 中）。用户以为之前没保存过，重新写一份点保存就走
+   * `saveMacroUserView` 的**整字段 PUT 覆盖**，原文被静默抹掉。
+   * 现在失败抛错：调用方据此显示「读取失败 + 重试」，且在成功加载前**不允许进入编辑**，
+   * 从根上杜绝「用默认值覆盖已有内容」。
+   */
   async function fetchMacroUserView(region: string): Promise<MacroUserView | null> {
     const response = await client.request<{ region: string; view: MacroUserView | null }>({
       method: "GET",
       path: `/evidence/macro/${region}/my-view`,
     });
-    return response.status < 400 ? response.data.view : null;
+    if (response.status >= 400 || !response.data) {
+      throw new Error(classifyCoreError(response.status, detailOf(response.data)).message);
+    }
+    return response.data.view;
   }
 
   async function saveMacroUserView(region: string, input: { direction: string; horizon: string; confidence: string; text: string }): Promise<MacroUserView | null> {

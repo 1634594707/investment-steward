@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "MacroCalendarEvent": {
+      "additionalProperties": false,
+      "description": "事件日历单项（信息层·事件层首版）：只含官方固定节奏规则可推算的事件。\n\ndate_type=\"exact\"：官方固定规则（如 BLS 非农=每月第一个周五），date 即规则推算日；\ndate_type=\"window\"：官方只有窗口节奏（如 CPI 约中旬），date=窗口起、window_end=窗口止；\nnote 恒含「规则推算，具体以官方日历为准」。非固定节奏事件（FOMC 等）绝不生成日期。\n\nv37 `phase`（发布阶段，关键区分）：窗口型事件在窗口期内**不再一律呈现为「未来事件」**——\n- upcoming：窗口尚未开始（今天 < date）；\n- in_window：窗口进行中（date ≤ 今天 ≤ window_end）——**官方可能已发布也可能未发布，\n  本管道无法从规则推算得知，故 phase 只描述窗口位置，不声称是否已发布**；\n- elapsed：窗口已过（今天 > window_end）——按规则推算官方应已发布，实际值须以官方为准。\n\n`actual_*` / `expectation`：可选接入的**实际值与观测日**（由 `linked_series` 关联的宏观\n指标提供，如美国 CPI 同比 ← FRED CPIAUCSL）。取不到即保持 None 并在证据文本如实声明\n「实际值未接入」，绝不填默认值（ADR-0006 不编造）。",
+      "properties": {
+        "region": {
+          "maxLength": 20,
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "event_key": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Event Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "date_type": {
+          "pattern": "^(exact|window)$",
+          "title": "Date Type",
+          "type": "string"
+        },
+        "date": {
+          "maxLength": 10,
+          "minLength": 10,
+          "title": "Date",
+          "type": "string"
+        },
+        "window_end": {
+          "anyOf": [
+            {
+              "maxLength": 10,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 400,
+          "title": "Note",
+          "type": "string"
+        },
+        "phase": {
+          "default": "upcoming",
+          "pattern": "^(upcoming|in_window|elapsed)$",
+          "title": "Phase",
+          "type": "string"
+        },
+        "linked_series": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linked Series"
+        },
+        "actual_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Value"
+        },
+        "actual_unit": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Unit"
+        },
+        "actual_obs_date": {
+          "anyOf": [
+            {
+              "maxLength": 10,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Obs Date"
+        },
+        "actual_source": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Source"
+        },
+        "actual_frequency": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Frequency"
+        },
+        "annual_background": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Annual Background",
+          "type": "array"
+        },
+        "actual_variants": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Actual Variants",
+          "type": "array"
+        },
+        "actual_variant_label": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Variant Label"
+        }
+      },
+      "required": [
+        "region",
+        "event_key",
+        "label",
+        "kind",
+        "date_type",
+        "date"
+      ],
+      "title": "MacroCalendarEvent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`GET /evidence/macro/calendar` 响应：未来 N 天数据发布日历（按日期升序）。",
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/MacroCalendarEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "days": {
+      "maximum": 60,
+      "minimum": 1,
+      "title": "Days",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "days"
+  ],
+  "title": "MacroCalendarSnapshot",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/macro-calendar-snapshot/1.0"
+}

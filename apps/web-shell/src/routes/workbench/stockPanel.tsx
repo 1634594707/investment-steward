@@ -202,8 +202,15 @@ export function StockReportPanel({
   directionError: string | null;
   /** B02/B04（2026-09-15 方向研判路线图）：单股生成失败的「原因 + 恢复动作」文案（外层 generateReport 写入，null=无错误）。 */
   reportError: string | null;
-  /** v33 C02：方向研判本次模型可选（profileId 为空 = 跟随全局使用中）。 */
-  onGenerateDirection: (topic: string, question: string, profileId?: string | null) => void;
+  /** v33 C02：方向研判本次模型可选（profileId 为空 = 跟随全局使用中）。
+   *
+   *  第四轮审计修正：`profileId` 改为**必填**。此前声明成可选（`profileId?`），
+   *  而 `ResearchWorkbenchPage` 的实现 `generateDirection(topic, question)` 只接 2 个
+   *  形参、第 3 个被静默丢弃并硬编码 `null`——面板把用户选好的 `directionProfileId`
+   *  传进去后无影无踪：界面上的「本次模型」选择形同虚设，实际跑的是全局「使用中」
+   *  方案，费用也按那个出账，且 TypeScript 不会报错（可选参数允许不传）。
+   *  改成必填后，任何新的调用点漏传都会直接编译失败。 */
+  onGenerateDirection: (topic: string, question: string, profileId: string | null) => void;
   /** v33 D02/D03：候选池 → 战法雷达的结构化交接（发送范围由调用方决定，AppShell 生成 requestId）。 */
   onSendToTactics: (pool: string[], context?: { sourceLabel?: string; sourceReportId?: string; topic?: string; question?: string; excluded?: { symbol: string; reason: string }[] }) => void;
   modelProfiles: ModelProfile[];
@@ -222,7 +229,9 @@ export function StockReportPanel({
   onCollabFinished: (report: StockReport) => void;
   /** v32 研报追问：提交一次追问（原报告不可变，结果保存为追加的分析附录）。
    * v39 Q10：`mode` 带入本次入口（interpret 解读本报告 / supplement_research 补充研究）。 */
-  onCreateFollowUp: (reportId: string, question: string, supplements: FollowUpSupplementInput[], mode: string) => Promise<AnalysisTurn | null>;
+  /** v32 提交一次追问。返回 `persisted` 供调用方在「本次未保存」时如实告知
+   *  （S3 口径：Core 落库失败仍会交付答案，但必须说清它没有留档）。 */
+  onCreateFollowUp: (reportId: string, question: string, supplements: FollowUpSupplementInput[], mode: string) => Promise<{ turn: AnalysisTurn; persisted: boolean } | null>;
   /** v32 研报追问：载入某报告的全部追问附录（append-only，时间正序）。 */
   onLoadFollowUps: (reportId: string) => Promise<AnalysisTurn[] | null>;
 }) {
@@ -341,13 +350,17 @@ export function StockReportPanel({
     setFollowupBusy(true);
     setFollowupError(null);
     try {
-      const turn = await onCreateFollowUp(submittedFor, question, supplements, mode);
+      const outcome = await onCreateFollowUp(submittedFor, question, supplements, mode);
       if (activeReportIdRef.current !== submittedFor) return false; // 已切换报告：迟到响应不落地
-      if (!turn) {
+      if (!outcome) {
         setFollowupError("追问未完成：模型调用或解析未通过（原报告保持不变）。请调整问题或补充材料后重试。");
         return false;
       }
-      setFollowupTurns((current) => [...current, turn]);
+      setFollowupTurns((current) => [...current, outcome.turn]);
+      // S3 同款：交付了但没留档，必须说清楚——否则用户以为它会一直在附录里
+      if (!outcome.persisted) {
+        setFollowupError("本次追问已生成但**未能保存**：刷新或重启后会消失，续问也接不上。请复制答案留存，并检查本机数据库是否可写。");
+      }
       return true;
     } catch {
       if (activeReportIdRef.current === submittedFor) setFollowupError("追问请求失败，请重试。");
@@ -365,13 +378,16 @@ export function StockReportPanel({
     setDirectionFollowupBusy(true);
     setDirectionFollowupError(null);
     try {
-      const turn = await onCreateFollowUp(submittedFor, question, supplements, mode);
+      const outcome = await onCreateFollowUp(submittedFor, question, supplements, mode);
       if (directionFollowupReportIdRef.current !== submittedFor) return false; // 已切换报告：迟到响应不落地
-      if (!turn) {
+      if (!outcome) {
         setDirectionFollowupError("追问未完成：模型调用或解析未通过（原报告保持不变）。请调整问题或补充材料后重试。");
         return false;
       }
-      setDirectionFollowupTurns((current) => [...current, turn]);
+      setDirectionFollowupTurns((current) => [...current, outcome.turn]);
+      if (!outcome.persisted) {
+        setDirectionFollowupError("本次追问已生成但**未能保存**：刷新或重启后会消失，续问也接不上。请复制答案留存，并检查本机数据库是否可写。");
+      }
       return true;
     } catch {
       if (directionFollowupReportIdRef.current === submittedFor) setDirectionFollowupError("追问请求失败，请重试。");
@@ -1092,13 +1108,26 @@ export function StockReportPanel({
               </div>
               {/* v31 §4.1 首屏固定行：模式 · 字数 · 三态质量状态；不完整时红色横幅 + 缺失项 */}
               <ReportFirstScreen report={report} />
+              {/* S3（用户视角路线图 2026-09-26）：Core 落库失败时仍会交付 200 + 完整报告，
+                  但响应里没有 report_id。此处必须显式告警——否则用户读完关掉，
+                  报告从未写库、无 id 可回取、也不会出现在历史列表里，而界面零提示。 */}
+              {report.persisted === false && (
+                <p className="form-error" role="alert">
+                  本次报告<strong>未保存</strong>：生成已完成但写入本地数据库失败，因此不会出现在「研究产出」历史里、也无法追问。请先导出 Markdown 或复制正文，再排查存储（磁盘空间/数据库占用）后重试。
+                </p>
+              )}
               {report.quality_status === "incomplete" && (
                 <div className="wb-actions">
+                  {/* S5/路线图 2026-09-26：此前此按钮无 disabled，父组件的
+                      studyGenerationRef 只丢弃过期响应、不取消在途请求（onGenerateStockReport
+                      未传 signal），双击会并发跑两份深研——两份都计费，只出一个转圈提示。
+                      判据与本组件其它生成按钮（:862 起 6 处）保持一致。 */}
                   <button
                     className="ghost-btn"
+                    disabled={busy || compareBusy || collabBusy}
                     onClick={() => onGenerate(report.symbol, question.trim(), klineRange, entry.profileId, "standard")}
                   >
-                    切换标准模式重新生成完整报告
+                    {busy || compareBusy || collabBusy ? "重新生成中…" : "切换标准模式重新生成完整报告"}
                   </button>
                 </div>
               )}
@@ -1167,7 +1196,10 @@ export function StockReportPanel({
           )}
           {(busy || compareBusy) && !compareResults && (
             <div className="wb-empty wb-loading">
-              正在拉取新闻/财报与 K 线并生成报告，完成后自动展示。深研档与多模型串行耗时较长（单份可达 5-10 分钟），请勿关闭窗口。
+              {/* T10：生成已改为后台任务（服务端 job 表 + 后台线程）。关掉页面、切换视图、
+                  甚至应用重启都不会中断任务——进度与「停止」在底部状态栏的任务中心里。
+                  原文案「请勿关闭窗口」的前提已不成立。 */}
+              正在生成研报。可以自由切换页面或最小化到托盘，进度与停止按钮见底部状态栏的任务中心；生成完成后会自动展示。
             </div>
           )}
           {/* B02/B04（2026-09-15 路线图）：单股失败原因 + 恢复动作在此展示（此前 reportError 从未被渲染）。 */}

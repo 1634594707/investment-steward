@@ -54,8 +54,23 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _run_in_flight(run: dict[str, Any]) -> bool:
+    """该运行当前是否有角色正在执行（调用方须已持锁）。"""
+    index = run.get("next_index", 0)
+    stages = run.get("stages") or []
+    if index >= len(stages):
+        return False
+    return stages[index].get("status") == "running"
+
+
 def _prune_locked() -> None:
-    """超量/过期清理（调用方须已持锁）：协同运行是轻量内存态，最多保留 _MAX_RUNS 份。"""
+    """超量/过期清理（调用方须已持锁）：协同运行是轻量内存态，最多保留 _MAX_RUNS 份。
+
+    S8（用户视角路线图 2026-09-26）：**在途运行不参与淘汰**。改造前按 created_at 无差别
+    淘汰，启动第 21 个运行时可能把某个「正在模型调用中」的运行踢掉——那个线程仍会跑完
+    并正常返回，但用户**下一次**推进拿到的是 404「协同运行不存在或已过期」，已付费的
+    四角色流水线就此丢失。宁可短时超量，也不淘汰正在跑的运行。
+    """
     now_ts = datetime.now(UTC).timestamp()
     expired = [
         run_id
@@ -65,7 +80,11 @@ def _prune_locked() -> None:
     for run_id in expired:
         _runs.pop(run_id, None)
     while len(_runs) > _MAX_RUNS:
-        oldest = min(_runs, key=lambda rid: _runs[rid]["created_at"])
+        candidates = [run_id for run_id, run in _runs.items() if not _run_in_flight(run)]
+        if not candidates:
+            # 全都在途：宁可超量，也不淘汰正在执行的运行。
+            break
+        oldest = min(candidates, key=lambda rid: _runs[rid]["created_at"])
         _runs.pop(oldest, None)
 
 
@@ -297,68 +316,89 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
         stage["error"] = f"角色执行异常：{exc}"
         return stage
 
-    parsed = macro_ai.extract_json_object(reply.content)
-    if not _stage_result_valid(stage_name, parsed):
-        stage["status"] = "failed"
-        stage["error"] = f"{STAGE_LABELS[stage_name]}输出无法解析为约定 JSON（无引用不发布，ADR-0006）。原文片段：{reply.content[:200]}"
-        return stage
-
-    # v24 质量闸门：报告类阶段（初稿/修订）的引用必须属于本次真实取到的来源。
-    # 虚构引用一律剔除；剔除后为空 → 按「无引用不发布」判该阶段失败（不发布、不落库）。
-    if stage_name in ("draft", "revise"):
-        allowed = _allowed_citations(run)
-        # v28：来源数据日期由创建运行时定格（同一证据包），当天日期按站点既有口径取本机时区。
-        meta = run.get("evidence_meta") or {}
-        evidence = run.get("evidence") or {}
-        quality = report_quality.validate_report(
-            parsed,
-            allowed=allowed,
-            source_asof=meta.get("source_asof") or {},
-            today=datetime.now().astimezone().date(),
-            # v31：模式随运行传递（创建时已归一化），闸门口径与落库/前端展示一致。
-            mode=run.get("report_mode") or report_quality.DEFAULT_REPORT_MODE,
-            # JV04：证据同源在此兑现——`sources` 是创建运行时定稿的证据包原文，
-            # 四角色共享同一份，语义比对用的正是模型当初看到的那段内容。
-            source_texts=evidence.get("sources") or {},
-            jev_judge=jev_client.build_judge(core, credential_store, purpose="jev:claim-support"),
-        )
-        if not quality["citations"]:
+    # S8（用户视角路线图 2026-09-26）：**以下整段必须在 try 内**。
+    # 改造前只有模型调用被两个 except 包住，JSON 解析与质量闸门（含
+    # report_quality.validate_report / jev_client.build_judge）都在函数体缩进层、
+    # 任何异常都无人接。stage["status"] 已被置为 "running" 且不会复位，于是此后每次
+    # POST /evidence/collab-next 都撞 `CollabBusyError`（409），**长达 _RUN_TTL_SECONDS
+    # 6 小时**；而 _runs 只在内存，用户唯一出路是**重启应用**。
+    # finally 兜底：无论从哪条路退出（包括 BaseException），都不把 stage 留在 "running"。
+    decided = False
+    try:
+        parsed = macro_ai.extract_json_object(reply.content)
+        if not _stage_result_valid(stage_name, parsed):
             stage["status"] = "failed"
-            stage["error"] = (
-                f"{STAGE_LABELS[stage_name]}引用的来源 id 均不属于本次真实取到的来源"
-                f"（剔除：{'、'.join(quality['dropped_citations'])}；可引用：{'、'.join(quality['available_citations'])}），"
-                "按「无引用不发布」不发布（防虚构引用）。"
-            )
+            stage["error"] = f"{STAGE_LABELS[stage_name]}输出无法解析为约定 JSON（无引用不发布，ADR-0006）。原文片段：{reply.content[:200]}"
             return stage
-        parsed = {**parsed, "citations": quality["citations"]}
-        stage["citation_dropped"] = quality["dropped_citations"]
-        stage["quality_warnings"] = quality["warnings"]
-        stage["report_chars"] = quality["report_chars"]
-        stage["summary_chars"] = quality["summary_chars"]
-        stage["report_sections"] = quality["sections"]
-        # v31 质量恢复：三态状态 + 阻断项 + 缺失小节随阶段留痕（落库与前端展示共用同一口径）。
-        stage["quality_status"] = quality["quality_status"]
-        stage["quality_status_label"] = quality["quality_status_label"]
-        stage["quality_blockers"] = quality["quality_blockers"]
-        stage["missing_sections"] = quality["missing_sections"]
-        stage["section_states"] = quality["section_states"]
-        # v27：claim→source 覆盖结论与证据分级随阶段留痕（落库与前端展示共用同一口径）。
-        stage["claim_findings"] = quality["claim_findings"]
-        # JV04：语义支撑层回执（未启用/不可用时为 available=False，如实标注而非静默）。
-        stage["jev"] = quality.get("jev")
-        stage["evidence_quality"] = quality["evidence_quality"]
-        # v28：一句话结论 + 摘要降级提示随阶段留痕（首屏结论卡与摘要旁注的数据来源）。
-        stage["conclusion"] = quality["conclusion"]
-        stage["summary_downgrade_notes"] = quality["summary_downgrade_notes"]
-        # 兼容旧断言字段名：parsed 里的 claims 保留原始条目，便于前端逐条对照正文。
-        parsed = {**parsed, "claims": quality["claims"]}
 
-    stage["status"] = "done"
-    stage["result"] = parsed
-    stage["latency_ms"] = reply.latency_ms
-    with _lock:
-        run["next_index"] = index + 1
-    return stage
+        # v24 质量闸门：报告类阶段（初稿/修订）的引用必须属于本次真实取到的来源。
+        # 虚构引用一律剔除；剔除后为空 → 按「无引用不发布」判该阶段失败（不发布、不落库）。
+        if stage_name in ("draft", "revise"):
+            allowed = _allowed_citations(run)
+            # v28：来源数据日期由创建运行时定格（同一证据包），当天日期按站点既有口径取本机时区。
+            meta = run.get("evidence_meta") or {}
+            evidence = run.get("evidence") or {}
+            quality = report_quality.validate_report(
+                parsed,
+                allowed=allowed,
+                source_asof=meta.get("source_asof") or {},
+                today=datetime.now().astimezone().date(),
+                # v31：模式随运行传递（创建时已归一化），闸门口径与落库/前端展示一致。
+                mode=run.get("report_mode") or report_quality.DEFAULT_REPORT_MODE,
+                # JV04：证据同源在此兑现——`sources` 是创建运行时定稿的证据包原文，
+                # 四角色共享同一份，语义比对用的正是模型当初看到的那段内容。
+                source_texts=evidence.get("sources") or {},
+                jev_judge=jev_client.build_judge(core, credential_store, purpose="jev:claim-support"),
+            )
+            if not quality["citations"]:
+                stage["status"] = "failed"
+                stage["error"] = (
+                    f"{STAGE_LABELS[stage_name]}引用的来源 id 均不属于本次真实取到的来源"
+                    f"（剔除：{'、'.join(quality['dropped_citations'])}；可引用：{'、'.join(quality['available_citations'])}），"
+                    "按「无引用不发布」不发布（防虚构引用）。"
+                )
+                return stage
+            parsed = {**parsed, "citations": quality["citations"]}
+            stage["citation_dropped"] = quality["dropped_citations"]
+            stage["quality_warnings"] = quality["warnings"]
+            stage["report_chars"] = quality["report_chars"]
+            stage["summary_chars"] = quality["summary_chars"]
+            stage["report_sections"] = quality["sections"]
+            # v31 质量恢复：三态状态 + 阻断项 + 缺失小节随阶段留痕（落库与前端展示共用同一口径）。
+            stage["quality_status"] = quality["quality_status"]
+            stage["quality_status_label"] = quality["quality_status_label"]
+            stage["quality_blockers"] = quality["quality_blockers"]
+            stage["missing_sections"] = quality["missing_sections"]
+            stage["section_states"] = quality["section_states"]
+            # v27：claim→source 覆盖结论与证据分级随阶段留痕（落库与前端展示共用同一口径）。
+            stage["claim_findings"] = quality["claim_findings"]
+            # JV04：语义支撑层回执（未启用/不可用时为 available=False，如实标注而非静默）。
+            stage["jev"] = quality.get("jev")
+            stage["evidence_quality"] = quality["evidence_quality"]
+            # v28：一句话结论 + 摘要降级提示随阶段留痕（首屏结论卡与摘要旁注的数据来源）。
+            stage["conclusion"] = quality["conclusion"]
+            stage["summary_downgrade_notes"] = quality["summary_downgrade_notes"]
+            # 兼容旧断言字段名：parsed 里的 claims 保留原始条目，便于前端逐条对照正文。
+            parsed = {**parsed, "claims": quality["claims"]}
+
+        # 数据核对 / 风险审查等非报告类阶段：无质量闸门，直接定稿。
+        stage["status"] = "done"
+        stage["result"] = parsed
+        stage["latency_ms"] = reply.latency_ms
+        decided = True
+        with _lock:
+            run["next_index"] = index + 1
+        return stage
+    except Exception as exc:  # noqa: BLE001 - 单角色后处理异常如实标注，绝不留 running
+        stage["status"] = "failed"
+        stage["error"] = f"角色后处理异常：{type(exc).__name__}: {exc}"
+        return stage
+    finally:
+        # S8 兜底：无论从哪条路退出（含 BaseException），都不把 stage 留在 "running"——
+        # 否则该运行会被 CollabBusyError 永久挡住，用户只能重启应用。
+        if not decided and stage.get("status") == "running":
+            stage["status"] = "failed"
+            stage["error"] = "角色后处理中断（状态未落定），可重试该阶段"
 
 
 def _stage_result_valid(stage_name: str, parsed: Any) -> bool:

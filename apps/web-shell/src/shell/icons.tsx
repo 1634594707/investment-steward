@@ -72,6 +72,9 @@ export const NAV_ICONS: Record<string, (props: IconProps) => ReactElement> = {
   library: IconLibrary,
   macro: IconMacro,
   tactics: IconTactics,
+  // 2026-09-22 PV03 修复：IconYouzi（:47）此前未登记进映射，游资工作区折叠态 nav-item 渲染为空框
+  // （取证：.runtime-local/evidence-20260922/probe-4.json，nav-item[aria-label=游资雷达] hasSvg=false）。
+  youzi: IconYouzi,
   extensions: IconExtensions,
   settings: IconSettings,
 };

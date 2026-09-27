@@ -58,6 +58,8 @@ export function ResearchWorkbenchPage({
     aiReports: reports,
     aiReportsTotal,
     aiReportFacets,
+    aiReportsLoaded: historyLoaded,
+    aiReportsError: historyError,
     researchReviewQueue: reviewQueue,
     generateStockReport: onGenerateStockReport,
     generateDirectionReport: onGenerateDirection,
@@ -275,7 +277,12 @@ export function ResearchWorkbenchPage({
   // D02：在途方向研判请求的 abort 句柄（任务中心「停止」触发）。
   const directionAbortRef = useRef<AbortController | null>(null);
 
-  function generateDirection(topic: string, question: string): void {
+  // profileId 必须是**必填**：stockPanel 的 prop 类型声明了 `(topic, question, profileId?)`，
+  // 而此前这里的实现只接 2 个形参、第 292 行又硬编码 `null`——面板把用户选好的
+  // `directionProfileId` 传进来后被静默丢弃，界面上的「本次模型」选择形同虚设，
+  // 实际跑的是全局「使用中」方案，费用也按那个出账。
+  // 写成必填（不可省略）后，TS 会在任何新调用点漏传时直接报错，而不是再静默一次。
+  function generateDirection(topic: string, question: string, profileId: string | null): void {
     setDirectionBusy(true);
     setDirectionError(null);
     // D02（桌面端升级路线图 2026-09-18）：方向研判登记进任务中心——单请求长任务，
@@ -289,7 +296,7 @@ export function ResearchWorkbenchPage({
       stop: () => controller.abort(),
       startedAt: new Date().toISOString(),
     });
-    void onGenerateDirection(topic, question, null, undefined, controller.signal)
+    void onGenerateDirection(topic, question, profileId, undefined, controller.signal)
       .then((result) => {
         if (result) {
           setDirectionReport(result);
@@ -445,7 +452,16 @@ export function ResearchWorkbenchPage({
             </div>
           </div>
         )}
-        {facetCounts.total === 0 ? (
+        {/* 第四轮审计：读失败**不能**渲染成「一条产出都没有」。此前 counts 停在初值全 0，
+            页面直接给「还没有保存的研究产出」——用户据此以为此前所有已付费的研报与
+            方向研判都丢了，于是重新生成，又是一轮真金白银的模型调用。
+            现在按「未加载 / 加载失败 / 确实为空」三种状态分别呈现。 */}
+        {historyError && !historyLoaded ? (
+          <div className="wb-history-empty">
+            <p>读取历史产出失败：{historyError}</p>
+            <button className="ghost-btn" onClick={() => void onRefreshReports()}>重新读取</button>
+          </div>
+        ) : facetCounts.total === 0 ? (
           <p className="wb-history-empty">还没有保存的研究产出。生成方向研判或个股研报后会自动留档。</p>
         ) : pagedReports.length === 0 ? (
           <p className="wb-history-empty">没有符合筛选条件的产出，请调整分类或关键字。</p>

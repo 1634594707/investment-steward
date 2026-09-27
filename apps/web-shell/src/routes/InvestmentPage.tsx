@@ -82,7 +82,7 @@ interface Props {
   onSelectCandlePeriod: (period: CandlePeriod) => void;
   onPullEvidence: (instrument: string, kind: EvidenceKind) => Promise<Evidence[] | null>;
   /** v23 历史重复证据清理（后端按类型+标题+日期分组保留最早一条），返回清理条数。 */
-  onDedupEvidence: () => Promise<{ removed: number } | null>;
+  onDedupEvidence: (options?: { confirm?: boolean }) => Promise<{ removed: number; would_remove: number; candidates: Array<{ evidence_id: string; summary: string; type: string; collected_at: string }> } | null>;
   onOpenEvidence: (evidenceId: string) => void;
 }
 
@@ -253,6 +253,8 @@ export function InvestmentPage({
   // v23 历史重复证据清理。
   const [dedupBusy, setDedupBusy] = useState(false);
   const [dedupNote, setDedupNote] = useState<string | null>(null);
+  // 第四轮审计 api-7：预览阶段返回的待删清单，确认前必须让用户过目。
+  const [dedupPreview, setDedupPreview] = useState<Array<{ evidence_id: string; summary: string; type: string; collected_at: string }> | null>(null);
   // v23 证据分类筛选：按证据类型分组展示 + chips 过滤。
   const [evidenceFilter, setEvidenceFilter] = useState<string>("all");
   const pullRequest = useRef(0);
@@ -500,14 +502,29 @@ export function InvestmentPage({
     }
   }
 
-  /** v23 清理历史重复证据（哈希归一化之前入账的同内容多条），保留最早一条。 */
-  async function runDedup() {
+  /** v23 清理历史重复证据。**两段式**（第四轮审计 api-7）：先预览待删清单，用户确认后才真删。
+   * 改造前点一下即硬删除，无确认无清单，误删无法追溯。 */
+  async function runDedup(confirm: boolean) {
     if (dedupBusy) return;
     setDedupBusy(true);
     setDedupNote(null);
     try {
-      const result = await onDedupEvidence();
-      setDedupNote(result ? (result.removed > 0 ? `已清理 ${result.removed} 条重复证据（各组保留最早入账一条）` : "未发现重复证据") : "清理请求失败，请重试。");
+      const result = await onDedupEvidence({ confirm });
+      if (!result) {
+        setDedupNote("清理请求失败，请重试。");
+        setDedupPreview(null);
+        return;
+      }
+      if (result.removed > 0) {
+        setDedupNote(`已清理 ${result.removed} 条重复证据（各组保留最早入账一条）。删除清单已写入审计日志。`);
+        setDedupPreview(null);
+      } else if (result.would_remove > 0) {
+        setDedupNote(`发现 ${result.would_remove} 条重复证据，**尚未删除**。请核对下方清单后再确认。`);
+        setDedupPreview(result.candidates);
+      } else {
+        setDedupNote("未发现重复证据。");
+        setDedupPreview(null);
+      }
     } catch {
       setDedupNote("清理请求失败，请重试。");
     } finally {
@@ -750,11 +767,46 @@ export function InvestmentPage({
                         {pullBusy === kind ? "获取中…" : `拉取${label}`}
                       </button>
                     ))}
-                    <button className="pull-btn" disabled={dedupBusy || pullAllBusy || pullBusy !== null} title="历史重复证据一次性清理：按类型+标题+日期分组，保留最早入账一条" onClick={() => void runDedup()}>
-                      {dedupBusy ? "清理中…" : "清理重复"}
+                    <button
+                      className="pull-btn"
+                      disabled={dedupBusy || pullAllBusy || pullBusy !== null}
+                      title="历史重复证据清理：按类型+标题+日期+内容哈希分组，保留最早入账一条。**先预览，确认后才删除**"
+                      onClick={() => void runDedup(false)}
+                    >
+                      {dedupBusy ? "处理中…" : "检查重复证据"}
                     </button>
                   </div>
                   {dedupNote && <p className="report-meta">{dedupNote}</p>}
+                  {dedupPreview && dedupPreview.length > 0 && (
+                    <div className="pulled-group">
+                      <div className="block-title">
+                        <h4>待删除清单（{dedupPreview.length} 条）</h4>
+                        <span>每组保留最早入账的一条；下列为将被删除的条目</span>
+                      </div>
+                      <ul className="mini-list">
+                        {dedupPreview.slice(0, 20).map((entry) => (
+                          <li key={entry.evidence_id}>
+                            <code>{entry.evidence_id.slice(0, 8)}</code> · {entry.type} · {entry.summary}
+                          </li>
+                        ))}
+                      </ul>
+                      {dedupPreview.length > 20 && (
+                        <p className="report-meta">仅显示前 20 条，完整清单见接口返回的 candidates。</p>
+                      )}
+                      <div className="filter-row">
+                        <button
+                          className="pull-btn"
+                          disabled={dedupBusy}
+                          onClick={() => void runDedup(true)}
+                        >
+                          {dedupBusy ? "删除中…" : "确认删除以上条目"}
+                        </button>
+                        <button className="ghost-btn" disabled={dedupBusy} onClick={() => setDedupPreview(null)}>
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {Object.entries(pulled).some(([, entries]) => entries !== undefined) && (
                     <div className="pulled-group">
                       {EVIDENCE_KINDS.map(({ kind, label }) => {

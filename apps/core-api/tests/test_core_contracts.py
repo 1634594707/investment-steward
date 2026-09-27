@@ -283,7 +283,12 @@ def test_notifications_empty_without_matching_evidence(client):
     test_client, headers = client
     unanswered = test_client.get("/notifications/pending", headers=headers)
     assert unanswered.status_code == 200
-    assert unanswered.json() == []
+    # 第四轮审计（api-5）：响应已是包装对象，空列表断言改读 items。
+    payload = unanswered.json()
+    assert payload["items"] == []
+    # 未被静音时必须如实说「没有静音」，否则界面无从区分空与静音
+    assert payload["muted"] is False
+    assert payload["hidden_count"] == 0
 
 
 def test_notifications_fire_on_confirmed_condition_match(client):
@@ -326,7 +331,7 @@ def test_notifications_fire_on_confirmed_condition_match(client):
 
     pending = test_client.get("/notifications/pending", headers=headers)
     assert pending.status_code == 200
-    payload = pending.json()
+    payload = pending.json()["items"]  # 第四轮审计（api-5）：包装对象，取 items
     assert len(payload) == 1
     notification = payload[0]
     assert notification["condition_kind"] == "invalidation_condition"

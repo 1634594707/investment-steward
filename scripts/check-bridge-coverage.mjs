@@ -1,222 +1,325 @@
-/* 真实模式冒烟（A）：宿主桥白名单正则 vs 前端实际请求全量覆盖。
- * 直接读取 desktop-host/src/main.ts 生产正则，不手工复制；逐条断言五页
- * 启动 Promise.all + 各类变更请求都能通过桥（不被 502 拒之门外）。
+/* A02（架构改进路线图 2026-09-25）：桌面宿主桥暴露清单的校验器。
+ *
+ * 旧脚本的做法有两个结构性缺陷，本文件整体替换：
+ *   1. 从 main.ts 源码里**按文字**抠出大正则字面量再编译——宿主一改写法（变量改名、
+ *      换成正则常量、拆成函数）检查就静默失准；历史上已两次「脚本全绿、打包版 502」。
+ *   2. 只比路径、不比方法，`GET /x` 与 `POST /x` 无法区分；且按参数名猜样例路径。
+ *
+ * 新做法：直接消费 `apps/desktop-host/src/generated/bridgeManifest.ts` 的同一份数据
+ * （由 scripts/generate_bridge_manifest.mjs 生成，源头是 Core 运行时路由表 + 显式暴露声明），
+ * 并补齐三类断言：
+ *   A. 清单本身与 Core 路由表一致（调用生成器的 --check）；
+ *   B. 正面：清单内的「方法 + 路径」放行；负面：错方法、多一段、未公开路由、豁免端点全部拒绝；
+ *   C. 前端源码里真实出现的请求路径必须全部被清单覆盖（不再依赖手抄清单）。
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// 以脚本自身位置定位仓库根，避免依赖调用方 cwd（dist:win 的 cwd 是 apps/desktop-host）。
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const mainPath = resolve(repoRoot, "apps/desktop-host/src/main.ts");
-const src = readFileSync(mainPath, "utf8");
-
-const line = src.split("\n").find((l) => l.includes("const corePath = /"));
-if (!line) throw new Error("未在 main.ts 找到 corePath 白名单正则");
-const regexStart = line.indexOf("const corePath = /") + "const corePath = ".length;
-const literalStart = line.indexOf("/", regexStart);
-// 终止标记必须是正则字面量的结束斜杠（"...$/"）：早期版本用 "/.test(request.path)" 定位，
-// 代码里变量名改成 requestPath 后该标记消失 → 正则被截断成空 → 全部路径假阳性。
-const literalEnd = line.indexOf("$/");
-if (literalEnd <= literalStart) throw new Error("无法定位 corePath 正则结尾（应形如 ...)$/.test(...)）");
-// 注意：indexOf("$/") 返回的是 `$` 自身的下标，切片必须 +1 才能把 `$` 锚点纳入。
-// 早期版本写成 slice(literalStart + 1, literalEnd)，等于丢掉 `$` → 正则变成前缀匹配
-// → 形如 /ai-research/reports/{id}/follow-ups 这类"多一段"的真实缺口会被判为放行（假阴性）。
-const regexSource = line.slice(literalStart + 1, literalEnd + 1);
-const bridge = new RegExp(regexSource);
-
-const paths = [
-  // 启动 Promise.all（AppShell）
-  "GET /investment-policies",
-  "GET /evidence",
-  "GET /plugins/catalog",
-  "GET /research/questions/latest",
-  "GET /research/runs",
-  "GET /holdings",
-  "GET /thesis",
-  "GET /plans",
-  "GET /decisions",
-  "GET /brief/today",
-  "GET /review/weekly",
-  "GET /notifications/pending",
-  "GET /notifications/triage",
-  "GET /learning/unit/today",
-  "GET /learning/goals/current",
-  "GET /learning/activities",
-  "GET /channels",
-  "GET /audit",
-  "GET /capabilities",
-  // 状态栏 / 插槽 / 卡片（G1/G4）
-  "GET /health",
-  "GET /slots",
-  "GET /cards/slots/today.brief",
-  "GET /cards/slots/notification.global",
-  // 双挂载 / 应用区（G2）
-  "GET /plugins/official.reading-library/app",
-  // 凭据库（G3-1/G3-4）
-  "GET /credentials",
-  "GET /credentials/market_data_token",
-  "PUT /credentials/market_data_token",
-  "DELETE /credentials/market_data_token",
-  "POST /credentials/market_data_token/test",
-  // 模型多方案（G3-3）
-  "GET /model-profiles",
-  "POST /model-profiles",
-  // 投资者画像（E3）
-  "GET /investor/profile",
-  "PUT /investor/profile",
-  "POST /model-profiles/prof-1/activate",
-  "POST /model-profiles/prof-1/test",
-  "DELETE /model-profiles/prof-1",
-  // 研读图书馆（G5）
-  "GET /library/books",
-  "POST /library/books",
-  "DELETE /library/books/book-1",
-  "POST /library/plan/generate",
-  "POST /library/annotations/book-1:0/to-research",
-  // 量化分享池（G6-2）
-  "GET /quant/artifacts",
-  "POST /quant/runs",
-  "GET /quant/lineage/steward/cn-equity-mr-baseline",
-  // 投资页 / 证据 / 行情
-  "GET /market/candles/510300",
-  "GET /market/candles/511230",
-  "GET /evidence/announcements/600519",
-  "GET /evidence/news/600519",
-  "GET /evidence/financials/600519",
-  "GET /evidence/ev-abc123",
-  "POST /holdings",
-  "DELETE /holdings/00000000-0000-0000-0000-000000000000",
-  "POST /thesis",
-  "PUT /thesis/11111111-1111-1111-1111-111111111111",
-  "POST /investment-policies",
-  "POST /investment-policies/pol-1/confirm",
-  // 研究页
-  "POST /research/runs",
-  "POST /research/runs/run-1/run",
-  "POST /research/runs/run-1/transition",
-  "GET /research/runs/run-1/response",
-  // 复盘页
-  "POST /decisions",
-  "POST /plans",
-  "POST /plans/plan-1/transition",
-  "POST /brief/today/generate",
-  "POST /evidence/freshness/patrol",
-  "POST /notifications/evaluate",
-  "POST /notifications/11111111-1111-1111-1111-111111111111/read",
-  "POST /learning/activities",
-  "DELETE /learning/activities/act-1",
-  "GET /learning/reflections/export",
-  // 扩展页
-  "POST /plugins/official.cn-market-data/install",
-  "POST /plugins/official.cn-market-data/disable",
-  "POST /plugins/official.cn-market-data/update",
-  "POST /plugins/official.cn-market-data/revoke",
-  // 学习闭环（P0 缺口补齐：活动→政策建议）
-  "POST /learning/activities/act-1/propose-policy-change",
-  // 游资雷达（official.youzi-radar，P3-D03；未启用时 409，页面显示启用引导）
-  "GET /youzi/today",
-  "GET /youzi/watchlist",
-  "GET /youzi/seats/600519",
-  "GET /youzi/profile/1234",
-  "GET /youzi/cross-check",
-  "GET /youzi/cffex",
-  // 游资二期：跨日披露事实（Y2-08）与有限窗口复盘（Y3-01）
-  "GET /youzi/tactics",
-  "GET /youzi/tactics/20260917",
-  "GET /youzi/replay/600519",
-  // 标的速查与 AI 研报库
-  "GET /instruments/lookup",
-  "GET /instruments/resolve",
-  "GET /ai-research/reports",
-  "GET /ai-research/reports/r1",
-  "DELETE /ai-research/reports/r1",
-  "POST /ai-research/reports/r1/follow-ups",
-  "GET /ai-research/reports/r1/follow-ups",
-  "GET /ai-research/review-queue",
-  // 战法雷达市场批量扫描（D01：建任务 → 轮询进度 → 停止；2026-09-21 补，此前整段漏检 → 打包版 502）
-  "POST /tactics/catalog",
-  "POST /tactics/scan",
-  "POST /tactics/scan-market",
-  "GET /tactics/scan-market/job-1",
-  "POST /tactics/scan-market/job-1/cancel",
-  "GET /tactics/sectors",
-  "GET /tactics/signals/600519",
-  "GET /tactics/watchlist",
-  "GET /tactics/watchlist/600519",
-  "GET /tactics/watchlist/600519/notes",
-  "GET /tactics/ai-reviews",
-  "GET /tactics/notes/600519",
-  // 设置页：备份列表 / 备份恢复 / 导入 / 模型用量
-  "GET /storage/backups",
-  "POST /storage/backups/db-2026-09-20.sqlite/restore",
-  "POST /import/preview",
-  "POST /import/apply",
-  "GET /model-usage",
-  // Jev 决策模型（JV02）：另一套协议（POST /systemone），配置与探测独立成节
-  "GET /jev/config",
-  "PUT /jev/config",
-  "POST /jev/probe",
-  "POST /jev/models",
-  // 游资雷达课程只读端点（U05/U08）
-  "GET /youzi/curriculum",
-];
+const manifestPath = resolve(repoRoot, "apps/desktop-host/src/generated/bridgeManifest.ts");
+const exposurePath = resolve(repoRoot, "apps/desktop-host/bridge-exposure.json");
 
 const failures = [];
-for (const item of paths) {
-  const [method, path] = item.split(" ");
-  const ok = bridge.test(path);
-  if (!ok) failures.push(item);
+const fail = (message) => failures.push(message);
+
+// ---------------------------------------------------------------------------
+// A. 清单与 Core 路由表一致（生成器负责；这里只透传结果）
+// ---------------------------------------------------------------------------
+try {
+  execFileSync(
+    process.execPath,
+    [resolve(repoRoot, "scripts/generate_bridge_manifest.mjs"), "--check"],
+    { cwd: repoRoot, stdio: ["ignore", "ignore", "inherit"] },
+  );
+} catch {
+  fail("桥清单与 Core 路由表/暴露声明不一致（见上方生成器输出）");
 }
-if (failures.length) {
-  console.error("桥白名单未放行（将在真实模式变 502）：");
-  for (const f of failures) console.error("  " + f);
-  process.exit(1);
+
+// ---------------------------------------------------------------------------
+// 读清单（与 main.ts 消费的是同一份数据）
+// ---------------------------------------------------------------------------
+const manifestSource = readFileSync(manifestPath, "utf8");
+const routeRe =
+  /\{ method: "([A-Z]+)", path: "((?:[^"\\]|\\.)*)", pattern: "((?:[^"\\]|\\.)*)" \}/g;
+const routes = [];
+let match;
+while ((match = routeRe.exec(manifestSource))) {
+  routes.push({
+    method: match[1],
+    path: JSON.parse(`"${match[2]}"`),
+    regex: new RegExp(JSON.parse(`"${match[3]}"`)),
+  });
 }
-console.log(`桥白名单覆盖校验通过：${paths.length} 条请求全部命中生产正则。`);
+if (!routes.length) throw new Error("未从生成的桥清单里解析出任何路由");
 
-// —— 全量自动审计（2026-09-21 追加）——
-// 上面的手工清单已两次漏项（F01 的 /model-usage、D01 的 /tactics/scan-market/{job_id}），
-// 表现为「脚本全绿、打包版 502」：dev 模式经 vite 代理直连 Core，绕过宿主桥，因此测不出白名单缺口。
-// 故此处不再依赖手抄，直接扫描 Core 源码声明的全部路由，与生产正则逐条对照。
-const pyFiles = [];
-(function collect(dir) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, entry.name);
-    if (entry.isDirectory()) { if (entry.name !== "__pycache__") collect(p); }
-    else if (entry.name.endsWith(".py")) pyFiles.push(p);
-  }
-})(resolve(repoRoot, "apps/core-api/src"));
+const exposure = JSON.parse(readFileSync(exposurePath, "utf8"));
+const isAllowed = (method, pathname) =>
+  routes.some((route) => route.method === method && route.regex.test(pathname));
 
-/** 有意不经宿主桥的端点（桌面端渲染层无调用方）。新增豁免必须写清理由。 */
-const EXEMPT = new Map([
-  ["GET /evidence/support-resistance/{symbol}", "插件能力端点，桌面端渲染层无调用方"],
-]);
-
+/** 路径模板 → 具体请求路径（清单里的 pattern 已能直接匹配样例，这里只为造真实形状）。 */
 const sampleOf = (name) =>
-  name.startsWith("plugin_id") ? "official.cn-market-data"
-    : name.startsWith("symbol") ? "600519"
-      : name.startsWith("job_id") ? "job-1"
+  name.startsWith("plugin_id")
+    ? "official.cn-market-data"
+    : name.startsWith("symbol")
+      ? "600519"
+      : name.startsWith("job_id")
+        ? "job-1"
         : "abc123";
 
-const missingRoutes = [];
-let declaredCount = 0;
-for (const file of pyFiles) {
-  const text = readFileSync(file, "utf8");
-  const routeRe = /@app\.(get|post|put|delete|patch)\(\s*["']([^"']+)["']/g;
-  let m;
-  while ((m = routeRe.exec(text))) {
-    declaredCount += 1;
-    const key = `${m[1].toUpperCase()} ${m[2]}`;
-    if (EXEMPT.has(key)) continue;
-    const concrete = m[2].replace(/\{([^}]+)\}/g, (_s, n) => sampleOf(n));
-    if (!bridge.test(concrete)) missingRoutes.push(`${key}  ->  实际请求形如 ${concrete}`);
+const concrete = (template) =>
+  template.replace(/\{([^}]+)\}/g, (_all, raw) => sampleOf(String(raw).split(":")[0]));
+
+// ---------------------------------------------------------------------------
+// B. 正面与负面断言
+// ---------------------------------------------------------------------------
+const METHODS = ["GET", "POST", "PUT", "DELETE"];
+
+// 同一具体路径可能合法地声明多个方法（如 GET /decisions 与 POST /decisions 都是 Core 端点）。
+// 负例必须只针对「该路径未声明的方法」，否则会把合法组合误报成方法串味。
+const declaredMethods = new Map();
+for (const route of routes) {
+  const path = concrete(route.path);
+  if (!declaredMethods.has(path)) declaredMethods.set(path, new Set());
+  declaredMethods.get(path).add(route.method);
+}
+
+for (const route of routes) {
+  const path = concrete(route.path);
+  if (!isAllowed(route.method, path)) {
+    fail(`清单自相矛盾：${route.method} ${route.path}（实际请求 ${path}）未被自身放行`);
+  }
+  // 负面 1：同路径的其它方法必须被拒（旧实现只比路径，这里是最实质的增强）。
+  const declared = declaredMethods.get(path) ?? new Set();
+  for (const method of METHODS) {
+    if (declared.has(method)) continue;
+    const via = routes.filter((item) => item.method === method && item.regex.test(path));
+    if (!via.length) continue;
+    // 参数化模板天然覆盖字面量路径（如 GET /evidence/{evidence_id} 覆盖 /evidence/dedup）：
+    // 桥按「方法 + 路径形状」放行，这不是方法串味。只有字面量模板方法不符才算缺陷。
+    const overlapOnly = via.every(
+      (item) => item.path.includes("{") && concrete(item.path) !== path,
+    );
+    if (overlapOnly) continue;
+    fail(`方法未配对：${method} ${path} 被放行，但清单只声明了 ${[...declared].join("/")}`);
+  }
+  // 负面 2：多一段路径必须被**该路由自己的**模式拒绝（旧脚本曾因丢 `$` 锚点变成前缀匹配而漏判）。
+  // 例外：`{x:path}` 这类跨段模板本就允许含斜杠（如 /evidence/news/{symbol:path}）。
+  if (!route.path.includes(":path")) {
+    const deeper = `${path}/__extra__`;
+    if (route.regex.test(deeper)) {
+      fail(`路径未锚定：${route.method} ${route.path} 的模式匹配了 ${deeper}（应只匹配自身形状）`);
+    }
   }
 }
-if (missingRoutes.length) {
-  console.error(`\n以下 ${missingRoutes.length} 条 Core 端点未进宿主桥白名单（打包版会返回 502）：`);
-  for (const line of missingRoutes) console.error("  " + line);
-  console.error("修法：在 apps/desktop-host/src/main.ts 的 corePath 正则里同步补分支；确属桌面端不用的，加入本脚本 EXEMPT 并注明理由。");
+
+for (const entry of exposure.exempt ?? []) {
+  const path = concrete(entry.path);
+  if (isAllowed(entry.method, path)) {
+    fail(`豁免失效：${entry.method} ${path} 声明为不通桥，却被清单放行`);
+  }
+}
+if (isAllowed("GET", "/definitely-not-a-route")) {
+  fail("未公开路由被放行：默认拒绝失效");
+}
+
+// ---------------------------------------------------------------------------
+// C. 前端源码里真实出现的请求必须被覆盖（替代手抄清单）
+// ---------------------------------------------------------------------------
+const webSrc = resolve(repoRoot, "apps/web-shell/src");
+
+function collectFiles(dir) {
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      found.push(...collectFiles(full));
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+/** 找到包住 `path:` 的那个对象字面量，从中读 method。 */
+function enclosingObject(text, index) {
+  let depth = 0;
+  let start = -1;
+  for (let i = index; i >= 0; i -= 1) {
+    const ch = text[i];
+    if (ch === "}") depth += 1;
+    else if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+        break;
+      }
+      depth -= 1;
+    }
+  }
+  if (start < 0) return null;
+  depth = 0;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** 解析 `path:` 之后的字符串字面量（支持模板串）。返回 null 表示无法定形。 */
+function readPathLiteral(text, index) {
+  const rest = text.slice(index);
+  const quote = rest.match(/^\s*([`"'])/);
+  if (!quote) return null;
+  const mark = quote[1];
+  let cursor = index + quote[0].length;
+  let value = "";
+  while (cursor < text.length) {
+    const ch = text[cursor];
+    if (ch === "\\") {
+      value += text[cursor + 1] ?? "";
+      cursor += 2;
+      continue;
+    }
+    if (mark === "`" && ch === "$" && text[cursor + 1] === "{") {
+      let depth = 0;
+      let end = cursor + 1;
+      for (; end < text.length; end += 1) {
+        if (text[end] === "{") depth += 1;
+        else if (text[end] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      const expr = text.slice(cursor + 2, end);
+      // 路径段一定紧跟在 `/` 后面。前面的字符不是 `/` 的插值只能是查询串/后缀拼接
+      // （如 `/ai-research/reports${suffix}`、`/holdings/${id}${query}`），整段丢弃。
+      const previous = value.slice(-1);
+      if (previous !== "/") {
+        cursor = end + 1;
+        continue;
+      }
+      if (/join|concat|\.map\(|\+/.test(expr)) return null;
+      value += "abc123";
+      cursor = end + 1;
+      continue;
+    }
+    if (ch === mark) break;
+    value += ch;
+    cursor += 1;
+  }
+  // 查询串不参与桥匹配（main.ts 用 split("?",1)[0] 截断）。
+  value = value.split("?")[0].split("#")[0];
+  if (!value.startsWith("/")) return null;
+  return value;
+}
+
+const scanned = [];
+const skipped = [];
+for (const file of collectFiles(webSrc)) {
+  const text = readFileSync(file, "utf8");
+  const re = /path:\s*(?=[`"'])/g;
+  let hit;
+  while ((hit = re.exec(text))) {
+    const holder = enclosingObject(text, hit.index);
+    // 类型声明里的 `path:` 也会被扫到（`{ method: "GET"|...; path: \`/${string}\` }`）：
+    // 对象字面量用逗号分隔，类型成员用分号——用这个差别把它们排除。
+    if (holder?.includes(";")) continue;
+    const literal = readPathLiteral(text, hit.index + "path:".length);
+    const where = file.replace(repoRoot, ".");
+    if (!literal) {
+      skipped.push(`${where} @${hit.index}`);
+      continue;
+    }
+    const methodMatch = holder?.match(/method:\s*"([A-Z]+)"/);
+    if (!methodMatch) {
+      skipped.push(`${where} ${literal}（未在同对象内找到静态 method）`);
+      continue;
+    }
+    scanned.push({ method: methodMatch[1], path: literal, file: where });
+  }
+}
+
+/**
+ * 动态段取值由调用点决定的模板：无法从字面量定形，但不能「扫不到就算通过」。
+ * 每条必须写明理由，并给出**必须被放行**的具体探针路径（正面断言，不是豁免）。
+ */
+const UNRESOLVED_TEMPLATES = [
+  {
+    shape: "POST /plugins/{plugin_id}/{action}",
+    reason: "action 由调用点决定（install/disable/update/revoke/app），不是路径段常量",
+    probes: [
+      "POST /plugins/official.cn-market-data/install",
+      "POST /plugins/official.cn-market-data/disable",
+      "POST /plugins/official.cn-market-data/update",
+      "POST /plugins/official.cn-market-data/revoke",
+      "GET /plugins/official.reading-library/app",
+    ],
+  },
+  {
+    shape: "GET /evidence/{kind}/{symbol}",
+    reason: "kind 由调用点决定（announcements/news/financials），symbol 走 :path 可跨段",
+    probes: [
+      "GET /evidence/announcements/600519",
+      "GET /evidence/news/600519",
+      "GET /evidence/financials/600519",
+    ],
+  },
+];
+
+// 登记了但已不再出现的模板要清理，避免清单腐烂；未登记的动态模板必须报错。
+const registeredSamples = new Set(
+  UNRESOLVED_TEMPLATES.map((entry) => {
+    const [method, template] = entry.shape.split(" ");
+    return `${method} ${template.replace(/\{[^}]+\}/g, "abc123")}`;
+  }),
+);
+const unmatched = scanned.filter((item) => !isAllowed(item.method, item.path));
+const unresolvedShapes = new Set(unmatched.map((item) => `${item.method} ${item.path}`));
+for (const item of unmatched) {
+  // 落到这里的是「含动态段且采样未命中」的模板：必须在上面的清单里显式登记。
+  if (!registeredSamples.has(`${item.method} ${item.path}`)) {
+    fail(`前端真实请求未进桥清单：${item.method} ${item.path}（${item.file}）`);
+  }
+}
+for (const entry of UNRESOLVED_TEMPLATES) {
+  for (const probe of entry.probes) {
+    const [method, path] = probe.split(" ");
+    if (!isAllowed(method, path)) {
+      fail(`动态模板探针未进桥清单：${probe}（${entry.shape} · ${entry.reason}）`);
+    }
+  }
+}
+
+// 前端源码扫描出的请求里，去重后至少要有一定规模，否则说明扫描器本身失效了。
+const uniqueScanned = new Set(scanned.map((item) => `${item.method} ${item.path}`));
+if (uniqueScanned.size < 40) {
+  fail(`前端源码扫描只得到 ${uniqueScanned.size} 条请求，疑似扫描器失效（预期 ≥40）`);
+}
+
+if (failures.length) {
+  console.error(`桥清单校验失败（${failures.length} 项）：`);
+  for (const item of failures) console.error(`  - ${item}`);
+  console.error(
+    "\n修法：新增 Core 端点 → 在 apps/desktop-host/bridge-exposure.json 登记并运行\n" +
+      "      node scripts/generate_bridge_manifest.mjs；\n" +
+      "      确属桌面端不用的 → 登记到 exempt 并写明理由。",
+  );
   process.exit(1);
 }
-console.log(`Core 路由全量审计通过：声明 ${declaredCount} 条，除 ${EXEMPT.size} 条豁免外全部经宿主桥放行。`);
+
+console.log(
+  `桥清单校验通过：清单 ${routes.length} 条（方法+路径均配对），` +
+    `豁免 ${(exposure.exempt ?? []).length} 条；` +
+    `前端源码扫描 ${uniqueScanned.size} 条请求，` +
+    `其中动态模板 ${unresolvedShapes.size} 条按登记探针验证；` +
+    `跳过 ${skipped.length} 条无法定形的路径。`,
+);
+if (process.env.BRIDGE_CHECK_VERBOSE) {
+  for (const item of skipped) console.log(`  skip: ${item}`);
+}

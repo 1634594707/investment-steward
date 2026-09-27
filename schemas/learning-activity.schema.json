@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "LearningUnitType": {
+      "enum": [
+        "lesson",
+        "exercise",
+        "reflection"
+      ],
+      "title": "LearningUnitType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "用户的一次学习活动：绑定自身持仓/自选，承载自主回答与反思，不产生产生建议。",
+  "properties": {
+    "activity_id": {
+      "format": "uuid",
+      "title": "Activity Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "unit_id": {
+      "format": "uuid",
+      "title": "Unit Id",
+      "type": "string"
+    },
+    "unit_type": {
+      "$ref": "#/$defs/LearningUnitType",
+      "default": "exercise"
+    },
+    "bound_instrument": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bound Instrument"
+    },
+    "bound_instrument_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bound Instrument Label"
+    },
+    "objective": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Objective",
+      "type": "string"
+    },
+    "user_answer": {
+      "default": "",
+      "maxLength": 10000,
+      "title": "User Answer",
+      "type": "string"
+    },
+    "reflection": {
+      "default": "",
+      "maxLength": 10000,
+      "title": "Reflection",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "activity_id",
+    "user_id",
+    "unit_id",
+    "objective"
+  ],
+  "title": "LearningActivity",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/learning-activity/1.0"
+}

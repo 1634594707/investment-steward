@@ -7,6 +7,8 @@
 .quant-workflow button span { font: 11px var(--font-data); }
 .quant-capabilities { margin-bottom: calc(var(--space-6) * var(--density-scale)); color: var(--muted); font-size: var(--text-3); }
 .quant-capabilities summary { padding-block: calc(var(--space-2) * var(--density-scale)); cursor: pointer; }
+/* T6：常驻刷新控件。右对齐、随密度缩放，浅色主题用 --muted/--line 自动适配。 */
+.quant-refresh { display: flex; justify-content: flex-end; margin-bottom: calc(var(--space-2) * var(--density-scale)); }
 .quant-page .stage-bar { margin-block: calc(var(--space-3) * var(--density-scale)); border: 0; }
 .quant-page .stage-cell { border: 0; border-left: 2px solid var(--line); background: transparent; }
 .quant-page .stage-cell.on { border-color: var(--mint); }

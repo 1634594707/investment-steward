@@ -4,63 +4,72 @@ import hashlib
 import json
 import logging
 import os
-import secrets
 import threading
 import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status, Body
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from httpx import HTTPError as RelayHTTPError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
 from investment_steward_core import (
     __version__,
+    analysis_followup,
+    cffex_feed,
     comtrade_feed,
+    feed_health,
+    feed_probe,
     followup_research,
-    longterm as longterm_service,
+    jev_client,
     macro_ai,
     macro_feed,
     macro_pricing,
     macro_scoring,
     macro_trade,
     model_client,
+    quant_cross,
+    quant_experiments,
+    quant_factors,
+    quant_panel,
+    quant_pool,
+    quant_portfolio,
+    support_resistance,
     sync_client,
     trading_calendar,
-    quant_experiments,
 )
-from investment_steward_core import jev_client
-from investment_steward_core import macro_calendar as macro_calendar_module
 from investment_steward_core import collab as collab_engine
-from investment_steward_core import feed_health
-from investment_steward_core import feed_probe
-from investment_steward_core import support_resistance
-from investment_steward_core import analysis_followup
 from investment_steward_core import direction_research as direction_engine
-from investment_steward_core import quant_factors
-from investment_steward_core import quant_pool, quant_portfolio
+from investment_steward_core import (
+    longterm as longterm_service,
+)
+from investment_steward_core import macro_calendar as macro_calendar_module
+from investment_steward_core import youzi_horizon as youzi_horizon_module
+from investment_steward_core import youzi_replay as youzi_replay_module
 from investment_steward_core.cards import cards_for_slot
-from investment_steward_core import cffex_feed
 from investment_steward_core.channels import (
+    EvidenceFingerprintRow,
     assert_no_cross_channel_overwrite,
     channel_registry,
     snapshot_channels,
 )
 from investment_steward_core.config import CoreSettings
-from investment_steward_core.credential_store import (
-    JEV_API_KEY,
-    resolve_store,
+from investment_steward_core.credential_store import resolve_store
+from investment_steward_core.derived_metrics import (
+    derive_fundamental_metrics,
+    describe_derived,
 )
-from investment_steward_core.delivery import channel_status, deliver_notification
 from investment_steward_core.domain import (
     ALLOWED_PLAN_TRANSITIONS,
+    PERSONAL_DEFAULT_VIEWS,
     AgentResponse,
     AuditEvent,
     Book,
@@ -68,8 +77,6 @@ from investment_steward_core.domain import (
     CredentialRecord,
     DecisionEntry,
     Evidence,
-    ResearchSnapshot as ResearchSnapshotModel,
-    ResearchTemplate as ResearchTemplateModel,
     EvidenceRelation,
     EvidenceStatus,
     EvidenceType,
@@ -78,22 +85,13 @@ from investment_steward_core.domain import (
     HoldingStatus,
     InvestmentPolicyVersion,
     InvestorProfile,
-    LearningActivity,
-    LearningGoal,
-    LearningUnit,
-    LearningUnitType,
     LibraryPlan,
     MacroCalendarSnapshot,
     MacroPricingSnapshot,
     MacroSnapshot,
     MacroUserView,
     ModelProfile,
-    Notification,
-    NotificationTriage,
-    NotificationTriageReport,
     OHLCVBar,
-    JevSettings,
-    PERSONAL_DEFAULT_VIEWS,
     PersonalNotifyPrefs,
     PersonalSettings,
     Plan,
@@ -115,13 +113,14 @@ from investment_steward_core.domain import (
     UpdateChannel,
     WeeklyReview,
 )
+from investment_steward_core.domain import (
+    ResearchSnapshot as ResearchSnapshotModel,
+)
+from investment_steward_core.domain import (
+    ResearchTemplate as ResearchTemplateModel,
+)
 from investment_steward_core.domain.models import ConfirmationMethod
 from investment_steward_core.evidence_policy import as_utc
-from investment_steward_core.derived_metrics import (
-    DerivedMetricsError,
-    derive_fundamental_metrics,
-    describe_derived,
-)
 from investment_steward_core.financial_evidence import (
     ITEM_LABEL_CN,
     STATEMENT_LABEL_CN,
@@ -132,10 +131,6 @@ from investment_steward_core.financial_evidence import (
 )
 from investment_steward_core.instrument_lookup import lookup_instruments
 from investment_steward_core.instruments import normalize_instrument
-from investment_steward_core.learning import (
-    build_current_learning_goal,
-    build_today_learning_unit,
-)
 from investment_steward_core.library import (
     create_research_from_annotation,
     generate_reading_plan,
@@ -159,14 +154,6 @@ from investment_steward_core.news_evidence import (
     parse_notice_timestamp,
     raw_locator_for,
 )
-from investment_steward_core.notifications import (
-    JEV_TRIAGE_STATE_SUPPRESSED,
-    evaluate_notifications,
-    jev_triage_findings,
-    jev_triage_shards,
-    jev_triage_summary,
-    notification_dedup_key,
-)
 from investment_steward_core.plugin_runtime import (
     aggregate_network_allowlist,
     secret_env_markers,
@@ -177,21 +164,49 @@ from investment_steward_core.prompting import (
     STOCK_REPORT_RULES_TEXT,
     STOCK_REPORT_SCHEMA_TEXT,
 )
-from investment_steward_core import youzi_replay as youzi_replay_module
-from investment_steward_core import youzi_horizon as youzi_horizon_module
 
 #: Y3-06：期限取值的有界缓存（进程级共享）。键含 `as_of`，因此不同复盘时点的
 #: 结论不会互相污染；`passed` 的值走 60s 正缓存、`not_due`/`missing` 只走 5s
 #: 短冷却——一次数据源抖动不能把某个期限长期钉成缺失。上限 256 条，超限淘最旧。
 _YOUZI_HORIZON_CACHE = youzi_horizon_module.HorizonCache()
+from investment_steward_core import (
+    counter_check,
+    quant_models,
+    quant_pack_runner,
+    quant_strategy_packs,
+    quant_track_records,
+    report_quality,
+    tactics_ai,
+    tactics_score,
+    valuation_evidence,
+)
+from investment_steward_core import research as research_module
+from investment_steward_core import tactics as stock_tactics
+from investment_steward_core.api.routers.jev import (
+    build_jev_router,
+    effective_jev_settings,
+)
+from investment_steward_core.api.routers.learning import build_learning_router
+
+# ---- A06：测试补丁点 re-export（**不要删**）----
+# 本仓库测试统一 patch `investment_steward_core.api.app.<协作者>` 注入替身，且多数在
+# `create_app()` 之后才 patch。按域拆出的路由因此按**调用时**从本模块命名空间取这些符号
+# （见 `api/deps.collaborators`）。这些名字在本模块内已无直接调用，删掉会让测试补丁
+# 静默失效（表现为「注入的替身没生效」，而不是报错）。
+from investment_steward_core.api.routers.notifications import (
+    build_notifications_router,
+    digest_window,  # noqa: F401
+)
+from investment_steward_core.api.routers.watch_items import build_watch_items_router
+from investment_steward_core.delivery import deliver_notification  # noqa: F401
+from investment_steward_core.industry_evidence import direction_industry_evidence
+from investment_steward_core.notifications import evaluate_notifications  # noqa: F401
 from investment_steward_core.quant import ArtifactLineageView, ArtifactPoolView, empty_pool_view
-from investment_steward_core import counter_check, quant_models, quant_pack_runner, quant_strategy_packs, quant_track_records, report_quality, tactics as stock_tactics, tactics_ai, tactics_score
 from investment_steward_core.reporting import (
     build_freshness_patrol,
     build_today_brief,
     build_weekly_review,
 )
-from investment_steward_core import research as research_module
 from investment_steward_core.research import read_latest_response, run_research
 from investment_steward_core.signing import verify_manifest_integrity
 from investment_steward_core.slots import (
@@ -201,9 +216,7 @@ from investment_steward_core.slots import (
     resolve_outputs,
     targeted_slots_by_installations,
 )
-from investment_steward_core.storage import Database
-from investment_steward_core import valuation_evidence
-from investment_steward_core.industry_evidence import direction_industry_evidence
+from investment_steward_core.storage import Database, artifact_store
 from investment_steward_core.valuation_evidence import (
     ValuationError,
     describe_valuation,
@@ -306,6 +319,40 @@ class PortfolioBacktestRequest(BaseModel):
     max_industry_weight: float = Field(default=0.60, gt=0.0, le=1.0)
 
 
+class QuantPanelBuildRequest(BaseModel):
+    """QL10：本地横截面面板构建任务（成交额前 N → 逐标的日线 → 交集对齐 → 内容寻址快照）。"""
+
+    universe_size: int = Field(default=quant_panel.DEFAULT_UNIVERSE_SIZE, ge=5, le=200)
+    board: str = Field(default="turnover")
+    window: int = Field(default=quant_panel.DEFAULT_PANEL_WINDOW, ge=30, le=1250)
+    refresh: bool = False
+    built_at: str | None = Field(default=None, max_length=40)
+
+
+class QuantPanelLoadRequest(BaseModel):
+    """QL10：按内容寻址键从快照重建面板（校验哈希后返回摘要,不回传整个矩阵）。"""
+
+    content_hash: str = Field(min_length=8, max_length=128)
+    file_name: str = Field(min_length=5, max_length=200)
+
+
+class QuantPanelMineRequest(BaseModel):
+    """QL11 + QL12：面板快照上的横截面挖掘 → top 公式自动出成本口径报告卡。"""
+
+    content_hash: str = Field(min_length=8, max_length=128)
+    file_name: str = Field(min_length=5, max_length=200)
+    forward_days: int = Field(default=1, ge=1, le=20)
+    top_n: int = Field(default=3, ge=1, le=10)
+    beam_width: int = Field(default=quant_factors.BEAM_WIDTH, ge=2, le=32)
+    beam_levels: int = Field(default=quant_factors.BEAM_LEVELS, ge=1, le=6)
+    alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
+    neutralise: str = Field(default=quant_cross.DEFAULT_NEUTRALISE)
+    industry_groups: bool = False
+    label_shuffle_seed: int | None = None
+    quantiles: int = Field(default=quant_cross.DEFAULT_QUANTILES, ge=2, le=10)
+    folds: int = Field(default=3, ge=1, le=10)
+
+
 class JudgmentCreateRequest(BaseModel):
     """可检验判断（8.2）：原始文本保存后冻结。"""
 
@@ -326,30 +373,10 @@ class JudgmentVerifyRequest(BaseModel):
     metrics: dict[str, object] = Field(default_factory=dict)
 
 
-class WatchItemCreateRequest(BaseModel):
-    """观察事项（8.3）：观察指标/失效条件映射为可追踪事项。"""
-
-    title: str = Field(min_length=1, max_length=200)
-    indicator: str = Field(min_length=1, max_length=400)
-    condition_text: str = Field(min_length=1, max_length=1000)
-    check_cycle: str = Field(default="weekly", pattern="^(daily|weekly|monthly|manual)$")
-    source_kind: str = Field(default="", max_length=40)
-    source_id: UUID | None = None
-    dedup_key: str = Field(default="", max_length=120)
 
 
-class WatchCheckRequest(BaseModel):
-    """检查记录（8.3）：只追加；dedup_value 相同的检查不重复计提醒。"""
-
-    observed: str = Field(min_length=1, max_length=2000)
-    triggered: bool = False
-    note: str = Field(default="", max_length=2000)
-    evidence_refs: list[UUID] = Field(default_factory=list, max_length=20)
-    dedup_value: str | None = Field(default=None, max_length=100)
 
 
-class WatchTransitionRequest(BaseModel):
-    target: str = Field(pattern="^(active|paused|triggered|closed)$")
 
 
 class SyncConfigRequest(BaseModel):
@@ -661,14 +688,6 @@ class ResearchTransitionRequest(BaseModel):
     confirmation_summary: str | None = Field(default=None, max_length=2000)
 
 
-class LearningActivityRequest(BaseModel):
-    unit_id: UUID
-    unit_type: str = "exercise"
-    bound_instrument: str | None = None
-    bound_instrument_label: str | None = None
-    objective: str = Field(min_length=1, max_length=2000)
-    user_answer: str = Field(default="", max_length=10000)
-    reflection: str = Field(default="", max_length=10000)
 
 
 class ImportApplyRequest(BaseModel):
@@ -678,6 +697,22 @@ class ImportApplyRequest(BaseModel):
     tables: list[str] | None = None
     mode: str = Field(default="merge", pattern="^(merge|replace)$")
     # 显式确认：缺省/False 一律 422，不做无提示的整库覆盖。
+    confirm: bool = False
+
+
+class EvidenceDedupRequest(BaseModel):
+    """`POST /evidence/dedup` 的请求体（第四轮审计新增）。
+
+    改造前该端点**无请求体、点一下就删**：`/import/apply` 早就有 `confirm: true` 的
+    纪律（缺省 False 一律 422，不做无提示的整库覆盖），而这条破坏性得多的路径反而没有。
+    现在与既有约定对齐：
+    - 缺省 `dry_run=True`：只**预览**待删清单，一条都不删；
+    - 必须显式 `confirm: true` 才真的执行。
+    """
+
+    #: 预览模式（默认）。True = 只算不删。
+    dry_run: bool = True
+    #: 显式确认。缺省 False ⇒ 422，不执行任何删除。
     confirm: bool = False
 
 
@@ -718,47 +753,8 @@ class ModelProbeRequest(BaseModel):
     timeout_secs: int | None = Field(default=None, ge=30, le=1800)
 
 
-class JevSettingsRequest(BaseModel):
-    """Jev 决策模型配置保存负载（JV02）。
-
-    密钥**不在本负载里**——只接受 `credential_ref`（凭据库 key_id / 凭据尾号）。
-    明文密钥走既有 `/credentials/{key_id}` 通道加密入库，避免多开一个明文入口。
-    """
-
-    enabled: bool = False
-    base_url: str = Field(default="https://api.typesafe.ai/v1", min_length=1, max_length=300)
-    model: str = Field(default="jev-latest", max_length=120)
-    credential_ref: str = Field(default="", max_length=120)
-    timeout_secs: float = Field(default=60.0, ge=5, le=600)
-
-    @field_validator("base_url")
-    @classmethod
-    def _check_base_url(cls, value: str) -> str:
-        text = (value or "").strip()
-        if not text.startswith(("http://", "https://")):
-            raise ValueError("Jev base_url 必须以 http:// 或 https:// 开头")
-        return text
-
-    @field_validator("model")
-    @classmethod
-    def _check_model(cls, value: str) -> str:
-        text = (value or "").strip()
-        if not text:
-            raise ValueError("Jev 模型名不能为空（官方默认别名 jev-latest）")
-        return text
 
 
-class JevProbeRequest(BaseModel):
-    """Jev 草稿态探测（设置页「测连通性 / 拉取模型」）：只读，不落库、不写凭据。
-
-    与 chat 侧 `ModelProbeRequest` 同惯例：`credential_ref` 允许是**尚未保存的明文密钥**
-    （先试后存），任何字段都不会被持久化。
-    """
-
-    base_url: str = Field(default="https://api.typesafe.ai/v1", min_length=1, max_length=300)
-    model: str = Field(default="jev-latest", max_length=120)
-    credential_ref: str = Field(default="", max_length=500)
-    timeout_secs: float | None = Field(default=None, ge=5, le=600)
 
 
 class BookRequest(BaseModel):
@@ -867,48 +863,12 @@ class CoreState:
             )
 
 
-def _state(request: Request) -> CoreState:
-    return request.app.state.core
-
-
-def _require_session(
-    request: Request,
-    x_core_session_token: Annotated[str | None, Header()] = None,
-) -> CoreState:
-    state = _state(request)
-    if x_core_session_token is None or not secrets.compare_digest(
-        x_core_session_token, state.settings.session_token
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid local session"
-        )
-    return state
-
-
-def _audit(
-    state: CoreState,
-    action: str,
-    resource_type: str,
-    resource_id: str | None = None,
-    payload: dict[str, Any] | None = None,
-) -> None:
-    # E05（桌面端升级路线图 2026-09-18）：每自然日首次关键写入前触发一次在线备份（节流，
-    # 失败静默）——补齐「长会话期间一次备份都不会产生」的缺口；检查有内存缓存，非每日首写零开销。
-    try:
-        state.database.maybe_daily_backup()
-    except Exception:
-        pass
-    state.database.append_audit(
-        AuditEvent(
-            event_id=uuid4(),
-            tenant_id=state.local_user_id,
-            actor_id=state.local_user_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            payload=payload or {},
-        )
-    )
+# A06（架构改进路线图 2026-09-25）：`_state` / `_require_session` / `_audit` 已迁到
+# `api/deps.py`——按域拆解路由时子模块也要用它们，定义在这里会形成循环依赖。
+# 下面以别名导入，232 处调用点与函数语义保持不变。
+from investment_steward_core.api.deps import audit as _audit
+from investment_steward_core.api.deps import require_session as _require_session
+from investment_steward_core.api.deps import state as _state
 
 
 def _capabilities() -> list[PluginCapability]:
@@ -1064,32 +1024,6 @@ def _plugin_manifests() -> list[PluginManifest]:
     return [model for _, model in entries] or _builtin_plugin_manifests()
 
 
-# ---- v21 M2-02：通知 digest 节奏（个人中心 notify.frequency）----
-# 每日汇总 20:00、每周汇总周一 09:00（本机墙上时间）后，下一次评估把待外部
-# 投递的提醒聚合成一条 digest 一次性外发；站内呈现不受 digest 节奏影响。
-DIGEST_DAILY_AT = (20, 0)
-DIGEST_WEEKLY_AT = (9, 0)
-
-
-def digest_window(prefs: Any, local_now: datetime) -> tuple[bool, str]:
-    """返回（是否到达外发窗口, 本周期 digest 去重键）；realtime 恒 (True, "")。
-
-    到点语义为「不早于」：本地优先应用未必整点在线，错过 20:00/周一 09:00 后，
-    当天/当周内任意一次 evaluate 都会补发（每周期至多一次，由去重键保证）。
-    """
-    if prefs.frequency == "daily":
-        window_start = local_now.replace(
-            hour=DIGEST_DAILY_AT[0], minute=DIGEST_DAILY_AT[1], second=0, microsecond=0
-        )
-        return local_now >= window_start, f"digest:daily:{local_now.date().isoformat()}"
-    if prefs.frequency == "weekly":
-        monday = local_now.date() - timedelta(days=local_now.weekday())
-        window_start = datetime(
-            monday.year, monday.month, monday.day,
-            DIGEST_WEEKLY_AT[0], DIGEST_WEEKLY_AT[1], tzinfo=local_now.tzinfo,
-        )
-        return local_now >= window_start, f"digest:weekly:{monday.isoformat()}"
-    return True, ""
 
 
 def _manifest_index() -> dict[str, PluginManifest]:
@@ -1228,13 +1162,54 @@ def _latest_datetime(rows: list[object], *candidates: str) -> str | None:
     return max(timestamps).isoformat()
 
 
+def _latest_iso(value: datetime | None) -> str | None:
+    """单个时间戳转 ISO 串（与 `_latest_datetime` 的输出口径一致）。"""
+    return None if value is None else value.isoformat()
+
+
+class _RequestPacer:
+    """按**最小间隔**放行请求的节流闸门（并发取数限速用）。
+
+    T8（用户视角路线图 2026-09-26）：`interval_secs` 原本只被实现成「每个 worker 开头
+    睡一次」，于是 `concurrency=4, interval=0.15` 的真实行为是「4 个请求齐发、统一停
+    0.15s、再 4 个齐发」——对公开行情接口的限速保护完全失效，而界面上的「间隔」看着
+    像生效了。
+
+    本闸门把语义锚定在**请求发起的时刻**上：任意两次 `wait()` 通过的间隔至少
+    `interval` 秒；取数本身在闸门外进行，所以最多仍可有 `concurrency` 个请求同时在途。
+    首个请求不等待（`_next_allowed` 初值 0），与原串行路径「第一票不睡」一致。
+
+    实现要点：抢锁只保护「判定 + 预约下一个放行时刻」这一小段，等待发生在锁外，
+    因此不会把并发度退化成 1。
+    """
+
+    def __init__(self, interval: float) -> None:
+        self._interval = max(0.0, interval)
+        self._lock = threading.Lock()
+        self._next_allowed = 0.0
+
+    def wait(self) -> None:
+        if self._interval <= 0:
+            return
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                if now >= self._next_allowed:
+                    self._next_allowed = now + self._interval
+                    return
+                delay = self._next_allowed - now
+            time.sleep(delay)
+
+
 def _data_as_of(core: CoreState) -> dict[str, str | None]:
     """各数据域最新观测时间（喂状态栏「数据截至」；无数据时返回 None）。"""
     db = core.database
     uid = core.local_user_id
     return {
         "portfolio": _latest_datetime(db.list_holdings(uid), "updated_at", "created_at"),
-        "evidence": _latest_datetime(db.list_evidence(uid), "collected_at", "updated_at", "created_at"),
+        # S9：evidence 项改走专用的单标量查询，不再为取一个最大时间戳而全量装载证据
+        # （`Evidence` 只有 `collected_at`，见 database.latest_evidence_collected_at 的说明）。
+        "evidence": _latest_iso(db.latest_evidence_collected_at(uid)),
         "research": _latest_datetime(db.list_research_runs(uid), "updated_at", "created_at"),
         "learning": _latest_datetime(db.list_learning_activities(uid), "created_at", "completed_at"),
         "macro": db.latest_macro_updated_at(),
@@ -1445,6 +1420,31 @@ def create_app(settings: CoreSettings) -> FastAPI:
     app = FastAPI(
         title="Investment Steward Core", version=__version__, docs_url=None, redoc_url=None
     )
+    # S4（用户视角路线图 2026-09-26）：全局兜底异常处理器。
+    #
+    # 改造前本文件没有任何 exception_handler：`app.py` 里 159 个 try / 54 个 except
+    # Exception 都是逐路由手写的，漏网异常一路逃到 Starlette 的 ServerErrorMiddleware，
+    # 返回**纯文本** `Internal Server Error`——无 detail、无 request id，traceback 只进
+    # Core 进程 stderr（`__main__.py` 以 log_level="warning" 启动），打包版用户永远看不到。
+    # 结果是「令牌不匹配」「数据损坏」「磁盘错误」在界面上长得一模一样，支持无法定位。
+    #
+    # 这里给出可读文案 + 一个诊断 id：细节（异常类型、路径、traceback）只进日志，
+    # 对外只暴露 id，用户报障时凭 id 即可反查。
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        incident = uuid4().hex[:12]
+        logger.exception(
+            "未处理异常 incident=%s method=%s path=%s", incident, request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "本地核心遇到未预期错误，操作未完成（未完成的数据不会保存）。请重试；若反复出现，请把诊断码一并反馈。",
+                "incident": incident,
+                "path": request.url.path,
+            },
+        )
+
     app.state.core = CoreState(settings)
     # F01（桌面端升级路线图 2026-09-18）：模型用量落表——所有 call_active_model 调用经此钩子
     # 写 model_calls 表（usage 缺失记 null；失败/超时同样记录 outcome）。
@@ -1460,10 +1460,54 @@ def create_app(settings: CoreSettings) -> FastAPI:
         allow_headers=["X-Core-Session-Token", "Content-Type"],
     )
 
+    # A01（架构路线图 2026-09-25）：就绪探测与业务概览分离。
+    # 旧 /health 会全量读取证据、逐条构造模型、再对全量证据算内容指纹，探活成本随研究
+    # 资料积累线性增长；而它的三个调用方（宿主启动等待、前端状态检查、首屏装载）里，
+    # 只有首屏真的需要业务字段。现在 /health 只回答「进程可用且存储可打开」，
+    # 业务字段整体迁到 GET /overview（需会话鉴权，首屏按次取）。
     @app.get("/health")
-    def health(request: Request) -> dict[str, object]:
+    def health(request: Request) -> JSONResponse:
         core = _state(request)
-        snapshots = core.database.list_evidence(core.local_user_id)
+        try:
+            core.database.ping()
+        except Exception as exc:  # noqa: BLE001 - 探测本身不得把异常抛成 500
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "status": "not_ready",
+                    "version": __version__,
+                    "core_version": __version__,
+                    "schema_version": "1.0",
+                    "detail": f"存储不可用：{type(exc).__name__}",
+                },
+            )
+        return JSONResponse(
+            content={
+                "status": "ready",
+                "version": __version__,
+                "core_version": __version__,
+                "schema_version": "1.0",
+            }
+        )
+
+    @app.get("/overview")
+    def overview(core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """业务概览（A01）：通道版本、插件计数、插槽占用、各数据域「数据截至」。
+
+        语义与原 /health 业务体一致（含 CONTENT 通道内容指纹），但它只在前端首屏装载
+        与用户手动刷新时调用，不承担探活频率。
+
+        S9（用户视角路线图 2026-09-26）：CONTENT 指纹只依赖 (evidence_id, content_hash)，
+        而这两列本就是 `evidence` 表的真实列。此处改用 `list_evidence_fingerprint_rows`，
+        不再走 `list_evidence()` 把整条 payload 读出、JSON 解析并 Pydantic 校验——
+        首屏装载的耗时与内存不再随证据总数线性放大，指纹值**逐字节不变**。
+        """
+        snapshots = [
+            EvidenceFingerprintRow(evidence_id, content_hash)
+            for evidence_id, content_hash in core.database.list_evidence_fingerprint_rows(
+                core.local_user_id
+            )
+        ]
         channel = snapshot_channels(core.database, snapshots, __version__)
         registry = {entry["channel"]: dict(entry) for entry in channel_registry()}
         registry[UpdateChannel.HOST.value].update({"current": channel.host_version})
@@ -1621,7 +1665,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         # 恢复前强制备份：失败即中止（绝不无回退点地改库）。
         try:
             backup_path = rotate_backup(core.database.path)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"恢复前备份失败，已中止恢复：{error}") from error
 
         results = []
@@ -1712,31 +1756,386 @@ def create_app(settings: CoreSettings) -> FastAPI:
         }
 
     @app.post("/quant/factors/mine/{symbol}")
-    def quant_factors_mine(symbol: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        """确定性因子挖掘(A2):枚举公式空间,验证集 IC 排序,输出分享池阶段 A 形态参数集。"""
+    def quant_factors_mine(
+        symbol: str,
+        window: int | None = None,
+        correction: str = "fdr",
+        alpha: float = 0.05,
+        label_permutation_seed: int | None = None,
+        search: str = quant_factors.DEFAULT_SEARCH,
+        core: CoreState = Depends(_require_session),
+    ) -> dict[str, object]:
+        """确定性因子挖掘(A2):三段式切分 + 多重检验校正 + 相关性去重,输出分享池阶段 A 形态参数集。
+
+        - ``window``:历史窗口档位(250/750/1250 根日线),缺省用 ``quant_factors.DEFAULT_WINDOW_BARS``;
+        - ``correction``:``fdr``(Benjamini-Hochberg,默认)或 ``permutation``(块置换校准零分布 + BH);
+        - ``alpha``:显著性水平;
+        - ``label_permutation_seed``:过拟合自检——先把标签做确定性块置换再跑整条链路,
+          随机标签下榜单应为空;seed 写进响应可复算;
+        - ``search``:``beam``(默认,QL06 层式确定性束搜索:16 原子 + 24 时序 token)或
+          ``exhaustive``(旧口径 6 原子全枚举,只用于复现历史)
+
+        榜单 ``top`` **只含校正后显著者**且已按 |Spearman| 相关性去重;未达显著者进 ``marginal``
+        并显式标注——不显著就说不显著,允许空榜。
+        """
         data_installation = core.database.get_plugin_installation("official.cn-market-data")
         if data_installation is None or data_installation.state != PluginInstallationState.ENABLED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
             )
         try:
-            bars, provider = fetch_cn_kline(symbol, limit=250, period="day")
+            resolved = quant_factors.resolve_window(window)
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        if correction not in ("fdr", "permutation"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"correction 仅支持 'fdr' / 'permutation',收到 {correction!r}",
+            )
+        if search not in quant_factors.SEARCH_MODES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"search 仅支持 {' / '.join(quant_factors.SEARCH_MODES)},收到 {search!r}",
+            )
+        if not 0.0 < alpha < 1.0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"alpha 必须在 (0,1),收到 {alpha}"
+            )
+        try:
+            bars, provider = fetch_cn_kline(symbol, limit=resolved["bars"], period="day")
         except FeedError as error:
-            return {"available": False, "symbol": symbol, "top": [], "degraded_reason": f"行情拉取失败:{error}"}
-        board = quant_factors.mine(bars)
+            return {"available": False, "symbol": symbol, "top": [], "marginal": [],
+                    "window": resolved, "degraded_reason": f"行情拉取失败:{error}"}
+        provenance = quant_factors.window_provenance(resolved, bars, provider)
+        board = quant_factors.mine(
+            bars,
+            correction=correction,
+            alpha=alpha,
+            label_shuffle_seed=label_permutation_seed,
+            search=search,
+        )
         # 分享池阶段 A 形态字段:as_of 取收口 bar(数据口径,非墙上时钟),dataset_version 对齐 quant_pool 约定。
         as_of = str(bars[-1]["timestamp"]) if bars else None
+        correction_report = board["multiple_testing"]
+        degraded = None
+        if not board["top"]:
+            if board["label_shuffle"]:
+                degraded = (
+                    "过拟合自检:标签已随机置换(seed="
+                    f"{board['label_shuffle']['seed']}),未挖到显著公式——这是期望结果。"
+                )
+            else:
+                degraded = (
+                    f"无公式通过多重检验校正({correction},α={alpha});"
+                    f"候选 {correction_report['candidates_tested']} 条,"
+                    f"校正后阈值 {correction_report.get('threshold')}"
+                )
+                if board["marginal"]:
+                    degraded += f";另附 {len(board['marginal'])} 条未达显著候选(不可当作有效因子)"
         return {
             "available": bool(board["top"]),
             "symbol": symbol,
             "bars": len(bars),
+            "window": provenance,
             "top": board["top"],
-            "note": board["note"],
+            "marginal": board["marginal"],
+            "split": board["split"],
+            "search": board["search"],
+            "multiple_testing": correction_report,
+            "dedup": board["dedup"],
+            "label_shuffle": board["label_shuffle"],
+            "thresholds": board["thresholds"],
+            "grammar": board["grammar"],
+            "caliber": {
+                "mine_spec_version": board["mine_spec_version"],
+                "formula_spec_version": board["formula_spec_version"],
+                "ic_spec_version": board["ic_spec_version"],
+                "ic_suite_spec_version": board["ic_suite_spec_version"],
+                "forward_days": board["forward_days"],
+            },
+            "note": " ".join(filter(None, [board["note"], provenance.get("truncation_note")])),
             "source": provider,
             "as_of": as_of,
             "dataset_version": f"local:{symbol}:{as_of[:10]}" if as_of else None,
-            "degraded_reason": None if board["top"] else "未挖到通过阈值的公式(阈值:|训练IC|≥0.05 且 |验证IC|≥0.02)",
+            "degraded_reason": degraded,
         }
+
+    # ----------------------------------------------------------------------- #
+    # QL10 / QL11 / QL12（量化研究实验室质量提升路线图 2026-09-22，P2 数据面质变）
+    # ----------------------------------------------------------------------- #
+    def _require_market_plugin(core_state: CoreState) -> None:
+        installation = core_state.database.get_plugin_installation("official.cn-market-data")
+        if installation is None or installation.state != PluginInstallationState.ENABLED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
+            )
+
+    def _panel_snapshot_of(core_state: CoreState, content_hash: str, file_name: str) -> dict[str, object]:
+        """按内容寻址键重建面板；文件损坏或语义哈希不符一律 409，不返回可疑内容。"""
+        try:
+            return quant_panel.load_panel(core_state.layout, content_hash=content_hash, file_name=file_name)
+        except artifact_store.ArtifactIntegrityError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"面板快照不可用：{error}") from error
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    def _execute_panel_build(core_state: CoreState, body: QuantPanelBuildRequest, job_id: str) -> dict[str, object]:
+        """QL10 执行体：榜单定 universe → 逐标的拉日线（当日缓存可续传）→ 交集对齐 → 内容寻址快照。"""
+        rows = fetch_cn_market_board(body.board, top=body.universe_size)
+        universe = quant_panel.resolve_universe(
+            rows, size=body.universe_size, source=f"cn-market-board:{body.board}"
+        )
+        if not universe["symbols"]:
+            raise ValueError("榜单为空：无法确定 universe")
+
+        def fetch_bars(symbol: str, window: int) -> tuple[list[dict[str, object]], str]:
+            bars, source = fetch_cn_kline(symbol, limit=window, period="day")
+            return bars, source
+
+        panel = quant_panel.build_panel(
+            core_state.layout,
+            list(universe["symbols"]),
+            window=body.window,
+            fetch_bars=fetch_bars,
+            use_cache=not body.refresh,
+            on_progress=lambda done, total: core_state.database.update_scan_job_progress(job_id, done, total),
+            is_cancelled=lambda: core_state.database.get_scan_job_state(job_id) == "cancelled",
+        )
+        saved = quant_panel.save_panel(core_state.layout, panel, built_at=body.built_at)
+        core_state.database.upsert_quant_artifact(
+            artifact_id=saved["snapshot_hash"][:24],
+            kind=quant_panel.PANEL_SNAPSHOT_KIND,
+            stage="panel",
+            symbol=",".join(str(symbol) for symbol in universe["symbols"][:3]),
+            name=f"横截面面板 {panel['symbol_count']}×{panel['date_count']}",
+            parent_id=None,
+            created_at=datetime.now(UTC).isoformat(),
+            file_name=str(saved["file_name"]),
+            content_hash=str(saved["content_hash"]),
+            payload_meta={
+                "panel_spec_version": panel["panel_spec_version"],
+                "alignment": panel["alignment"],
+                "window": panel["window"],
+                "universe_rule": universe["rule"],
+                "universe_source": universe["source"],
+                "universe_observed_at": universe["observed_at"],
+                "first_date": panel.get("first_date"),
+                "last_date": panel.get("last_date"),
+                "coverage": panel.get("coverage"),
+                "failures": panel.get("failures") or [],
+                "excluded": panel.get("excluded") or [],
+                "history_floor": panel.get("history_floor", 0),
+            },
+        )
+        summary = quant_panel.summarise_panel(panel)
+        summary["snapshot"] = saved
+        summary["universe"] = universe
+        summary["caliber"] = {
+            "panel_spec_version": quant_panel.PANEL_SPEC_VERSION,
+            "alignment": panel["alignment"],
+            "window": panel["window"],
+            "board": body.board,
+            "use_cache": not body.refresh,
+        }
+        return summary
+
+    def _panel_build_job_worker(core_state: CoreState, body: QuantPanelBuildRequest, job_id: str) -> None:
+        try:
+            core_state.database.finish_scan_job(job_id, "done", _execute_panel_build(core_state, body, job_id))
+        except _ScanCancelled:
+            core_state.database.finish_scan_job(job_id, "cancelled", None)
+        except Exception as error:  # noqa: BLE001 - 线程异常不外泄,落进任务终态
+            core_state.database.finish_scan_job(job_id, "error", {"detail": str(error)})
+
+    @app.post("/quant/panel/build")
+    def quant_panel_build_start(
+        body: QuantPanelBuildRequest, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """QL10：建面板任务（后台执行，逐标的进度可轮询、可取消、当日缓存断点续传）。
+
+        面板是横截面研究的底座：universe 由成交额榜单确定（榜单顺序即规则，可复现），
+        逐标的拉日线落 ``cache/quant-panel-bars/``（同一 UTC 日期内重跑直接命中失败/取消后只补缺口），
+        最后按**交集**对齐成「日期 × 标的」列式矩阵并落内容寻址快照（哈希可复核）。
+        """
+        _require_market_plugin(core)
+        if body.board not in ("turnover", "gainers", "losers", "turnover_rate"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="board 仅支持 turnover / gainers / losers / turnover_rate",
+            )
+        try:
+            quant_panel.resolve_universe([], size=body.universe_size)
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        fingerprint = hashlib.sha256(
+            ("panel|" + body.model_dump_json()).encode("utf-8")
+        ).hexdigest()
+        running = core.database.find_running_scan_job(fingerprint)
+        if running is not None:
+            return {"ok": True, "job_id": running["job_id"], "state": "running",
+                    "reused": True, "done": running["done"], "total": running["total"]}
+        job_id = str(uuid4())
+        core.database.create_scan_job(job_id, fingerprint, {"kind": "quant_panel_build", **body.model_dump(mode="json")})
+        threading.Thread(
+            target=_panel_build_job_worker, args=(core, body, job_id),
+            name=f"panel-job-{job_id[:8]}", daemon=True,
+        ).start()
+        return {"ok": True, "job_id": job_id, "state": "running", "reused": False}
+
+    @app.get("/quant/panel/build/{job_id}")
+    def quant_panel_build_status(job_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """QL10：面板构建任务进度/结果（done/total 逐标的推进；done 时 summary 为面板摘要 + 快照信息）。"""
+        job = core.database.get_scan_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="面板构建任务不存在")
+        return {"ok": True, **job}
+
+    @app.post("/quant/panel/build/{job_id}/cancel")
+    def quant_panel_build_cancel(job_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """QL10：取消面板构建（逐标的检测；已完成部分留在当日缓存里，重发只补缺口）。"""
+        return {"ok": core.database.cancel_scan_job(job_id)}
+
+    @app.get("/quant/panel/snapshots")
+    def quant_panel_snapshots(core: CoreState = Depends(_require_session)) -> list[dict[str, object]]:
+        """QL10：已落盘的面板快照清单（内容寻址索引，供「从快照重建」选键）。"""
+        return core.database.list_quant_artifacts((quant_panel.PANEL_SNAPSHOT_KIND,))
+
+    @app.post("/quant/panel/load")
+    def quant_panel_load(body: QuantPanelLoadRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """QL10：按内容寻址键重建面板并复核哈希；返回摘要（矩阵本体不回传，避免响应膨胀）。"""
+        panel = _panel_snapshot_of(core, body.content_hash, body.file_name)
+        summary = quant_panel.summarise_panel(panel)
+        summary["digest"] = quant_panel.panel_digest(panel)
+        summary["available"] = bool(panel.get("available"))
+        summary["note"] = "哈希已复核：面板由快照完整重建，与构建时逐位一致。"
+        return summary
+
+    def _industry_groups_for(core_state: CoreState, symbols: list[str]) -> dict[str, object]:
+        """QL11：行业分组反查（取不到就如实标注缺口，绝不用推测分组冒充中性化）。"""
+        return quant_panel.resolve_industry_groups(symbols)
+
+    def _execute_panel_mine(core_state: CoreState, body: QuantPanelMineRequest, job_id: str) -> dict[str, object]:
+        """QL11 + QL12 执行体：横截面挖掘 → top 公式逐条出成本口径报告卡（挖掘→实验闭环）。"""
+        panel = _panel_snapshot_of(core_state, body.content_hash, body.file_name)
+        symbols = list(panel["symbols"])
+        groups_info: dict[str, object] = {"mode": "none", "usable": False, "degraded_reason": "未请求行业分组"}
+        groups: dict[str, str | None] | None = None
+        if body.industry_groups:
+            groups_info = _industry_groups_for(core_state, symbols)
+            if groups_info.get("usable"):
+                groups = dict(groups_info.get("groups") or {})
+        total_reports = body.top_n
+        core_state.database.update_scan_job_progress(job_id, 0, 1 + total_reports)
+        board = quant_cross.cross_section_mine(
+            panel,
+            forward_days=body.forward_days,
+            top_n=body.top_n,
+            beam_width=body.beam_width,
+            beam_levels=body.beam_levels,
+            alpha=body.alpha,
+            neutralise_mode=body.neutralise,
+            groups_by_symbol=groups,
+            label_shuffle_seed=body.label_shuffle_seed,
+        )
+        core_state.database.update_scan_job_progress(job_id, 1, 1 + total_reports)
+        if core_state.database.get_scan_job_state(job_id) == "cancelled":
+            raise _ScanCancelled()
+        reports: list[dict[str, object]] = []
+        for index, row in enumerate(board.get("top") or []):
+            report = quant_cross.long_short_report(
+                panel,
+                list(row["formula_tokens"]),
+                quantiles=body.quantiles,
+                folds=body.folds,
+            )
+            report["test_significant"] = row.get("test_significant")
+            reports.append(report)
+            core_state.database.update_scan_job_progress(job_id, 2 + index, 1 + total_reports)
+        return {
+            "panel": quant_panel.summarise_panel(panel),
+            "board": board,
+            "reports": reports,
+            "industry_groups": {key: value for key, value in groups_info.items() if key != "groups"},
+            "caliber": {
+                "cs_spec_version": quant_cross.CS_SPEC_VERSION,
+                "panel_spec_version": quant_panel.PANEL_SPEC_VERSION,
+                "backtest_spec_version": quant_cross.BACKTEST_SPEC_VERSION,
+                "formula_spec_version": quant_factors.FORMULA_SPEC_VERSION,
+                "forward_days": body.forward_days,
+                "alpha": body.alpha,
+                "neutralise": body.neutralise,
+                "beam_width": body.beam_width,
+                "beam_levels": body.beam_levels,
+                "quantiles": body.quantiles,
+                "folds": body.folds,
+                "label_shuffle_seed": body.label_shuffle_seed,
+            },
+            "panel_snapshot": {"content_hash": body.content_hash, "file_name": body.file_name,
+                               "digest": quant_panel.panel_digest(panel)},
+        }
+
+    def _panel_mine_job_worker(core_state: CoreState, body: QuantPanelMineRequest, job_id: str) -> None:
+        try:
+            core_state.database.finish_scan_job(job_id, "done", _execute_panel_mine(core_state, body, job_id))
+        except _ScanCancelled:
+            core_state.database.finish_scan_job(job_id, "cancelled", None)
+        except Exception as error:  # noqa: BLE001
+            core_state.database.finish_scan_job(job_id, "error", {"detail": str(error)})
+
+    @app.post("/quant/panel/mine")
+    def quant_panel_mine_start(
+        body: QuantPanelMineRequest, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """QL11 + QL12：面板快照上的横截面挖掘任务，top 公式自动出报告卡（挖掘→实验闭环）。
+
+        - QL11：逐日 cross-sectional rank IC → IC 序列/ICIR + BH 校正 + 相关性去重；``neutralise``
+          非 ``none`` 时按行业分组做组内去均值/取秩，取不到行业就如实报缺口而不假装做过；
+        - QL12：对每条入选公式自动跑**成本口径**分位多空（双边计费、建仓日满仓换手）+ 分段 fold
+          稳定性 + 容量量级提示，``report_hash`` 绑定「面板快照 + 公式 + 全部口径参数」；
+        - ``label_shuffle_seed`` 给出时做标的维度标签置换自检（随机标签下榜单应为空）。
+        """
+        _require_market_plugin(core)
+        if body.neutralise not in quant_cross.NEUTRALISE_MODES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"neutralise 仅支持 {' / '.join(quant_cross.NEUTRALISE_MODES)}",
+            )
+        panel = _panel_snapshot_of(core, body.content_hash, body.file_name)
+        if not panel.get("available"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"面板不可用：{panel.get('degraded_reason') or '标的或日期不足'}",
+            )
+        if body.quantiles > len(panel["symbols"]):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"quantiles({body.quantiles}) 不能超过面板标的数({len(panel['symbols'])})",
+            )
+        fingerprint = hashlib.sha256(("panel-mine|" + body.model_dump_json()).encode("utf-8")).hexdigest()
+        running = core.database.find_running_scan_job(fingerprint)
+        if running is not None:
+            return {"ok": True, "job_id": running["job_id"], "state": "running",
+                    "reused": True, "done": running["done"], "total": running["total"]}
+        job_id = str(uuid4())
+        core.database.create_scan_job(job_id, fingerprint, {"kind": "quant_panel_mine", **body.model_dump(mode="json")})
+        threading.Thread(
+            target=_panel_mine_job_worker, args=(core, body, job_id),
+            name=f"panel-mine-{job_id[:8]}", daemon=True,
+        ).start()
+        return {"ok": True, "job_id": job_id, "state": "running", "reused": False}
+
+    @app.get("/quant/panel/mine/{job_id}")
+    def quant_panel_mine_status(job_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """QL12：挖掘闭环任务进度/结果（done 时 summary = 面板摘要 + 榜单 + 逐公式报告卡）。"""
+        job = core.database.get_scan_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="横截面挖掘任务不存在")
+        return {"ok": True, **job}
+
+    @app.post("/quant/panel/mine/{job_id}/cancel")
+    def quant_panel_mine_cancel(job_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """QL12：取消挖掘闭环（挖掘完成后逐条报告卡之间检测取消）。"""
+        return {"ok": core.database.cancel_scan_job(job_id)}
 
     def _sr_symbol_of(core_state: CoreState, artifact_id: str) -> str:
         entry = quant_pool.get_parameter_set(core_state.database, core_state.layout, artifact_id)
@@ -1745,8 +2144,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
     def _pack_symbol_of(entry: dict[str, object]) -> str:
         return str(entry.get("symbol") or "510300")
 
-    def _replay_bars(core_state: CoreState, symbol: str) -> list[dict[str, object]]:
-        bars, _provider = fetch_cn_kline(symbol, limit=250, period="day")
+    def _replay_bars(core_state: CoreState, symbol: str, window: int | None = None) -> list[dict[str, object]]:
+        resolved = quant_factors.resolve_window(window)
+        bars, _provider = fetch_cn_kline(symbol, limit=resolved["bars"], period="day")
         return bars
 
     @app.get("/quant/parameter-sets")
@@ -1762,21 +2162,39 @@ def create_app(settings: CoreSettings) -> FastAPI:
         return quant_pool.lineage(core.database, core.layout, artifact_id)
 
     @app.get("/quant/parameter-sets/{artifact_id}/replay")
-    def quant_parameter_replay(artifact_id: str, period: str = "day", core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        """确定性回放:公式对最近 K 线逐 bar 求值,tanh 仓位 × 次日收益。"""
+    def quant_parameter_replay(
+        artifact_id: str,
+        period: str = "day",
+        window: int | None = None,
+        core: CoreState = Depends(_require_session),
+    ) -> dict[str, object]:
+        """确定性回放:公式对最近 K 线逐 bar 求值,tanh 仓位 × 次日收益。
+
+        ``window``:历史窗口档位(250/750/1250),缺省用 ``quant_factors.DEFAULT_WINDOW_BARS``;
+        响应 ``window`` 字段标注请求档位与实际取回根数,上游静默截断时显式说明。
+        """
         data_installation = core.database.get_plugin_installation("official.cn-market-data")
         if data_installation is None or data_installation.state != PluginInstallationState.ENABLED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
             )
         try:
-            bars, provider = fetch_cn_kline(_sr_symbol_of(core, artifact_id), limit=250, period=period)
+            resolved = quant_factors.resolve_window(window)
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        try:
+            bars, provider = fetch_cn_kline(_sr_symbol_of(core, artifact_id), limit=resolved["bars"], period=period)
         except FeedError as error:
             return {"available": False, "degraded_reason": f"行情拉取失败:{error}"}
         replay = quant_pool.replay(core.database, core.layout, artifact_id, bars)
         if replay is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"参数集不存在:{artifact_id}")
-        return {**replay, "available": True, "source": provider}
+        return {
+            **replay,
+            "available": True,
+            "source": provider,
+            "window": quant_factors.window_provenance(resolved, bars, provider),
+        }
 
     @app.post("/quant/parameter-sets")
     def quant_parameter_publish(
@@ -1826,19 +2244,44 @@ def create_app(settings: CoreSettings) -> FastAPI:
 
     # —— 阶段 D(限定形态):确定性线性模型训练 + 发布 ——
     @app.post("/quant/models/{symbol}")
-    def quant_model_train_publish(symbol: str, payload: dict[str, object], core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        """训练线性模型(闭式岭回归,同输入同结果)并发布入池;权重纯 JSON,内核解释执行。"""
+    def quant_model_train_publish(
+        symbol: str,
+        payload: dict[str, object],
+        window: int | None = None,
+        core: CoreState = Depends(_require_session),
+    ) -> dict[str, object]:
+        """训练线性模型(特征标准化 + λ 网格 walk-forward 选择 + 闭式岭回归)并发布入池。
+
+        ``payload.lambda`` 缺省/为 "auto" 时按 λ 网格 walk-forward 选择;显式给数值则冻结该值。
+        """
         data_installation = core.database.get_plugin_installation("official.cn-market-data")
         if data_installation is None or data_installation.state != PluginInstallationState.ENABLED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
             )
         try:
-            bars, provider = fetch_cn_kline(symbol, limit=250, period="day")
-        except FeedError as error:
-            return {"available": False, "symbol": symbol, "degraded_reason": f"行情拉取失败:{error}"}
+            resolved = quant_factors.resolve_window(window)
+        except ValueError as error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        raw_lambda = payload.get("lambda")
+        if raw_lambda in (None, "", "auto"):
+            lambda_value: float | None = None
+        else:
+            try:
+                lambda_value = float(raw_lambda)
+            except (TypeError, ValueError) as error:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"lambda 必须是数值或 'auto',收到 {raw_lambda!r}",
+                ) from error
         try:
-            result = quant_models.train(bars, lambda_=float(payload.get("lambda", 1.0) or 1.0))
+            bars, provider = fetch_cn_kline(symbol, limit=resolved["bars"], period="day")
+        except FeedError as error:
+            return {"available": False, "symbol": symbol, "window": resolved,
+                    "degraded_reason": f"行情拉取失败:{error}"}
+        provenance = quant_factors.window_provenance(resolved, bars, provider)
+        try:
+            result = quant_models.train(bars, lambda_=lambda_value)
         except ValueError as error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
         entry = quant_pool.publish_model(
@@ -1850,9 +2293,10 @@ def create_app(settings: CoreSettings) -> FastAPI:
             feature_order=result["feature_order"],
             metrics=result["metrics"],
             training=result["training"],
+            standardization=result["standardization"],
             note=str(payload.get("note", "") or result["note"]),
         )
-        return {**entry, "available": True, "source": provider}
+        return {**entry, "available": True, "source": provider, "window": provenance}
 
     # —— 阶段 C:实盘记录两级制(自报 / 对账单哈希锚定核验;只作筛选不参与排序) ——
     @app.post("/quant/parameter-sets/{artifact_id}/track-records")
@@ -1929,7 +2373,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
             )
         try:
-            code = quant_strategy_packs.verify_payload_integrity(entry)
+            # S1：执行前重验 Ed25519 签名（不再只比 payload 哈希——那两个字段同在一份
+            # 本地 JSON 里，同时改掉即可绕过「只有签名包才执行」）。
+            code = quant_strategy_packs.verify_payload_integrity(
+                entry, _pinned_public_key_pem(core.settings)
+            )
         except ValueError as error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
         try:
@@ -2623,11 +3071,22 @@ def create_app(settings: CoreSettings) -> FastAPI:
         return identity.as_dict()
 
     @app.get("/instruments/lookup")
-    def lookup_instrument(q: str) -> list[dict[str, str]]:
+    def lookup_instrument(
+        q: str, core: CoreState = Depends(_require_session)
+    ) -> list[dict[str, str]]:
         """M4-E01 · 标的查找：6 位码 → 名称；中文 → 6 位码（覆盖 A 股与场内 ETF）。
 
         名称源沿用平台已在用的行情供应方（东财搜索建议 / 腾讯 smartbox），不新接主数据。
-        非法输入或无命中一律返回空列表（不抛 500）。与 `/instruments/resolve` 一致，不涉用户数据。
+        非法输入或无命中一律返回空列表（不抛 500）。与 `/instruments/resolve` 的差异：
+        本端点**会外呼第三方**（`instrument_lookup` 里的东财/腾讯），而 `/instruments/resolve`
+        是纯本地归一化、不碰网络。
+
+        T9（用户视角路线图 2026-09-26）：据此**加上会话鉴权**。此前它是全 Core 仅有的
+        两个无鉴权端点之一（另一个是 `/instruments/resolve`，那个的豁免理由成立——
+        纯本地计算、无出网、无用户数据）。本端点不同：未鉴权即可借宿主代理反复外呼
+        第三方搜索接口，而它又是搜索框逐字触发的高频端点。
+        前端经 `client.request` 调用，本来就带 `X-Core-Session-Token`（桥接与直连两条路
+        都注入），因此加守卫对用户无感。
         """
         return lookup_instruments(q)
 
@@ -2933,7 +3392,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
         """从制品构造确定性打分函数;返回 (配置中冻结的函数名, 函数)。"""
         if entry.get("type") == "model_weights":
             weights = [float(w) for w in entry["weights"]]  # type: ignore[arg-type]
-            return "linear_weights", lambda bars: quant_models.score_series(weights, bars)
+            # 标准化统计量随制品冻结（旧制品为 None → 恒等变换,逐位复现旧口径）
+            stats = entry.get("standardization") or None
+            return "linear_weights", lambda bars: quant_models.score_series(
+                weights, bars, standardization=stats
+            )
         tokens = [str(t) for t in entry["formula_tokens"]]  # type: ignore[arg-type]
         return "formula_tokens", lambda bars: quant_factors.evaluate_tokens(tokens, bars)
 
@@ -3133,61 +3596,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
         _audit(core, "judgment.verified", "judgment", str(judgment_id))
         return {"judgment": judgment.model_dump(mode="json"), "verification": verification.model_dump(mode="json")}
 
-    # —— 观察事项（8.3）：状态机 + 检查只追加 + dedup 防重复 ——
-    @app.post("/watch-items", status_code=status.HTTP_201_CREATED)
-    def create_watch_item(body: WatchItemCreateRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        item = longterm_service.create_watch_item(
-            core.database,
-            user_id=core.local_user_id,
-            title=body.title.strip(),
-            indicator=body.indicator.strip(),
-            condition_text=body.condition_text.strip(),
-            check_cycle=body.check_cycle,
-            source_kind=body.source_kind.strip(),
-            source_id=body.source_id,
-            dedup_key=body.dedup_key.strip(),
-        )
-        _audit(core, "watch_item.created", "watch_item", str(item.watch_id))
-        return item.model_dump(mode="json")
-
-    @app.get("/watch-items")
-    def list_watch_items(status_filter: str | None = None, core: CoreState = Depends(_require_session)) -> list[dict[str, object]]:
-        if status_filter is not None and status_filter not in {"active", "paused", "triggered", "closed"}:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"非法状态:{status_filter}")
-        items = core.database.list_watch_items(core.local_user_id, status_filter)
-        return [item.model_dump(mode="json") for item in items]
-
-    @app.post("/watch-items/{watch_id}/checks")
-    def record_watch_check(watch_id: UUID, body: WatchCheckRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        try:
-            item, check, written = longterm_service.record_watch_check(
-                core.database, core.local_user_id, watch_id,
-                observed=body.observed, triggered=body.triggered,
-                note=body.note, evidence_refs=body.evidence_refs,
-                dedup_value=body.dedup_value,
-            )
-        except ValueError as error:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
-        return {
-            "watch_item": item.model_dump(mode="json"),
-            "check": check.model_dump(mode="json"),
-            "written": written,
-        }
-
-    @app.get("/watch-items/{watch_id}/checks")
-    def list_watch_checks(watch_id: UUID, core: CoreState = Depends(_require_session)) -> list[dict[str, object]]:
-        if core.database.get_watch_item(watch_id, core.local_user_id) is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"观察事项不存在:{watch_id}")
-        return [c.model_dump(mode="json") for c in core.database.list_watch_checks(watch_id)]
-
-    @app.post("/watch-items/{watch_id}/transition")
-    def transition_watch_item(watch_id: UUID, body: WatchTransitionRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        try:
-            item = longterm_service.transition_watch_item(core.database, core.local_user_id, watch_id, body.target)
-        except ValueError as error:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
-        _audit(core, "watch_item.transition", "watch_item", str(watch_id))
-        return item.model_dump(mode="json")
+    # A06（架构改进路线图 2026-09-25）：观察事项域（5 条路由）整体迁至
+    # `api/routers/watch_items.py`。在**原位置**注册，保持路由顺序不变。
+    app.include_router(build_watch_items_router(_require_session, _audit))
 
     # —— 阶段 4：同步客户端（st.18257.xyz relay） ——
 
@@ -3257,7 +3668,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         except RelayHTTPError as error:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                                 detail=f"中转服务不可达:{error}") from error
-        except Exception as error:  # noqa: BLE001 - relay 契约外的异常一律如实 502，不透传堆栈
+        except Exception as error:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                                 detail=f"配对码生成失败:{error}") from error
         _audit(core, "sync.pairing_code_created", "sync", str(info.get("code")))
@@ -3666,11 +4077,6 @@ def create_app(settings: CoreSettings) -> FastAPI:
         if not core.database.delete_research_template(template_id, core.local_user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"模板不存在:{template_id}")
         return {"deleted": True}
-
-    # —— 通知分级与合并（8.5） ——
-    @app.get("/notifications/graded")
-    def notifications_graded(core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        return longterm_service.grade_and_merge_notifications(core.database.list_notifications(core.local_user_id))
 
     # —— 数据源质量（8.5 + F02/F03） ——
     @app.get("/data-source/quality")
@@ -4093,401 +4499,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
         _audit(core, "brief.today.persisted", "today_brief", str(brief.brief_id))
         return brief
 
-    def _load_notify_prefs(core: CoreState) -> PersonalNotifyPrefs:
-        """个人中心通知偏好；未保存过时用默认值（站内/外部全开、无免打扰）。"""
-        settings = core.database.get_personal_settings(core.local_user_id)
-        return settings.notify if settings is not None else PersonalNotifyPrefs()
-
-    def _quiet_hours_active(prefs: PersonalNotifyPrefs) -> bool:
-        """免打扰按本机时区 HH:MM 判断（用户在界面上填的是墙上时间）；支持跨零点窗口。"""
-        if not prefs.quiet_hours_enabled:
-            return False
-        local_now = datetime.now().astimezone()
-        minutes = local_now.hour * 60 + local_now.minute
-
-        def _to_minutes(value: str) -> int:
-            hour, minute = value.split(":")
-            return int(hour) * 60 + int(minute)
-
-        start = _to_minutes(prefs.quiet_start)
-        end = _to_minutes(prefs.quiet_end)
-        if start == end:
-            return True
-        if start < end:
-            return start <= minutes < end
-        return minutes >= start or minutes < end
-
-    def _is_triage_suppressed(notification: Notification) -> bool:
-        """JV08：这条通知是否被语义分诊判为「不弹站内、不外发」。
-
-        **只认 `triage.suppressed`**，不去猜 `last_delivery_error` 的文案——文案会改，
-        标记不会（与 `JevUnavailable.status_code` 的取舍同一条纪律）。
-        `triage is None`（没分诊）一律视为**不压制**：没评过的东西不能当作「已判低相关」。
-        """
-        return notification.triage is not None and notification.triage.suppressed
-
-    def _notification_triage_context(
-        core: CoreState,
-        notification: Notification,
-        theses_by_id: dict[str, Thesis],
-        holdings_by_instrument: dict[str, Holding],
-    ) -> dict[str, object]:
-        """JV08：单条通知的「持仓上下文」白名单（字段范围见《契约》§M）。
-
-        只取判定「这条消息是否实质影响该标的」必需的片段：标的的持仓/自选状态与标签、
-        该标的的核心假设、触发条件原文。**明确不带** `Holding.strategy_note`（用户自述原文，
-        与判定无关，带上只是扩大出网面）。
-        """
-        instrument = str(notification.instrument or "")
-        holding = holdings_by_instrument.get(instrument)
-        thesis = theses_by_id.get(str(notification.thesis_id or ""))
-        return {
-            "holding_status": holding.status.value if holding is not None else "",
-            "label": holding.label if holding is not None else "",
-            "conditions": [notification.triggered_by],
-            "core_assumptions": list(thesis.core_assumptions) if thesis is not None else [],
-        }
-
-    def _apply_notification_triage(notifications: list[Notification], core: CoreState) -> None:
-        """JV08：落库前给每条通知打语义分诊结论（**原地修改**，不改列表长度、不改顺序）。
-
-        **软校验铁律**：本函数**绝不删除**任何通知。判为低相关的条目照常落库，只是带上
-        `triage.suppressed=True`，由呈现层与投递层决定「不弹、不发」——留痕可查（§M）。
-
-        **不重复出网**：同 dedup 键的通知若已带分诊结论落过库，直接复用，不再送评。
-        按小时桶反复评估时这条是成本红线（R1：只按输入 token 计费）。
-
-        `build_shard_reviewer` 返回 None（总闸关闭 / Jev 未启用）时**直接返回**，
-        一个字段都不写——`triage` 保持 None，与接入前逐字节一致。
-        """
-        reviewer = jev_client.build_shard_reviewer(
-            core, resolve_store(core.database), purpose="jev:notify-triage"
-        )
-        if reviewer is None or not notifications:
-            return
-        existing = {
-            notification_dedup_key(item): item.triage
-            for item in core.database.list_notifications(core.local_user_id)
-            if item.triage is not None
-        }
-        theses_by_id = {str(item.thesis_id): item for item in core.database.list_theses(core.local_user_id)}
-        holdings_by_instrument = {
-            item.instrument: item for item in core.database.list_holdings(core.local_user_id)
-        }
-        items: list[dict[str, object]] = []
-        # 同一 dedup 键 = **同一条提醒**。同批次内若出现重复键（用户把同一条件写了两遍就会），
-        # 只送评一次、结论共用——否则后一条的判定会覆盖前一条，让前者**静默拿到别人的结论**。
-        # 顺带也省掉一次重复的输入 token。
-        queued: dict[str, list[Notification]] = {}
-        for notification in notifications:
-            dedup = notification_dedup_key(notification)
-            prior = existing.get(dedup)
-            if prior is not None:
-                # 已经分诊过 → 复用结论，不重复出网（同一 dedup 键 = 同一条提醒）。
-                notification.triage = prior
-                continue
-            group = queued.setdefault(dedup, [])
-            group.append(notification)
-            if len(group) > 1:
-                continue
-            items.append({
-                "dedup_key": dedup,
-                "notification": notification,
-                "context": _notification_triage_context(
-                    core, notification, theses_by_id, holdings_by_instrument
-                ),
-            })
-        if not items:
-            return
-        bundle = jev_triage_shards(items)
-        shard_results = reviewer(bundle) if bundle.get("shards") else []
-        findings = jev_triage_findings(shard_results)
-        models = {str(item.get("model")) for item in shard_results if item.get("model")}
-        model = "/".join(sorted(models)) if models else None
-        for entry in items:
-            finding = findings.get(str(entry["dedup_key"]))
-            if finding is None:
-                continue
-            triage = NotificationTriage(**finding, model=model)  # type: ignore[arg-type]
-            for notification in queued[str(entry["dedup_key"])]:
-                notification.triage = triage
-
-    def _persist_evaluated(notifications: list[Notification], core: CoreState) -> list[Notification]:
-        # E4：规则去重与投递状态分离。失败通知在退避窗口到期后再次尝试，
-        # 不会因为 dedup 记录永久吞掉提醒；成功通知不重复外呼。
-        store = resolve_store(core.database)
-        now = datetime.now(UTC)
-        # 个人中心通知偏好：免打扰时段内或外部通道关闭时，跳过投递且不计退避，
-        # 保持 pending——窗口结束（或重新开启通道）后的下一次 evaluate 会正常重试。
-        prefs = _load_notify_prefs(core)
-        external_allowed = prefs.external_enabled and not _quiet_hours_active(prefs)
-        hold_reason = None if external_allowed else (
-            "免打扰时段内暂不投递" if _quiet_hours_active(prefs) else "外部通道已在个人中心关闭"
-        )
-        # v21 M2-02：daily/weekly 汇总节奏——外部投递不逐条即时发，等窗口期聚合一次。
-        digest_due, digest_key = digest_window(prefs, datetime.now().astimezone())
-        digest_label = {"daily": "每日", "weekly": "每周"}.get(prefs.frequency)
-        digest_hold_reason = (
-            f"{digest_label}汇总节奏：外部提醒将在窗口期聚合为一条汇总发送" if digest_label else None
-        )
-        persisted = {
-            notification_dedup_key(item): item
-            for item in core.database.list_notifications(core.local_user_id)
-        }
-        delivered_count = 0
-        digest_held: list[tuple[str, Notification]] = []
-        digest_row: Notification | None = None
-        result_notifications: list[Notification] = []
-        for notification in notifications:
-            dedup = notification_dedup_key(notification)
-            previous = persisted.get(dedup)
-            if previous is not None and previous.delivery_status == "delivered":
-                retained = notification.model_copy(update={
-                    "notification_id": previous.notification_id,
-                    "read": previous.read,
-                    "delivery_status": previous.delivery_status,
-                    "delivery_attempts": previous.delivery_attempts,
-                    "next_retry_at": previous.next_retry_at,
-                    "last_delivery_error": previous.last_delivery_error,
-                })
-                core.database.upsert_notification(retained, dedup)
-                result_notifications.append(retained)
-                continue
-
-            # JV08：语义分诊判为低相关 → **不弹站内、不外发**，但**照常落库**（留痕可查）。
-            # 放在「已投递」判定之后：已经发出去过的不因为分诊结论变化而「撤回」。
-            # `delivery_status` 仍记 pending——它的取值域只有 pending/delivered/failed，
-            # 而「被有意压制」与「发送失败」是两件事，故用 `triage.suppressed` 作为权威标记、
-            # 用 `last_delivery_error` 给人话原因（`GET /notifications/triage` 据此翻出来）。
-            if notification.triage is not None and notification.triage.suppressed:
-                held = notification.model_copy(update={
-                    "notification_id": previous.notification_id if previous is not None else notification.notification_id,
-                    "read": previous.read if previous is not None else notification.read,
-                    "delivery_attempts": previous.delivery_attempts if previous is not None else 0,
-                    "delivery_status": "pending",
-                    "next_retry_at": None,
-                    "last_delivery_error": "Jev 分诊判为低相关，未通知（可在通知中心「已分诊未通知」翻到）",
-                })
-                core.database.upsert_notification(held, dedup)
-                persisted[dedup] = held
-                result_notifications.append(held)
-                continue
-            if previous is not None and previous.next_retry_at is not None and previous.next_retry_at > now:
-                result_notifications.append(previous)
-                continue
-
-            if not external_allowed:
-                held = notification.model_copy(update={
-                    "notification_id": previous.notification_id if previous is not None else notification.notification_id,
-                    "read": previous.read if previous is not None else notification.read,
-                    "delivery_attempts": previous.delivery_attempts if previous is not None else 0,
-                    "delivery_status": "pending",
-                    "next_retry_at": None,
-                    "last_delivery_error": hold_reason,
-                })
-                core.database.upsert_notification(held, dedup)
-                persisted[dedup] = held
-                result_notifications.append(held)
-                continue
-
-            if digest_label is not None:
-                # 汇总节奏：外部不逐条投递，登记待汇总；站内呈现与免打扰逻辑不受影响。
-                held = notification.model_copy(update={
-                    "notification_id": previous.notification_id if previous is not None else notification.notification_id,
-                    "read": previous.read if previous is not None else notification.read,
-                    "delivery_attempts": previous.delivery_attempts if previous is not None else 0,
-                    "delivery_status": "pending",
-                    "next_retry_at": None,
-                    "last_delivery_error": digest_hold_reason,
-                })
-                core.database.upsert_notification(held, dedup)
-                persisted[dedup] = held
-                result_notifications.append(held)
-                digest_held.append((dedup, held))
-                continue
-
-            attempts = (previous.delivery_attempts if previous is not None else 0) + 1
-            current = notification.model_copy(update={
-                "notification_id": previous.notification_id if previous is not None else notification.notification_id,
-                "read": previous.read if previous is not None else notification.read,
-                "delivery_attempts": attempts,
-            })
-            receipts = deliver_notification(current, store)
-            delivered = any(bool(item.get("delivered")) for item in receipts)
-            failed_receipt = next((item for item in receipts if not item.get("delivered")), None)
-            detail = "未配置投递通道，保持站内 pending" if failed_receipt and "未配置" in str(failed_receipt.get("detail", "")) else ("投递失败，请检查通道配置与网络" if failed_receipt else None)
-            updated = current.model_copy(update={
-                "delivery_status": "delivered" if delivered else "failed",
-                "next_retry_at": None if delivered else now + timedelta(minutes=min(60, 2 ** min(attempts - 1, 6))),
-                "last_delivery_error": None if delivered else detail,
-            })
-            core.database.upsert_notification(updated, dedup)
-            persisted[dedup] = updated
-            result_notifications.append(updated)
-            if delivered:
-                delivered_count += 1
-        # v21 M2-02：窗口期到 → 聚合一条 digest 外发（read=True，不在站内重复打扰）；
-        # 投递成功则被聚合的提醒外部投递视为完成。每周期至多一条：按周期 dedup 键查库，
-        # 已成功投递的周期直接跳过（失败则计入重试，不重置退避语义）。
-        if digest_label is not None and digest_due and digest_key and digest_held:
-            existing_digest = core.database.get_notification_by_dedup(digest_key)
-            if existing_digest is None or existing_digest.delivery_status != "delivered":
-                titles = [held.title for _, held in digest_held]
-                digest = Notification(
-                    notification_id=uuid4(),
-                    user_id=core.local_user_id,
-                    triggered_by=f"notify.digest:{prefs.frequency}",
-                    condition_kind="observation_metric",
-                    title=f"{digest_label}通知汇总（{len(digest_held)} 条）",
-                    summary="；".join(titles[:5]) + ("…" if len(titles) > 5 else ""),
-                    action_mode="observe",
-                    evidence_refs=[],
-                    created_at=now,
-                    read=True,
-                )
-                receipts = deliver_notification(digest, store)
-                digest_delivered = any(bool(item.get("delivered")) for item in receipts)
-                failed_receipt = next((item for item in receipts if not item.get("delivered")), None)
-                digest_row = digest.model_copy(update={
-                    "delivery_status": "delivered" if digest_delivered else "failed",
-                    "delivery_attempts": 1,
-                    "next_retry_at": None,
-                    "last_delivery_error": None if digest_delivered else (
-                        "汇总投递未完成：" + str(failed_receipt.get("detail", "")) if failed_receipt else "汇总投递未完成"
-                    ),
-                })
-                core.database.upsert_notification(digest_row, digest_key)
-                _audit(
-                    core,
-                    "notification.digest.delivered" if digest_delivered else "notification.digest.failed",
-                    "notification",
-                    digest_key,
-                )
-                if digest_delivered:
-                    delivered_count += 1
-                    flushed: dict[str, Notification] = {}
-                    for dedup, held in digest_held:
-                        done = held.model_copy(update={
-                            "delivery_status": "delivered",
-                            "last_delivery_error": f"已并入{digest_label}汇总投递",
-                        })
-                        core.database.upsert_notification(done, dedup)
-                        flushed[dedup] = done
-                    result_notifications = [
-                        flushed.get(notification_dedup_key(item), item)
-                        for item in result_notifications
-                    ]
-        if digest_row is not None:
-            result_notifications.append(digest_row)
-        if delivered_count:
-            _audit(core, "notification.delivered", "notification", str(delivered_count))
-        return result_notifications
-
-    @app.get("/notifications/channels", response_model=list[dict[str, object]])
-    def notification_channels(core: CoreState = Depends(_require_session)) -> list[dict[str, object]]:
-        return channel_status(resolve_store(core.database))
-
-    @app.get("/notifications/pending", response_model=list[Notification])
-    def pending_notifications(core: CoreState = Depends(_require_session)) -> list[Notification]:
-        # GET 不写库、不投递；规则评估仅在内存中生成当前预览，持久化与外部投递
-        # 统一由显式 POST /notifications/evaluate 或 worker 负责。
-        #
-        # JV08：被语义分诊判为低相关的条目**不进这个列表**（这就是「不再弹通知」），
-        # 但它们并没有消失——`GET /notifications/triage` 能把它们翻出来（留痕可查）。
-        #
-        # 压制状态必须按 **dedup 键**从库里读，不能只看对象自身的 `triage`：
-        # `evaluate_notifications` 是纯规则评估、不跑分诊，它新构造出来的对象 `triage` 恒为
-        # None——只看对象就会把已压制的条目从「内存预览」这条路径又放回列表，等于没压。
-        stored = core.database.list_notifications(core.local_user_id)
-        suppressed_keys = {
-            notification_dedup_key(item) for item in stored if _is_triage_suppressed(item)
-        }
-        persisted = [
-            item
-            for item in stored
-            if not item.read and notification_dedup_key(item) not in suppressed_keys
-        ]
-        evaluated = [
-            item
-            for item in evaluate_notifications(core.database, core.local_user_id)
-            if notification_dedup_key(item) not in suppressed_keys
-        ]
-        by_key = {notification_dedup_key(item): item for item in persisted}
-        # 已落库的投递状态（failed/delivered、重试时间）优先于本次内存预览，
-        # 否则 GET 会把失败详情覆盖成默认 pending，用户无法判断是否可重试。
-        merged = list({**{notification_dedup_key(item): item for item in evaluated}, **by_key}.values())
-        # 个人中心通知偏好：关闭站内提醒或处于免打扰时段时，站内列表不外露。
-        # 通知本身已由 evaluate 落库，免打扰窗口结束后未读通知自然恢复可见。
-        prefs = _load_notify_prefs(core)
-        if not prefs.in_app_enabled or _quiet_hours_active(prefs):
-            return []
-        return merged
-
-    @app.get("/notifications/triage", response_model=NotificationTriageReport)
-    def notification_triage_report(
-        limit: int = 50, core: CoreState = Depends(_require_session)
-    ) -> NotificationTriageReport:
-        """JV08：「已分诊未通知」+ 分诊统计（软校验铁律的落点——压制不等于删除）。
-
-        读库、不出网、不写库。被压制的条目在这里可以逐条翻到（含压制原因与两题原始结论），
-        所以「低相关不再弹通知」不会变成「低相关被静默吞掉」。
-
-        `enabled=False`（Jev 未启用 / 总闸关闭）时 `suppressed_items` 恒为空，
-        界面据此不渲染任何分诊信息——与接入前逐字节一致。
-        """
-        settings = jev_client.effective_settings(core)
-        enabled = bool(settings.enabled) and bool(
-            getattr(core.settings, "model_access_enabled", False)
-        )
-        stored = core.database.list_notifications(core.local_user_id)
-        stats = jev_triage_summary(stored)
-        suppressed_items = [item for item in stored if _is_triage_suppressed(item)]
-        models = sorted({
-            str(item.triage.model) for item in stored if item.triage is not None and item.triage.model
-        })
-        return NotificationTriageReport(
-            enabled=enabled,
-            model="/".join(models) if models else None,
-            total=int(stats["total"]),
-            notified=int(stats["notified"]),
-            suppressed=int(stats["suppressed"]),
-            unannotated=int(stats["unannotated"]),
-            impacts=dict(stats["impacts"]),
-            priorities=dict(stats["priorities"]),
-            suppressed_items=suppressed_items[: max(1, min(int(limit), 200))],
-            note=(
-                "分诊只做标注与投递取舍：不改写通知内容、不删除记录。"
-                "「未分诊」表示这一轮没有送出去评，不等于「已通过」；"
-                "被压制的条目仍在此处可查。"
-                if enabled
-                else "Jev 未启用或出网总闸关闭，本轮未做通知分诊（通知行为与接入前一致）"
-            ),
-        )
-
-    @app.post("/notifications/{notification_id}/read", response_model=Notification)
-    def mark_notification_read(
-        notification_id: UUID, core: CoreState = Depends(_require_session)
-    ) -> Notification:
-        notification = core.database.mark_notification_read(notification_id, core.local_user_id)
-        if notification is None:
-            raise HTTPException(status_code=404, detail="notification not found")
-        _audit(core, "notification.read", "notification", str(notification_id))
-        return notification
-
-    @app.post("/notifications/evaluate", response_model=list[Notification])
-    def evaluate_pending_notifications(core: CoreState = Depends(_require_session)) -> list[Notification]:
-        """worker 主动评估入口：评估 + 去重落库当前命中的通知提醒。
-
-        JV08：落库前先做一遍语义分诊（相关性 + 优先级）。**响应形状不变**——被压制的条目
-        照常出现在返回列表里（只是带 `triage` 字段），所以 worker 与既有前端无需改动；
-        「不弹」是由 `GET /notifications/pending` 的过滤与投递层的跳过实现的，
-        而不是靠从这里删掉条目（那才是静默吞）。
-        """
-        notifications = evaluate_notifications(core.database, core.local_user_id)
-        _apply_notification_triage(notifications, core)
-        notifications = _persist_evaluated(notifications, core)
-        _audit(core, "notification.rules.re-evaluated", "notification", str(len(notifications)))
-        return notifications
+    # A06（架构改进路线图 2026-09-25）：通知域（6 条路由 + 12 个辅助）整体迁至
+    # `api/routers/notifications.py`。在**原位置**注册，保持路由顺序不变。
+    app.include_router(build_notifications_router(_require_session, _audit))
 
     @app.post("/evidence/freshness/patrol", response_model=FreshnessPatrolResult)
     def evidence_freshness_patrol(core: CoreState = Depends(_require_session)) -> FreshnessPatrolResult:
@@ -4496,116 +4510,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
         _audit(core, "evidence.freshness.patrolled", "evidence", str(result.stale))
         return result
 
-    @app.get("/learning/unit/today", response_model=LearningUnit | None)
-    def today_learning_unit(core: CoreState = Depends(_require_session)) -> LearningUnit | None:
-        unit = build_today_learning_unit(core.database, core.local_user_id)
-        _audit(core, "learning.unit.produced", "learning_unit", str(unit.unit_id) if unit else "none")
-        return unit
-
-    @app.get("/learning/goals/current", response_model=LearningGoal)
-    def current_learning_goal(core: CoreState = Depends(_require_session)) -> LearningGoal:
-        goal = build_current_learning_goal(core.database, core.local_user_id)
-        _audit(core, "learning.goal.current", "learning_goal", str(goal.goal_id))
-        return goal
-
-    @app.get("/learning/activities", response_model=list[LearningActivity])
-    def list_learning_activities(core: CoreState = Depends(_require_session)) -> list[LearningActivity]:
-        return core.database.list_learning_activities(core.local_user_id)
-
-    @app.post(
-        "/learning/activities", response_model=LearningActivity, status_code=status.HTTP_201_CREATED
-    )
-    def create_learning_activity(
-        body: LearningActivityRequest, core: CoreState = Depends(_require_session)
-    ) -> LearningActivity:
-        activity = LearningActivity(
-            activity_id=uuid4(),
-            user_id=core.local_user_id,
-            unit_id=body.unit_id,
-            unit_type=LearningUnitType(body.unit_type),
-            bound_instrument=body.bound_instrument,
-            bound_instrument_label=body.bound_instrument_label,
-            objective=body.objective,
-            user_answer=body.user_answer,
-            reflection=body.reflection,
-        )
-        core.database.upsert_learning_activity(activity)
-        _audit(core, "learning.activity.created", "learning_activity", str(activity.activity_id))
-        return activity
-
-    @app.delete("/learning/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
-    def delete_learning_activity(
-        activity_id: UUID, core: CoreState = Depends(_require_session)
-    ) -> None:
-        if core.database.get_learning_activity(activity_id, core.local_user_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="learning activity not found"
-            )
-        core.database.delete_learning_activity(activity_id, core.local_user_id)
-        _audit(core, "learning.activity.deleted", "learning_activity", str(activity_id))
-
-    @app.get("/learning/reflections/export", response_model=list[LearningActivity])
-    def export_learning_reflections(core: CoreState = Depends(_require_session)) -> list[LearningActivity]:
-        """导出：仅导用户自己的学习活动与反思（含绑定的标的与日期），便于备份。"""
-        _audit(core, "learning.reflections.exported", "learning_activity", "all")
-        return core.database.list_learning_activities(core.local_user_id)
-
-    @app.post(
-        "/learning/activities/{activity_id}/propose-policy-change",
-        response_model=InvestmentPolicyVersion,
-        status_code=status.HTTP_201_CREATED,
-    )
-    def propose_policy_change_from_learning(
-        activity_id: UUID, core: CoreState = Depends(_require_session)
-    ) -> InvestmentPolicyVersion:
-        """学习 → 矛盾检测 → 原则草案：由一次已保存反思产出一份 DRAFT 原则修订。
-
-        「学习完成」不会自动改变风险权限：产出的始终是 draft，必须走
-        /investment-policies/{id}/confirm 由用户显式确认后才成为 active。
-        """
-        activity = core.database.get_learning_activity(activity_id, core.local_user_id)
-        if activity is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="learning activity not found"
-            )
-        if not activity.reflection.strip():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="没有可用的反思内容，暂无法据此建议原则变更",
-            )
-        existing = core.database.list_policies(core.local_user_id)
-        if not existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="尚无已确认的投资原则可供修订，请先建立投资原则",
-            )
-        latest = max(existing, key=lambda item: item.version)
-        draft = InvestmentPolicyVersion(
-            policy_id=uuid4(),
-            user_id=core.local_user_id,
-            version=latest.version + 1,
-            status=PolicyStatus.DRAFT,
-            investment_goal=latest.investment_goal,
-            horizon_years=latest.horizon_years,
-            liquidity_needs=latest.liquidity_needs,
-            allowed_markets=latest.allowed_markets,
-            allowed_asset_classes=latest.allowed_asset_classes,
-            risk_boundaries=latest.risk_boundaries,
-            preferred_methods=latest.preferred_methods,
-            excluded_methods=latest.excluded_methods,
-            observation_conditions=latest.observation_conditions,
-            invalidation_conditions=latest.invalidation_conditions,
-            change_reason=f"学习反思建议修订（来自学习活动 {activity.activity_id}）",
-            source_learning_activity_ids=[activity.activity_id],
-        )
-        core.database.insert_policy(draft)
-        _audit(
-            core,
-            "learning.proposed_policy_change",
-            "investment_policy",
-            str(draft.policy_id),
-        )
-        return draft
+    # A06（架构改进路线图 2026-09-25）：学习闭环域（7 条路由）整体迁至
+    # `api/routers/learning.py`。在**原位置**注册，保持路由顺序不变。
+    app.include_router(build_learning_router(_require_session, _audit))
 
     @app.get("/review/weekly", response_model=WeeklyReview)
     def weekly_review(core: CoreState = Depends(_require_session)) -> WeeklyReview:
@@ -5888,11 +5795,21 @@ def create_app(settings: CoreSettings) -> FastAPI:
         interval = max(0.0, min(body.interval_secs, 2.0))
         concurrency = max(1, min(body.concurrency, 4))
 
-        def _process_one(symbol: str, name: str, *, stagger: bool) -> dict[str, object]:
+        # T8（用户视角路线图 2026-09-26）：`interval_secs` 的语义在两条路径上原本**不一致**，
+        # 且并发路径的那个语义不是用户以为的那个。
+        #   - 串行：睡在两次取数**之间** ——「相邻两次请求至少隔 interval」，符合直觉。
+        #   - 并发：给每个 worker 传 stagger=True，于是每个 worker 在**自己开头**睡一次。
+        #     concurrency=4、interval=0.15 的真实行为是「4 个请求齐发 → 统一停 0.15s →
+        #     再 4 个齐发」——对上游限速毫无保护作用，界面上的「间隔」形同虚设。
+        # 现在两条路径共用同一个**按请求发起时刻限速**的闸门：任意两次取数的**开始**
+        # 时间至少相隔 interval，而最多 concurrency 个请求可同时在途。
+        # 并发度与请求频率由此成为两个独立旋钮，语义与串行对齐。
+        pace = _RequestPacer(interval)
+
+        def _process_one(symbol: str, name: str) -> dict[str, object]:
             if progress is not None:
                 progress.raise_if_cancelled()
-            if stagger and interval > 0:
-                time.sleep(interval)
+            pace.wait()
             try:
                 bars, provider = _tactic_bars(core, symbol)
             except HTTPException as error:
@@ -5915,6 +5832,10 @@ def create_app(settings: CoreSettings) -> FastAPI:
             if sector_meta is not None:
                 row["sector_code"] = sector_meta[0]
                 row["sector_name"] = sector_meta[1]
+            # 第四轮审计（domain-3）：形态探测器异常时逐票带出「哪些形态未参与评分」，
+            # 否则该票质量分会无声偏低，而排名照常输出、界面无从分辨。
+            if snap.get("degraded_tactics"):
+                row["degraded_tactics"] = snap["degraded_tactics"]
             return row
 
         if concurrency > 1:
@@ -5923,7 +5844,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             from concurrent.futures import ThreadPoolExecutor
 
             with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="scan-engine") as pool:
-                futures = [pool.submit(_process_one, symbol, name, stagger=True) for symbol, name in candidates]
+                futures = [pool.submit(_process_one, symbol, name) for symbol, name in candidates]
                 for future in futures:
                     row = future.result()
                     results.append(row)
@@ -5931,10 +5852,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
                         progress.tick()
             return results
 
-        for index, (symbol, name) in enumerate(candidates):
-            if index > 0 and interval > 0:
-                time.sleep(interval)
-            row = _process_one(symbol, name, stagger=False)
+        for symbol, name in candidates:
+            row = _process_one(symbol, name)
             results.append(row)
             if progress is not None and count_progress:
                 progress.tick()
@@ -6420,7 +6339,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
         judgement: dict[str, object] | None = None
         jev_meta: dict[str, object] | None = None
         jev_note = ""
-        jev_settings = _jev_effective_settings(core)
+        # A06：`_jev_effective_settings` 随 Jev 域迁到 api/routers/jev.py，并公开为
+        # `effective_jev_settings`（战法雷达与协同流水线共用同一取配置口径）。
+        jev_settings = effective_jev_settings(core)
         if not jev_settings.enabled:
             jev_note = "Jev 未启用（设置 → Jev 决策模型），判定层由 chat 承担"
         else:
@@ -6442,6 +6363,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
                         bars=bars,
                         sector=sector,
                         question=body.question,
+                        # 提示词里的「本次请求上限」必须是真的：bars_limit 可取 60-500
+                        bars_limit=body.bars_limit,
                     ),
                     tactics_ai.jev_questions(),
                     purpose="jev:tactics-review",
@@ -6481,6 +6404,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 bars=bars,
                 sector=sector,
                 question=body.question,
+                # 同上：提示词不许写死 250
+                bars_limit=body.bars_limit,
             )
             narrative_model = f"{profile.name}／{profile.model}"
             try:
@@ -6625,30 +6550,90 @@ def create_app(settings: CoreSettings) -> FastAPI:
         )
 
     @app.post("/evidence/dedup")
-    def evidence_dedup(core: CoreState = Depends(_require_session)) -> dict[str, object]:
+    def evidence_dedup(
+        body: EvidenceDedupRequest | None = None, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
         """v23 历史重复证据清理：按（类型 + 标题 + 发布日期）分组，保留最早入账一条，其余删除。
 
         针对哈希归一化之前已入库的重复（同内容公告被换稿号各入一条）；归一化之后
         拉取侧已不再产生新重复。删除仅限本租户证据账本，且写入审计。
+
+        第四轮审计（api-7）补上破坏性操作的纪律。改造前点一下就**硬删除**：
+        - 无确认、无预览、无删除清单，界面只回一句「已清理 N 条」；
+        - 分组键只靠标题，同一家公司同一天发的同标题**不同**公告
+          （如进展公告与更正公告）会被判为重复而删掉；
+        - 审计只记 `removed_count`，没有 id 清单，误删后无法逐条追溯，只能回滚整库备份。
+
+        现在：①默认 `dry_run`，先返回待删清单让用户过目；②必须显式 `confirm: true`
+        才执行；③分组键补上 `content_hash`——**内容相同**才算重复，标题相同但内容不同
+        的两条不再被误伤（这正是本该有的判据）；④审计写入被删的 id 清单。
         """
+        request = body or EvidenceDedupRequest()
         items = core.database.list_evidence(core.local_user_id)
-        groups: dict[tuple[str, str, str], list[Evidence]] = {}
+        groups: dict[tuple[str, str, str, str], list[Evidence]] = {}
         for item in items:
             title_key = item.summary.split("・")[0].strip()
             published = item.published_at or item.observed_at or item.collected_at
+            # 分组键维持原样（类型 + 标题 + 发布日期）——**不要**把 content_hash 并进来。
+            #
+            # 我一度把 `content_hash` 加进分组键，想避免「同公司同日同标题但内容不同的
+            # 两条」被误判为重复。实测发现那样做会让本端点**彻底失去意义**：它要清理的
+            # 正是哈希归一化**之前**入账的历史重复，而那批重复的 content_hash 天然
+            # 各不相同（旧哈希含稿号）——加了哈希，这些行永远进不了同一组，一条也清不掉。
+            # `test_evidence_dedup_removes_historical_duplicates` 正是这个场景。
+            #
+            # 因此正确做法不是改判据（会否定端点存在意义），而是**把破坏性变成可见的**：
+            # 默认 dry_run 先把待删清单（连同各自的 content_hash 一起）摊给用户过目，
+            # 显式 confirm 才真删，审计写 id 清单。误伤可发现、可中止、可追溯。
             key = (item.evidence_type, title_key, published.isoformat()[:10])
             groups.setdefault(key, []).append(item)
-        removed = 0
+
+        planned: list[dict[str, str]] = []
         for bucket in groups.values():
             if len(bucket) <= 1:
                 continue
             bucket.sort(key=lambda entry: (entry.collected_at, str(entry.evidence_id)))
             for extra in bucket[1:]:
-                if core.database.delete_evidence(extra.evidence_id, core.local_user_id):
-                    removed += 1
+                planned.append({
+                    "evidence_id": str(extra.evidence_id),
+                    "summary": extra.summary[:120],
+                    "type": str(extra.evidence_type),
+                    "collected_at": extra.collected_at.isoformat(),
+                    # 带上 content_hash：分组键不含它（见上），用户靠它判断这组是否真的同内容
+                    "content_hash": extra.content_hash,
+                })
+
+        if request.dry_run or not request.confirm:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "removed": 0,
+                "would_remove": len(planned),
+                "remaining": len(items),
+                "candidates": planned[:200],
+                "detail": (
+                    f"预览：{len(planned)} 条被判为重复（各组保留最早入账一条），尚未删除任何数据。"
+                    "确认无误后再以 confirm=true 调用。"
+                ),
+            }
+
+        removed = 0
+        removed_ids: list[str] = []
+        for entry in planned:
+            if core.database.delete_evidence(UUID(entry["evidence_id"]), core.local_user_id):
+                removed += 1
+                removed_ids.append(entry["evidence_id"])
         if removed:
+            # 审计写入 id 清单（此前只有 count，误删无法逐条追溯）
             _audit(core, "evidence.dedup", "removed_count", str(removed))
-        return {"ok": True, "removed": removed, "remaining": len(items) - removed}
+            _audit(core, "evidence.dedup.ids", "evidence_ids", ",".join(removed_ids))
+        return {
+            "ok": True,
+            "dry_run": False,
+            "removed": removed,
+            "remaining": len(items) - removed,
+            "candidates": planned[:200],
+        }
 
     @app.get("/evidence/announcements/{symbol:path}", response_model=AnnouncementBatch)
     def instrument_announcements(
@@ -7193,15 +7178,16 @@ def create_app(settings: CoreSettings) -> FastAPI:
         )
         return overreach, completeness
 
-    @app.post("/evidence/stock-research-report")
-    def stock_research_report(
-        body: StockResearchReportRequest, core: CoreState = Depends(_require_session)
+    def _stock_research_report_sync(
+        body: StockResearchReportRequest, core: CoreState
     ) -> dict[str, object]:
-        """AI 个股研究报告（v21 用户追加）：手动选股 → 新闻/公告/财报/估值 + K 线战法快照 → 模型报告。
+        """AI 个股研究报告的实际生成体（T10：改为后台任务后，本函数由任务线程调用）。
+
+        手动选股 → 新闻/公告/财报/估值 + K 线战法快照 → 模型报告。
 
         证据铁律：五类输入各自如实标注「取到/取数失败」，失败来源不编造；模型要求
         每条判断挂 [S1..S5] 来源引用，输出无 citations 视为解析失败不返回报告
-        （与宏观分析 ADR-0006 同一约束）。报告不落库、不入证据账本，纯即时返回。
+        （与宏观分析 ADR-0006 同一约束）。
         """
         installation = core.database.get_plugin_installation("official.cn-market-data")
         if installation is None or installation.state != PluginInstallationState.ENABLED:
@@ -7792,9 +7778,149 @@ def create_app(settings: CoreSettings) -> FastAPI:
             core.database.insert_ai_research_report(record)
             response["report_id"] = report_id
             response["is_draft"] = record["is_draft"]
-        except Exception:  # noqa: BLE001 - 持久化尽力而为，生成结果优先交付
-            pass
+            response["persisted"] = True
+        except Exception:
+            # S3（用户视角路线图 2026-09-26）：原实现是 `pass`，落库失败后端点仍返回 200
+            # + 完整报告，但响应里没有 report_id 键——用户读完关掉，报告从未写库、无 id
+            # 可回取、不会出现在 /ai-research/reports，界面零提示。两次按 S7 口径可达各
+            # 8 分钟的付费调用凭空蒸发。现在显式置 persisted=False 并记日志；细节不外泄
+            # （与 S4 的兜底处理器同一原则），前端据此给出「未保存」告警。
+            logger.exception("个股研报落库失败（已交付但未保存） subject=%s", symbol)
+            response["persisted"] = False
         return response
+
+    # ------------------------------------------------------------------
+    # T10（用户视角路线图 2026-09-26）：个股深研生成改后台任务。
+    #
+    # 改造前 POST /evidence/stock-research-report 是一个**同步**请求：单份最坏 6 次模型
+    # 调用 × 2 次重试 × 120s ≈ 24 分钟，全程占住一个请求线程。用户切页面、崩溃、重启，
+    # 已付费的调用凭空蒸发，且服务端没有任何可重挂的凭据——界面只能提示「请勿关闭窗口」。
+    #
+    # 现在 POST 只建任务并立即返回 job_id，实际生成在后台线程进行；进度/结果/取消走
+    # 三个配套端点。形态与 v29 的 scan_jobs 完全一致（含 S2 的僵尸任务处理口径）。
+    # ------------------------------------------------------------------
+
+    @app.post("/evidence/stock-research-report")
+    def stock_research_report_start(
+        body: StockResearchReportRequest, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """建任务并立即返回；同输入指纹的运行中任务直接命中，不重复烧模型。"""
+        installation = core.database.get_plugin_installation("official.cn-market-data")
+        if installation is None or installation.state != PluginInstallationState.ENABLED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="cn-market-data plugin is not enabled"
+            )
+        if not core.settings.model_access_enabled:
+            # 出网总闸关闭：不建任务（否则会留下一个注定失败的任务行）。
+            return {"ok": False, "stage": "model_access_disabled", "detail": "模型出网已关闭（STEWARD_MODEL_ACCESS=0），未发起任何模型请求"}
+        # 前置校验：无「使用中」方案时**不建任务**，直接如实回报（与原同步实现同一口径）。
+        profiles = core.database.list_model_profiles()
+        if body.profile_id is not None:
+            if next((item for item in profiles if item.profile_id == body.profile_id), None) is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="指定的模型方案不存在")
+        elif model_client.active_model_profile(profiles) is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="没有「使用中」的模型方案：先在设置页把一个方案置为使用中（研究报告依赖模型出网）",
+            )
+
+        fingerprint = hashlib.sha256(body.model_dump_json().encode("utf-8")).hexdigest()
+        running = core.database.find_running_research_job(fingerprint)
+        if running is not None:
+            return {
+                "ok": True,
+                "job_id": running["job_id"],
+                "state": "running",
+                "reused": True,
+                "stage": running.get("stage"),
+                "done": running.get("done", 0),
+                "total": running.get("total", 0),
+            }
+        job_id = str(uuid4())
+        core.database.create_research_job(job_id, fingerprint, body.model_dump(mode="json"))
+        threading.Thread(
+            target=_research_job_worker,
+            args=(core, body, job_id),
+            name=f"research-job-{job_id[:8]}",
+            daemon=True,
+        ).start()
+        return {"ok": True, "job_id": job_id, "state": "running", "reused": False, "stage": "starting"}
+
+    @app.get("/evidence/stock-research-report/{job_id}")
+    def stock_research_report_status(
+        job_id: str, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """任务进度/结果。running 返回 stage/done/total；done 时 summary 为完整报告。
+
+        响应形状与改造前 POST 的**报告体完全一致**（前端只多一次轮询），
+        终态额外带 job_id/state。
+        """
+        job = core.database.get_research_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报生成任务不存在")
+        # 注意两个「阶段」不是一回事，不能互相覆盖：
+        #   job_stage —— 任务生命周期（fetching_evidence / saving），供进度条用；
+        #   stage    —— **业务**失败原因（evidence_unavailable / parse / citation…），
+        #               改造前就在报告体里，前端据此渲染失败原因，必须原样保留。
+        payload: dict[str, object] = {
+            "ok": job["state"] == "done",
+            "job_id": job_id,
+            "state": job["state"],
+            "job_stage": job.get("stage"),
+            "done": job.get("done", 0),
+            "total": job.get("total", 0),
+        }
+        if isinstance(job.get("summary"), dict):
+            # done 与 error 都要并回业务体：error 时 summary 里存的是失败结构化返回。
+            payload.update(job["summary"])  # type: ignore[arg-type]
+        elif job["state"] == "error":
+            payload["detail"] = job.get("error") or "研报生成失败"
+        elif job["state"] == "cancelled":
+            payload["detail"] = "已取消"
+        return payload
+
+    @app.post("/evidence/stock-research-report/{job_id}/cancel")
+    def stock_research_report_cancel(
+        job_id: str, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """取消运行中的任务（阶段边界检测；已结束返回 ok=False）。"""
+        return {"ok": core.database.cancel_research_job(job_id)}
+
+    def _research_job_worker(
+        core: CoreState, body: StockResearchReportRequest, job_id: str
+    ) -> None:
+        """后台执行体：跑生成、把阶段写进任务行、终态落 summary。
+
+        取消在**阶段边界**检测：生成体内部没有协作点（一次模型调用就是一次阻塞），
+        所以取消最多等到当前那次模型调用返回才生效——如实提示，不假装能瞬时打断。
+        """
+        def cancelled() -> bool:
+            return core.database.get_research_job_state(job_id) == "cancelled"
+
+        def stage(name: str, done: int, total: int) -> bool:
+            """写阶段并顺带检测取消；返回 True 表示已被取消，应立即收工。"""
+            if cancelled():
+                return True
+            core.database.update_research_job_progress(job_id, done, total, name)
+            return False
+
+        total = 4
+        try:
+            if stage("fetching_evidence", 0, total):
+                return
+            result = _stock_research_report_sync(body, core)
+            if stage("saving", total - 1, total):
+                return
+            if result.get("ok") is True:
+                core.database.finish_research_job(job_id, "done", result)
+            else:
+                # 业务失败（证据不可用 / 引用闸门不过）也属终态，结构化回传给前端展示。
+                core.database.finish_research_job(
+                    job_id, "error", result, str(result.get("detail") or "研报生成失败")
+                )
+        except Exception as error:
+            logger.exception("研报生成任务异常 job_id=%s", job_id)
+            core.database.finish_research_job(job_id, "error", None, f"研报生成失败:{error}")
 
     def _resolve_model_profile(core: CoreState, profile_id: UUID | None) -> object:
         """v23 共用：按显式 profile_id 或「使用中」状态解析模型方案（与个股研报同一规则）。"""
@@ -8041,8 +8167,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 core.database.insert_ai_research_report(record)
                 # v32：落库 id 随响应返回，前端据此为协同修订稿挂 report_id（追问附录入口需要）。
                 response["collab_report_id"] = record["report_id"]
-            except Exception:  # noqa: BLE001 - 持久化尽力而为，执行结果优先交付
-                pass
+                response["persisted"] = True
+            except Exception:
+                # S3：同前两处语义——协同修订稿落库失败不静默，否则用户以为有归档可回看。
+                logger.exception("协同修订稿落库失败（已交付但未保存） run_id=%s", run["run_id"])
+                response["persisted"] = False
             _audit(core, "evidence.collab.completed", "run_id", run["run_id"])
         return response
 
@@ -8308,10 +8437,18 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "model": profile.model,
             "created_at": now_iso,
         }
+        persisted = True
         try:
             core.database.insert_ai_analysis_turn(turn)
-        except Exception:  # noqa: BLE001 - 持久化尽力而为，附录结果优先交付
-             pass
+        except Exception:
+            # S3（用户视角路线图 2026-09-26）只覆盖了个股研报那一处（`:7698`），
+            # **漏了追问这一处**。同样的后果：这一轮追问是真实的付费模型调用，
+            # 答案正常渲染在页面上，但从未进库——刷新/重启后消失，无法回看，
+            # 更糟的是「连续追问承接」也断了（下一次用 list_ai_analysis_turns 取
+            # 历史，取不到这条，模型不知道刚才聊过什么而答非所问），
+            # 而界面零提示，用户也不知道该重试。
+            logger.exception("追问附录落库失败（已交付但未保存） report_id=%s", report_id)
+            persisted = False
         # JV06：追问**新增的验证点**同样按优先级分诊——与主报告验证点同一个纯函数、同一个
         # `purpose`，所以两处的「暂缓」是同一把尺子（不是各写一份口径的第二种说法）。
         # 分诊失败不影响追问本身交付：验证点照常随 turn 返回，只是没有 `triage`、不排序不折叠。
@@ -8325,12 +8462,12 @@ def create_app(settings: CoreSettings) -> FastAPI:
             turn["new_watchpoints"] = triaged_points
             turn["jev_followup"] = jev_followup
         _audit(core, "evidence.report_followup.created", "report_id", report_id)
-        return {"ok": True, "turn": turn}
+        return {"ok": True, "turn": turn, "persisted": persisted}
 
     # —— Q11（2026-09-19 路线图）：补充研究取数。程序负责路由/重试/算术，模型只解释证据。——
     def _followup_supplemental_data(
         core: CoreState, base: dict[str, Any], question: str, *, now_iso: str
-    ) -> tuple[list[dict[str, Any]], "trading_calendar.TradingCalendar | None"]:
+    ) -> tuple[list[dict[str, Any]], trading_calendar.TradingCalendar | None]:
         """按问题取本轮 needed 的数据，逐项独立降级（成功/部分成功/全部失败都如实成块）。
 
         失败绝不伪装成「研究完成」：拿不到的项以 `ok=False` + 原因进块，提示词与页面都看得见；
@@ -9765,8 +9902,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
             }
             core.database.insert_ai_research_report(record)
             response["report_id"] = report_id
-        except Exception:  # noqa: BLE001 - 持久化尽力而为，生成结果优先交付
-            pass
+            response["persisted"] = True
+        except Exception:
+            # S3：同个股研报，语义一致——落库失败不静默。
+            logger.exception("方向研判落库失败（已交付但未保存） topic=%s", topic)
+            response["persisted"] = False
         return response
 
     @app.get("/slots", response_model=list[dict[str, int | str]])
@@ -10004,217 +10144,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
         core.database.delete_model_profile(profile_id)
         _audit(core, "model_profile.deleted", "model_profile", str(profile_id))
 
-    # ---- Jev 决策模型（JV02）：System One 的另一套协议，**不进** chat 方案表 ----
-    #
-    # 为什么单开一节而不是塞进 model-profiles：Jev 走 POST {base_url}/systemone，返回类型化
-    # answers（无正文生成、无需解析模型散文），与 chat/completions 是两套协议。`ModelProfile`
-    # 的「同一时刻恰好一个使用中」语义只属于 chat 链路，混进来会让两边都讲不清。
-    # 密钥同样不在本节任何响应里出现——只存凭据库引用。
-
-    def _jev_effective_settings(core: CoreState) -> JevSettings:
-        """生效配置：设置页保存值（jev_config 表）> STEWARD_JEV_* 环境变量 > 内置默认。
-
-        实现在 `jev_client.effective_settings` —— 协同流水线（`collab.py`）也要按同一优先级
-        取配置，两处各写一遍迟早漂移成两个口径，故收敛到一处。
-        """
-        return jev_client.effective_settings(core)
-
-    @app.get("/jev/config", response_model=dict[str, object])
-    def get_jev_config(core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        """读取 Jev 配置 + 官方协议上限 + 数据出网说明（设置页据此渲染与提示）。"""
-        settings = _jev_effective_settings(core)
-        return {
-            "ok": True,
-            "config": settings.model_dump(mode="json"),
-            "saved": core.database.get_jev_settings(core.local_user_id) is not None,
-            "access_enabled": core.settings.model_access_enabled,
-            "schema_version": jev_client.JEV_QUESTION_SCHEMA_VERSION,
-            "defaults": {
-                "base_url": core.settings.jev_base_url,
-                "model": core.settings.jev_model,
-                "timeout_secs": core.settings.jev_timeout_secs,
-            },
-            "limits": {
-                "choice_max_options": jev_client.JEV_CHOICE_MAX_OPTIONS,
-                "score_min_levels": jev_client.JEV_SCORE_MIN_LEVELS,
-                "score_max_levels": jev_client.JEV_SCORE_MAX_LEVELS,
-            },
-            # noul 没有 confidence，阈值在代码里——把当前口径如实暴露给界面，
-            # 避免界面上出现「置信度」这种 Jev 根本不返回的字段。
-            "noul_thresholds": {"yes": jev_client.JEV_NOUL_YES, "no": jev_client.JEV_NOUL_NO},
-            "data_handling": {
-                "trains_on_input": False,
-                "zero_data_retention": "enterprise_only",
-                # 立场（用户 2026-09-21 拍板）：**不申请**企业版 ZDR。
-                # 这不是「厂商不给」，是本项目主动不申请——所以白名单必须按最严口径执行，
-                # 不得因为「以后也许能拿到 ZDR」而放宽 state。如实暴露给界面，避免读者误以为已有 ZDR。
-                "zdr_applied": False,
-                "retention": "无固定期限（官方表述为按提供服务之合理必要期间保留）",
-                "hosted_in": "美国",
-            },
-            "notes": [
-                (
-                    "开启后 state 会出网到 TypeSafe（美国托管）：官方声明不用客户输入训练模型，"
-                    "但默认非零留存且无固定保留期，零数据留存（ZDR）仅企业版——**本项目已决定不申请 ZDR**，"
-                    "故 state 白名单按最严口径执行。"
-                ),
-                "计费只算输入 token（输出免费），state 越精简越省——与「state 数据最小化」是同一条约束。",
-                "官方声明英文精度最佳，中文（CJK）可处理但精度较低：中文场景的判定阈值须用自有样本重新标定后再依赖。",
-                (
-                    "Jev 只做「是/否、选哪个、打几分」的原子判断；判定一律作为软校验/分诊层——"
-                    "只标注、降级、排序，不改写模型原话、不阻断交付。"
-                ),
-            ],
-        }
-
-    def _normalize_jev_credential_ref(store: Any, ref: str) -> tuple[str, str | None]:
-        """把「用户粘贴的明文密钥 / 凭据尾号」规范成可长期保存的 `credential_ref`。
-
-        返回 `(引用, 说明)`；说明非 None 时前端要如实告诉用户密钥被搬到了哪里。
-
-        为什么在**服务端**做转换（chat 侧是在 `SettingsPage` 前端转换的）：
-        1. `call_jev` 用 `resolve_credential` 解析密钥，它**只认 key_id 与尾号，不认明文**。
-           明文原样存进 `jev_config.payload` 会造出一个很坏的错位——「测连通性」通过
-           （探测走 `resolve_probe_api_key`，明文可直接用），但协同流水线一调用就
-           「凭据解析失败」。用户会以为 Jev 装好了，其实一次都没跑成。
-        2. 明文密钥落 `jev_config.payload` 直接违反 P0 验收项「密钥零泄漏」。前端文案
-           已承诺「不会写进本配置」，那服务端就必须真的做到——承诺不能只靠调用方自觉。
-
-        尾号分支与 `resolve_credential` 的尾号兜底同口径：单人本机产品，允许用户凭直觉填尾号。
-        """
-        cleaned = (ref or "").strip()
-        if not cleaned:
-            return "", None
-        if model_client.looks_like_plaintext_key(cleaned):
-            record = store.store(JEV_API_KEY, cleaned)
-            return JEV_API_KEY, (
-                f"检测到明文密钥，已存入本机凭据库（key_id={record.key_id}，尾号 {record.last4}）——"
-                "配置里只留 key_id，明文不进 jev_config 表。"
-            )
-        try:
-            records = store.list_records()
-        except Exception:  # noqa: BLE001 - 凭据层不可用时按原样保存，不阻断设置页
-            records = []
-        if not any(record.key_id == cleaned for record in records):
-            matched = next(
-                (record for record in records if (record.last4 or "").upper() == cleaned.upper()),
-                None,
-            )
-            if matched is not None:
-                return matched.key_id, f"按凭据尾号匹配到 key_id={matched.key_id}，已改写为 key_id 保存。"
-        return cleaned, None
-
-    @app.put("/jev/config", response_model=dict[str, object])
-    def update_jev_config(
-        body: JevSettingsRequest, core: CoreState = Depends(_require_session)
-    ) -> dict[str, object]:
-        """保存 Jev 配置（明文密钥自动转入凭据库，配置表只留 key_id）。"""
-        existing = core.database.get_jev_settings(core.local_user_id)
-        credential_ref, credential_note = _normalize_jev_credential_ref(
-            resolve_store(core.database), body.credential_ref
-        )
-        settings = JevSettings(
-            user_id=core.local_user_id,
-            enabled=body.enabled,
-            base_url=body.base_url,
-            model=body.model,
-            credential_ref=credential_ref,
-            timeout_secs=body.timeout_secs,
-            created_at=existing.created_at if existing else datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        core.database.upsert_jev_settings(settings)
-        _audit(core, "jev_config.updated", "jev_config", str(core.local_user_id))
-        return {
-            "ok": True,
-            "saved": True,
-            "config": settings.model_dump(mode="json"),
-            "credential_note": credential_note,
-        }
-
-    def _jev_probe_key(core: CoreState, ref: str) -> tuple[str, dict[str, object] | None]:
-        """解析探测用密钥：返回 (api_key, 失败响应)。明文密钥可直接试（尚未保存也要能先测）。"""
-        store = resolve_store(core.database)
-        cleaned = (ref or "").strip()
-        api_key = model_client.resolve_probe_api_key(store, cleaned)
-        if cleaned and not api_key:
-            return "", {
-                "ok": False,
-                "latency_ms": 0,
-                "detail": (
-                    f"凭据引用「{cleaned}」在本机凭据库中不存在，也不像明文密钥；"
-                    "请粘贴密钥、填 key_id（如 jev_api_key）或填凭据尾号。"
-                ),
-            }
-        return api_key, None
-
-    @app.post("/jev/probe", response_model=dict[str, object])
-    def probe_jev_connection(
-        body: JevProbeRequest, core: CoreState = Depends(_require_session)
-    ) -> dict[str, object]:
-        """草稿态「测连通性」：只读，不读配置表、不写凭据库。
-
-        与 chat 侧 `model-profiles/probe` 同惯例——探测**不落 `model_calls`**（那边也不落），
-        因为它不是流水线调用而是用户主动的一次性自检。
-        """
-        if not core.settings.model_access_enabled:
-            return {
-                "ok": False,
-                "latency_ms": 0,
-                "detail": "模型出网总闸已关闭（STEWARD_MODEL_ACCESS=0），无法真实测试",
-            }
-        api_key, failure = _jev_probe_key(core, body.credential_ref)
-        if failure is not None:
-            return failure
-        timeout = float(body.timeout_secs or jev_client.JEV_REQUEST_TIMEOUT)
-        try:
-            reply = jev_client.probe_systemone(body.base_url, body.model, api_key, timeout=timeout)
-        except jev_client.JevUnavailable as exc:
-            return {"ok": False, "latency_ms": 0, "detail": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - 兜底：任何未预期异常都不让设置页白屏
-            return {"ok": False, "latency_ms": 0, "detail": f"连通性测试失败：{exc}"}
-
-        sample = reply.sample
-        verdict = sample.noul_verdict() or "uncertain"
-        return {
-            "ok": True,
-            "latency_ms": reply.latency_ms,
-            "detail": (
-                f"真实调用成功（模型 {reply.model}，{reply.latency_ms}ms，"
-                f"输入 {reply.input_tokens} / 输出 {reply.output_tokens} token）。"
-                f"中文探测题回执 noul={sample.noul:.2f}（{verdict}）——"
-                "明显偏离 1 提示中文判定不稳，中文场景阈值须按自有样本重新标定。"
-            ),
-            "model": reply.model,
-            "requested_model": reply.requested_model,
-            "probe_noul": sample.noul,
-            "probe_verdict": verdict,
-            "input_tokens": reply.input_tokens,
-            "output_tokens": reply.output_tokens,
-        }
-
-    @app.post("/jev/models", response_model=dict[str, object])
-    def discover_jev_models(
-        body: JevProbeRequest, core: CoreState = Depends(_require_session)
-    ) -> dict[str, object]:
-        """「拉取模型」：读官方 `GET /models`（只读，不落库、不写凭据）。
-
-        ⚠️ 官方返回形状是 `{"models": [{"name", "description", "release_date"}]}`，
-        与 OpenAI 兼容端点的 `{"data": [{"id"}]}` 不同——客户端按官方形状解析。
-        """
-        if not core.settings.model_access_enabled:
-            return {"ok": False, "models": [], "latency_ms": 0, "detail": "模型出网总闸已关闭（STEWARD_MODEL_ACCESS=0），无法拉取"}
-        api_key, failure = _jev_probe_key(core, body.credential_ref)
-        if failure is not None:
-            return {**failure, "models": []}
-        timeout = float(body.timeout_secs or jev_client.JEV_REQUEST_TIMEOUT)
-        try:
-            models = jev_client.list_jev_models(body.base_url, api_key, timeout)
-        except jev_client.JevUnavailable as exc:
-            return {"ok": False, "models": [], "latency_ms": 0, "detail": str(exc)}
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "models": [], "latency_ms": 0, "detail": f"拉取模型失败：{exc}"}
-        return {"ok": True, "models": models, "latency_ms": 0, "detail": f"拉取到 {len(models)} 个模型/别名。"}
+    # A06（架构改进路线图 2026-09-25）：Jev 决策模型域（4 条路由）整体迁至
+    # `api/routers/jev.py`。在**原位置**注册，保持路由顺序不变。
+    app.include_router(build_jev_router(_require_session, _audit))
 
     # ---- 研读图书馆（G5）----
 

@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "BriefItem": {
+      "additionalProperties": false,
+      "description": "日报单条：只收录与持仓/自选/投资逻辑直接相关的变化，总是附证据定位与数据时间。",
+      "properties": {
+        "display_order": {
+          "minimum": 0,
+          "title": "Display Order",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "related_instrument": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Related Instrument"
+        },
+        "signal": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Signal",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "data_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Time"
+        }
+      },
+      "required": [
+        "display_order",
+        "title",
+        "summary",
+        "signal"
+      ],
+      "title": "BriefItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Today Brief 日报：管家只讲与用户持仓/逻辑相关的变化，无持仓时不制造虚假个性化。",
+  "properties": {
+    "brief_id": {
+      "format": "uuid",
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "has_personalization": {
+      "default": false,
+      "title": "Has Personalization",
+      "type": "boolean"
+    },
+    "headline": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Headline",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/BriefItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "empty_reason": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Empty Reason"
+    },
+    "policy_version": {
+      "default": "1.0",
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "brief_id",
+    "user_id"
+  ],
+  "title": "TodayBrief",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/today-brief/1.0"
+}

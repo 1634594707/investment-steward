@@ -12,7 +12,7 @@ import { AppShell } from "./AppShell";
 
 /** 单对象端点返回 null（列表端点返回 [] 才是安全默认）。 */
 const OBJECT_PATHS = new Set([
-  "/health", "/personal/settings", "/investor/profile", "/brief/today", "/review/weekly",
+  "/overview", "/personal/settings", "/investor/profile", "/brief/today", "/review/weekly",
   "/learning/unit/today", "/learning/goals/current", "/research/questions/latest", "/quant/artifacts",
 ]);
 

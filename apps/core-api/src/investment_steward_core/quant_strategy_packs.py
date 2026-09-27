@@ -17,10 +17,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from investment_steward_core.storage.paths import StorageLayout
 from typing import Any
 
 from investment_steward_core.signing import canonical_bytes, verify_manifest_integrity
+from investment_steward_core.storage.paths import StorageLayout
 
 PACK_REQUIRED_FIELDS = ("name", "version", "author", "entrypoint", "symbol")
 
@@ -81,6 +81,11 @@ def import_pack(layout: StorageLayout, manifest: dict[str, Any], *, public_key_p
         "artifact_sha256": manifest["artifact_sha256"],
         "payload_sha256": payload_sha256,
         "payload": payload,
+        # S1：保存**当时被签名的规范字节**与签名本身。运行期若只重算 payload 哈希，
+        # 攻击者同时改 payload 与 payload_sha256 即可通过（两者都在同一个 JSON 里）；
+        # 保存原始签名字节才能在执行前真正再验一次 Ed25519。
+        "manifest_canonical": canonical_bytes(manifest).decode("utf-8"),
+        "signature": manifest.get("signature"),
         "signature_valid": True,
         "state": "installed",
         "imported_at": datetime.now(UTC).isoformat(),
@@ -91,9 +96,46 @@ def import_pack(layout: StorageLayout, manifest: dict[str, Any], *, public_key_p
     return entry
 
 
-def verify_payload_integrity(entry: dict[str, Any]) -> str:
-    """运行前重验包代码哈希(防目录文件被改动);返回代码文本,不一致抛 ValueError。"""
+def verify_payload_integrity(entry: dict[str, Any], public_key_pem: str | None = None) -> str:
+    """运行前重验包代码：哈希 + **Ed25519 签名**；不一致抛 ValueError。
+
+    S1（用户视角路线图 2026-09-26）：原实现只在运行期比对 `payload` 与
+    `payload_sha256`，**不再验签**（Ed25519 仅在入库时校验一次）。但这两个字段同在一份
+    本地 JSON 里——同时改掉二者即可通过检查，于是「只有签名包才执行」这条承诺在执行
+    路径上是断的。叠加 S1 修复前的沙箱逃逸，等于任意代码执行。
+
+    现在执行前对入库时保存的规范字节重新验签：篡改 payload、篡改哈希、或替换整个条目
+    都会被拒。`public_key_pem` 缺省时不验签（保留旧调用点的行为），但生产调用点必须传。
+    """
     payload = str(entry.get("payload", ""))
     if hashlib.sha256(payload.encode("utf-8")).hexdigest() != entry.get("payload_sha256"):
         raise ValueError(f"策略包 {entry.get('pack_id')} 代码哈希与签名清单不一致,拒绝执行")
+
+    if public_key_pem is not None:
+        canonical = entry.get("manifest_canonical")
+        signature = entry.get("signature")
+        if not isinstance(canonical, str) or not canonical:
+            raise ValueError(f"策略包 {entry.get('pack_id')} 缺少入库时的签名字节,无法重验签名,拒绝执行")
+        if not isinstance(signature, str) or not signature:
+            raise ValueError(f"策略包 {entry.get('pack_id')} 缺少签名,拒绝执行")
+        # `canonical_bytes` 会剔除 SELF_REFERENTIAL_FIELDS（artifact_sha256 / signature），
+        # 所以入库时保存的规范字节里本来就没有这两个字段——必须先按**条目里存的**值补回去,
+        # 才能喂给 verify_manifest_integrity。补的是存储值而非重算值：任何一个被改都会验不过。
+        manifest = json.loads(canonical)
+        manifest["artifact_sha256"] = entry.get("artifact_sha256")
+        manifest["signature"] = signature
+        try:
+            verify_manifest_integrity(manifest, public_key_pem)
+        except ValueError as error:
+            raise ValueError(
+                f"策略包 {entry.get('pack_id')} 签名重验失败,拒绝执行:{error}"
+            ) from error
+        # 关键：签名只覆盖 `manifest_canonical`，条目里的 payload 字段本身**不在签名范围内**。
+        # 只验签不比对的话，攻击者仍可改 payload + payload_sha256 而签名依旧通过。
+        # 因此以签名内的声明为权威，逐字比对条目值。
+        signed_payload = manifest.get("payload")
+        if not isinstance(signed_payload, str) or signed_payload != payload:
+            raise ValueError(
+                f"策略包 {entry.get('pack_id')} 代码与签名清单不一致,拒绝执行"
+            )
     return payload

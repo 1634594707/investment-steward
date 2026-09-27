@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "WeeklySection": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "change_to_process": {
+          "default": false,
+          "title": "Change To Process",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "title"
+      ],
+      "title": "WeeklySection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Weekly Review 周报：逻辑变化、未完成研究、决定与结果对照、下周建议；原则修改进入确认流程。",
+  "properties": {
+    "review_id": {
+      "format": "uuid",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "period_label": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Period Label",
+      "type": "string"
+    },
+    "thesis_changes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Thesis Changes",
+      "type": "array"
+    },
+    "open_research": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Open Research",
+      "type": "array"
+    },
+    "decisions_summary": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Decisions Summary",
+      "type": "array"
+    },
+    "next_week_suggestions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Next Week Suggestions",
+      "type": "array"
+    },
+    "principle_change_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Principle Change Reason"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/WeeklySection"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "user_id",
+    "period_label"
+  ],
+  "title": "WeeklyReview",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/weekly-review/1.0"
+}

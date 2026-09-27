@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "PersonalNotifyPrefs": {
+      "additionalProperties": false,
+      "description": "个人中心 · 通知偏好（仅本机生效，决定提醒的呈现与节流，不改变通道是否可用）。\n\n通道仍以 GET /notifications/channels 的 configured 为准：这里关掉的通道即使已配置也不投递。",
+      "properties": {
+        "in_app_enabled": {
+          "default": true,
+          "title": "In App Enabled",
+          "type": "boolean"
+        },
+        "external_enabled": {
+          "default": true,
+          "title": "External Enabled",
+          "type": "boolean"
+        },
+        "quiet_hours_enabled": {
+          "default": false,
+          "title": "Quiet Hours Enabled",
+          "type": "boolean"
+        },
+        "quiet_start": {
+          "default": "22:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Quiet Start",
+          "type": "string"
+        },
+        "quiet_end": {
+          "default": "08:00",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "Quiet End",
+          "type": "string"
+        },
+        "frequency": {
+          "default": "realtime",
+          "pattern": "^(realtime|daily|weekly)$",
+          "title": "Frequency",
+          "type": "string"
+        }
+      },
+      "title": "PersonalNotifyPrefs",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "个人中心设置（单用户 · 本机持久化）：显示身份 + 落地页 + 通知偏好 + 风险偏好。\n\n与 InvestorProfile 分工：画像回答「你是怎样的投资者」（供研究引擎消费）；\n个人中心回答「界面怎么为你服务」（显示名/头像/默认页/提醒节奏），不参与任何计算。",
+  "properties": {
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "display_name": {
+      "default": "投资人",
+      "maxLength": 20,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "avatar_data": {
+      "anyOf": [
+        {
+          "maxLength": 300000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Avatar Data"
+    },
+    "avatar_color": {
+      "default": "#378add",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Avatar Color",
+      "type": "string"
+    },
+    "default_view": {
+      "default": "today",
+      "pattern": "^(today|investment|workbench|research|review|quant|library|macro|settings)$",
+      "title": "Default View",
+      "type": "string"
+    },
+    "notify": {
+      "$ref": "#/$defs/PersonalNotifyPrefs"
+    },
+    "risk_profile": {
+      "default": "",
+      "maxLength": 32,
+      "title": "Risk Profile",
+      "type": "string"
+    },
+    "style_tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "title": "Style Tags",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id"
+  ],
+  "title": "PersonalSettings",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/personal-settings/1.0"
+}

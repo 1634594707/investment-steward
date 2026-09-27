@@ -17,6 +17,7 @@ import "./quant.css";
 import { createCoreClient } from "../state/coreClient";
 import { useQuant } from "../hooks/useQuant";
 import { ExperimentSection } from "./ExperimentSection";
+import { QuantCrossSection } from "./QuantCrossSection";
 
 interface Props {
   isDemo: boolean;
@@ -78,8 +79,16 @@ const FILTER_GROUPS: Array<{ key: string; label: string; options: Array<[string,
   },
 ];
 
-export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: Props) {
-  // B2：量化研究域数据自取（回调 props 已清零；别名对齐既有局部命名，页面主体零改动）。
+/**
+ * 过拟合自检固定种子:必须与 Core 侧 `quant_stats.DEFAULT_SEED` 一致,
+ * 否则「同一 seed 可复算」这句话就不成立。响应里会回显 seed 供核对。
+ */
+const OVERFIT_CHECK_SEED = 20260922;
+
+/** 历史窗口档位(QL09):与 Core 侧 quant_factors.WINDOW_TIERS 对齐。 */
+const WINDOW_TIERS = [250, 750, 1250] as const;
+
+export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: Props) {  // B2：量化研究域数据自取（回调 props 已清零；别名对齐既有局部命名，页面主体零改动）。
   const client = useMemo(() => createCoreClient(), []);
   const {
     quantPool: pool, fetchFactorMine: onFactorMine, fetchQuantParameterSets: onListParameterSets,
@@ -107,6 +116,11 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
   const [mineBusy, setMineBusy] = useState(false);
   const [mineResult, setMineResult] = useState<QuantFactorMineResult | null>(null);
   const [mineError, setMineError] = useState<string | null>(null);
+  // 质量口径开关(QL02/QL03/QL06/QL09):校正方法 / 历史窗口档位 / 搜索策略 / 过拟合自检
+  const [mineCorrection, setMineCorrection] = useState<"fdr" | "permutation">("fdr");
+  const [mineWindow, setMineWindow] = useState("");
+  const [mineSearch, setMineSearch] = useState<"beam" | "exhaustive">("beam");
+  const [overfitBusy, setOverfitBusy] = useState(false);
   // A4-1 分享池阶段 A 通道:本机参数集(列表/发布/Fork/详情回放)
   const [psList, setPsList] = useState<QuantParameterSet[] | null>(null);
   const [psBusyId, setPsBusyId] = useState<string | null>(null);
@@ -146,8 +160,12 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
     } catch { setPsError("实验记录读取失败，请重试。"); }
   }
   // 池内真实数据仅由本机产生;进入页面即拉一次,发布/Fork 后重拉。
-  // (处理函数引用随父渲染变化,刻意只在挂载时拉取,避免随轮询反复刷新)
+  // T6（用户视角路线图 2026-09-26）：此前依赖数组只有 [catalogRevision]，而 `active`
+  // 虽在 props 里声明并解构却从未被读取——KeepAlive 页面切走再切回不会重新拉取，
+  // 服务端跑完的面板构建结果用户看不到。改为与 useTactics / useYouzi 同一口径：
+  // 依赖 [catalogRevision, active] 且 `if (!active) return`。
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     setCatalogLoading(true);
     setCatalogError(null);
@@ -161,7 +179,7 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
     });
     return () => { cancelled = true; detailSequence.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalogRevision]);
+  }, [catalogRevision, active]);
 
   async function runMine() {
     if (!mineSymbol.trim() || mineBusy) return;
@@ -173,7 +191,16 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
       return;
     }
     try {
-      const result = await onFactorMine(mineSymbol.trim());
+      const windowBars = mineWindow.trim() ? Number(mineWindow) : undefined;
+      if (windowBars !== undefined && (!Number.isFinite(windowBars) || windowBars <= 0)) {
+        setMineError("历史窗口必须为正整数(250 / 750 / 1250)。");
+        return;
+      }
+      const result = await onFactorMine(mineSymbol.trim(), {
+        correction: mineCorrection,
+        window: windowBars,
+        search: mineSearch,
+      });
       if (result === null) {
         setMineError("挖掘请求失败(Core 未就绪或行情拉取失败)。");
         return;
@@ -181,6 +208,31 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
       setMineResult(result);
     } catch { setMineError("请求失败，请重试。"); }
     finally { setMineBusy(false); }
+  }
+
+  /** 过拟合自检:把标签做确定性块置换后重跑整条挖掘链路,榜单应为空（若不为空即口径失效）。 */
+  async function runOverfitCheck() {
+    if (!mineSymbol.trim() || overfitBusy) return;
+    setOverfitBusy(true);
+    setMineError(null);
+    if (!marketPluginEnabled) {
+      setMineError("行情插件未启用:挖掘依赖本机行情管道,请先在扩展页启用「中国市场行情」。");
+      setOverfitBusy(false);
+      return;
+    }
+    try {
+      const result = await onFactorMine(mineSymbol.trim(), {
+        correction: mineCorrection,
+        labelPermutationSeed: OVERFIT_CHECK_SEED,
+        search: mineSearch,
+      });
+      if (result === null) {
+        setMineError("请求失败（Core 未就绪或行情拉取失败）。");
+        return;
+      }
+      setMineResult(result);
+    } catch { setMineError("请求失败，请重试。"); }
+    finally { setOverfitBusy(false); }
   }
 
   // A3-3 导出参数集:top 公式序列化为分享池阶段 A 形态 JSON(本机下载,数据不出本机)。
@@ -193,10 +245,26 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
       symbol: mineResult.symbol,
       formula_tokens: item.formula_tokens,
       formula: item.formula,
-      metrics: { train_ic: item.train_ic, valid_ic: item.valid_ic, samples: item.samples },
+      metrics: {
+        train_ic: item.train_ic,
+        valid_ic: item.valid_ic,
+        test_ic: item.test_ic,
+        test_t_stat: item.test_t_stat,
+        test_p_value: item.test_p_value,
+        samples: item.samples,
+        segment_samples: item.segment_samples,
+        split: mineResult.split ?? null,
+        ic_suite: item.evaluation ?? null,
+        complexity: item.complexity,
+        complexity_shrink: item.complexity_shrink ?? null,
+        caliber: mineResult.caliber ?? null,
+      },
+      search: mineResult.search ?? null,
+      grammar: mineResult.grammar ?? null,
+      window: mineResult.window ?? null,
       as_of: mineResult.as_of ?? null,
       dataset_version: mineResult.dataset_version ?? null,
-      note: "因子挖掘导出:确定性枚举 + 验证集 IC 排序;仅作研究背景,不构成买卖建议",
+      note: "因子挖掘导出:确定性搜索 + 三段式切分 + 多重检验校正 + 相关性去重 + 复杂度收缩;仅作研究背景,不构成买卖建议",
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -219,7 +287,19 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
         setPublishError(result.detail ?? "发布失败(Core 未就绪、行情插件未启用或公式非法)。");
         return;
       }
-      setPublishNotice(`已发布 ${result.entry?.artifact_id ?? ""}。指标由内核以最新行情重算(确定性),可能与挖掘时点的 IC 略有差异。`);
+      // 口径已对齐:同一数据下发布后重算的 IC 与挖掘时点应完全相同,不再需要「略有差异」的免责话术。
+      const metrics = result.entry?.metrics;
+      const aligned = metrics && mineResult
+        ? metrics.train_ic === item.train_ic && metrics.valid_ic === item.valid_ic
+        : null;
+      setPublishNotice(
+        `已发布 ${result.entry?.artifact_id ?? ""}。` +
+        (aligned === true
+          ? "同数据快照下内核重算 IC 与挖掘时点逐位一致(已校验)。"
+          : aligned === false
+            ? "注意:内核重算 IC 与挖掘时点不一致——行情在两次请求间已更新,请以最新行情为准。"
+            : "指标由内核以最新行情重算(同数据快照下与挖掘时点一致)。"),
+      );
       void refreshSets();
     } catch { setPublishError("请求失败，请重试。"); }
     finally { setPublishBusy(null); }
@@ -265,10 +345,15 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
       setModelError("行情插件未启用:模型训练依赖本机行情管道,请先在扩展页启用「中国市场行情」。");
       return;
     }
-    const lambdaValue = Number(modelLambda);
-    if (!Number.isFinite(lambdaValue) || lambdaValue < 0) {
-      setModelError("lambda 必须是非负数。");
-      return;
+    const trimmedLambda = modelLambda.trim();
+    let lambdaValue: number | null = null;
+    if (trimmedLambda) {
+      const parsed = Number(trimmedLambda);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setModelError("λ 必须是非负数，或留空让内核按网格 × walk-forward 自动选择。");
+        return;
+      }
+      lambdaValue = parsed;
     }
     setModelBusy(true);
     setModelError(null);
@@ -610,7 +695,12 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
         <div className="factor-mine">
           <div className="pool-empty">
             <strong>确定性因子挖掘</strong>
-            <span>枚举公式空间并以验证集 IC 排序——同输入同结果,可复算;输出分享池阶段 A 形态参数集。需行情插件启用,数据实拉自本机缓存。</span>
+            <span>
+              搜索公式空间（16 个原子 + 时序算子 ts_mean/ts_std/ts_rank/ts_zscore/delay/delta）,三段式切分
+              (train 选模 / valid 调阈值 / test 只确认一次,搜索只用 train 段),
+              多重检验校正后才算显著,并按相关性去重、按公式复杂度收缩排序——同输入同结果,可复算。
+              不显著就说不显著,允许空榜。需行情插件启用,数据实拉自本机缓存。
+            </span>
           </div>
           <div className="market-toolbar">
             <input
@@ -621,27 +711,167 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
               onChange={(event) => setMineSymbol(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") void runMine(); }}
             />
+            <select
+              className="market-symbol-input"
+              aria-label="多重检验校正方法"
+              value={mineCorrection}
+              onChange={(event) => setMineCorrection(event.target.value as "fdr" | "permutation")}
+            >
+              <option value="fdr">FDR(BH,推荐)</option>
+              <option value="permutation">置换校准 + BH</option>
+            </select>
+            <select
+              className="market-symbol-input"
+              aria-label="历史窗口档位"
+              value={mineWindow}
+              onChange={(event) => setMineWindow(event.target.value)}
+            >
+              <option value="">窗口(默认 750)</option>
+              {WINDOW_TIERS.map((tier) => <option key={tier} value={String(tier)}>{tier} 根日线</option>)}
+            </select>
+            <select
+              className="market-symbol-input"
+              aria-label="公式搜索策略"
+              value={mineSearch}
+              onChange={(event) => setMineSearch(event.target.value as "beam" | "exhaustive")}
+            >
+              <option value="beam">束搜索(16 原子 + 24 时序算子)</option>
+              <option value="exhaustive">全枚举(旧口径 6 原子,用于复现)</option>
+            </select>
             <button className="primary-btn" disabled={mineBusy || !mineSymbol.trim()} onClick={() => void runMine()}>
               {mineBusy ? "挖掘中…" : "开始挖掘"}
+            </button>
+            <button
+              className="ghost-btn"
+              disabled={overfitBusy || !mineSymbol.trim()}
+              onClick={() => void runOverfitCheck()}
+              title={`把标签做确定性块置换后重跑整条链路(seed ${OVERFIT_CHECK_SEED})——榜单应为空`}
+            >
+              {overfitBusy ? "自检中…" : "过拟合自检"}
             </button>
           </div>
           {mineError && <div className="connection-bar" role="alert"><span>{mineError}</span></div>}
           {publishError && <div className="connection-bar" role="alert"><span>{publishError}</span></div>}
           {publishNotice && <div className="ps-alert ok">{publishNotice}</div>}
-          {mineResult && mineResult.available && (
+          {mineResult?.label_shuffle && (
+            <div className="ps-alert ok">
+              过拟合自检 · 标签已随机置换(seed {mineResult.label_shuffle.seed},块长 {mineResult.label_shuffle.block}）
+              {mineResult.top.length === 0
+                ? ":榜单为空 ✓ 统计口径没有从噪声里造出显著性。"
+                : `:⚠️ 仍挖出 ${mineResult.top.length} 条「显著」公式,说明该口径下假阳性未被拦住,不要采信本轮结果。`}
+            </div>
+          )}
+          {mineResult?.split && (
+            <p className="foot-note">
+              切分:train {mineResult.split.planned.train} / valid {mineResult.split.planned.valid} / test{" "}
+              {mineResult.split.planned.test} 根（可用样本 {mineResult.split.usable_samples},比例{" "}
+              {mineResult.split.ratio.map((r) => `${Math.round(r * 100)}%`).join(" / ")})
+              {mineResult.split.degraded ? ` —— ${mineResult.split.degraded_reason}` : ""}。
+              {mineResult.window
+                ? `窗口档位 ${mineResult.window.bars} 根,实取 ${mineResult.window.bars_actual ?? mineResult.bars ?? "—"} 根`
+                  + `（${mineResult.window.first_bar ?? "—"} → ${mineResult.window.last_bar ?? "—"},源 ${mineResult.window.source ?? "—"}）`
+                  + `。${mineResult.window.reason}`
+                  + (mineResult.window.truncated ? ` ⚠️ ${mineResult.window.truncation_note ?? "上游返回行数少于请求档位"}` : "")
+                : ""}
+              {mineResult.caliber
+                ? `口径:挖掘 v${mineResult.caliber.mine_spec_version} / 公式 v${mineResult.caliber.formula_spec_version ?? "—"} / IC v${mineResult.caliber.ic_spec_version} / 套件 v${mineResult.caliber.ic_suite_spec_version}。`
+                : ""}
+            </p>
+          )}
+          {mineResult?.search && (
+            <p className="foot-note" role="status">
+              搜索策略:{mineResult.search.strategy === "beam"
+                ? `确定性束搜索（束宽 ${mineResult.search.beam_width} · 层数 ${mineResult.search.levels} · 束内两两组合池 ${mineResult.search.pair_pool}）`
+                : `旧口径全枚举（depth ${mineResult.search.max_depth}）`} ·
+              原子 {Array.isArray(mineResult.search.atoms) ? mineResult.search.atoms.length : mineResult.search.atoms} 个
+              {mineResult.search.ts_tokens ? ` + 时序 token ${mineResult.search.ts_tokens} 个` : ""} ·
+              生成 {mineResult.search.candidates_generated ?? "—"} 条 / 求值 {mineResult.search.candidates_evaluated ?? "—"} 条 ·
+              进入校正 {mineResult.search.candidates_tested ?? "—"} 条 ·
+              选择段 {mineResult.search.selection_segment} · {mineResult.search.randomness}。
+            </p>
+          )}
+          {mineResult?.grammar && (
+            <details className="quant-capabilities">
+              <summary>
+                公式语法（v{mineResult.grammar.formula_spec_version} · 原子 {mineResult.grammar.atoms.length} 个 ·
+                时序 token {mineResult.grammar.time_series.tokens.length} 个）—— 由 Core 导出,前端不自建清单
+              </summary>
+              <div className="foot-note">
+                <p><b>原子</b>:{mineResult.grammar.atoms.join(" · ")}</p>
+                <p><b>算子</b>:二元 {mineResult.grammar.binary_ops.join("/")} · 一元 {mineResult.grammar.unary_ops.join("/")}
+                  {` · 时序 `}{mineResult.grammar.time_series.bases.join("/")}
+                  （窗口 {mineResult.grammar.time_series.windows.join("/")}）</p>
+                <p><b>时序语义</b>:{Object.entries(mineResult.grammar.time_series.semantics).map(([key, value]) => `${key} = ${value}`).join("；")}</p>
+                <p><b>评估口径</b>:{Object.entries(mineResult.grammar.evaluation).map(([key, value]) => `${key} = ${value}`).join("；")}</p>
+              </div>
+            </details>
+          )}
+          {mineResult?.multiple_testing && (
+            <p className="foot-note">
+              多重检验校正:{mineResult.multiple_testing.method === "fdr" ? "Benjamini-Hochberg FDR" : "块置换校准 + Benjamini-Hochberg"} ·
+              α={mineResult.multiple_testing.alpha} · 候选 {mineResult.multiple_testing.candidates_tested} 条 ·
+              通过 {mineResult.multiple_testing.rejected_total} 条 ·
+              校正后阈值 {mineResult.multiple_testing.threshold ?? "—"} · seed {mineResult.multiple_testing.seed}
+              {mineResult.multiple_testing.calibration?.null_sigma !== undefined && mineResult.multiple_testing.calibration?.null_sigma !== null
+                ? ` · 零分布 σ̂=${mineResult.multiple_testing.calibration.null_sigma.toFixed(4)}（池 ${mineResult.multiple_testing.calibration.pool_size} 次置换样本,p 分辨率 ${mineResult.multiple_testing.p_resolution ?? "—"}）`
+                : ""}
+            </p>
+          )}
+          {mineResult?.dedup && mineResult.dedup.merged_total > 0 && (
+            <p className="foot-note">
+              相关性去重(|Spearman| &gt; {mineResult.dedup.threshold}）:扫描前 {mineResult.dedup.scanned} 条显著候选,
+              合并 {mineResult.dedup.merged_total} 条同信号变体,每簇只保留排序最优者。
+            </p>
+          )}
+          {mineResult?.top.length ? (
             <table className="kv-table factor-table">
               <thead>
-                <tr><th>公式(token 序列)</th><th className="num">训练 IC</th><th className="num">验证 IC</th><th className="num">样本</th><th>导出 / 发布</th></tr>
+                <tr>
+                  <th>公式(token 序列)</th>
+                  <th className="num">训练 IC</th>
+                  <th className="num">验证 IC</th>
+                  <th className="num">测试 IC</th>
+                  <th className="num">同号</th>
+                  <th className="num">t 值</th>
+                  <th className="num">p 值</th>
+                  <th className="num">复杂度</th>
+                  <th className="num">样本(训/验/测)</th>
+                  <th>同簇变体 / 导出发布</th>
+                </tr>
               </thead>
               <tbody>
                 {mineResult.top.map((item) => (
-                  <tr key={item.formula} title={`公式 tokens:${item.formula_tokens.join(" , ")}`}>
+                  <tr key={item.formula} title={`公式 tokens:${item.formula_tokens.join(" , ")}｜${item.lookahead?.detail ?? ""}`}>
                     <td className="mono">{item.formula}</td>
                     <td className="mono num">{item.train_ic.toFixed(4)}</td>
                     <td className="mono num">{item.valid_ic.toFixed(4)}</td>
-                    <td className="mono num">{item.samples}</td>
+                    <td className="mono num">
+                      <b>{item.test_ic.toFixed(4)}</b>
+                    </td>
+                    <td className="mono num">{(item.sign_consistency * 100).toFixed(0)}%</td>
+                    <td className="mono num">{item.test_t_stat === null ? "—" : item.test_t_stat.toFixed(2)}</td>
+                    <td className="mono num">{item.test_p_value < 0.001 ? item.test_p_value.toExponential(1) : item.test_p_value.toFixed(4)}</td>
+                    <td
+                      className="mono num"
+                      title={item.complexity_shrink === undefined
+                        ? "复杂度惩罚系数 0（不惩罚）"
+                        : `AIC/BIC 式复杂度收缩:×${item.complexity_shrink.toFixed(4)}（排序键 ${item.rank_score.toFixed(4)} → ${(item.rank_score_adjusted ?? item.rank_score).toFixed(4)}）`}
+                    >
+                      {item.complexity}
+                    </td>
+                    <td className="mono num">
+                      {item.segment_samples.train}/{item.segment_samples.valid}/{item.segment_samples.test}
+                    </td>
                     <td>
                       <div className="ps-actions">
+                        {item.cluster && item.cluster.size > 1 && (
+                          <span
+                            className="caliber"
+                            title={`同簇变体(${item.cluster.size - 1} 条,|ρ| 最大 ${item.cluster.max_abs_correlation}):${item.cluster.merged_formulas.join(" / ")}`}
+                          >
+                            合并 {item.cluster.size - 1} 条变体
+                          </span>
+                        )}
                         <button
                           className="ghost-btn"
                           onClick={() => exportParameterSet(item)}
@@ -663,21 +893,51 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
+          {mineResult?.marginal.length ? (
+            <>
+              <div className="block-title"><h4>未达统计显著（不可当作有效因子）</h4><span>排序键最高的若干条,仅作参考并列明原因</span></div>
+              <table className="kv-table factor-table">
+                <thead>
+                  <tr>
+                    <th>公式</th>
+                    <th className="num">测试 IC</th>
+                    <th className="num">同号</th>
+                    <th className="num">t 值</th>
+                    <th className="num">p 值</th>
+                    <th>标注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mineResult.marginal.map((item) => (
+                    <tr key={item.formula}>
+                      <td className="mono">{item.formula}</td>
+                      <td className="mono num">{item.test_ic.toFixed(4)}</td>
+                      <td className="mono num">{(item.sign_consistency * 100).toFixed(0)}%</td>
+                      <td className="mono num">{item.test_t_stat === null ? "—" : item.test_t_stat.toFixed(2)}</td>
+                      <td className="mono num">{item.test_p_value < 0.001 ? item.test_p_value.toExponential(1) : item.test_p_value.toFixed(4)}</td>
+                      <td>{item.significance_note ?? "未达统计显著"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
           {mineResult && !mineResult.available && (
-            <p className="evidence-group-empty">{mineResult.degraded_reason ?? "未挖到通过阈值的公式(不编造)。"}</p>
+            <p className="evidence-group-empty">{mineResult.degraded_reason ?? "未挖到通过统计检验的公式(不编造)。"}</p>
           )}
           {mineResult?.note && <p className="foot-note">{mineResult.note}</p>}
 
           <div className="block-title model-title"><h4>线性模型训练 · 阶段 D</h4><span>纯 JSON 权重,官方内核解释执行;通用模型权重需更强执行隔离,后续开放</span></div>
           <p className="foot-note">
-            闭式岭回归(同输入同结果)拟合 6 特征 → 未来 5 日收益;训练/验证 70/30 切分,以验证集 IC 展示。
-            训练快照(数据版本/样本/切分/λ)完整入库,可复算。
+            特征先做 z-score 标准化(统计量只在训练段估计并冻结,防止泄漏),λ 由网格 × walk-forward
+            在训练∪验证前缀上选出;闭式岭回归拟合 6 特征 → 未来 5 日收益,三段式切分展示 train/valid/test IC。
+            λ 留空即自动选择;填数值则冻结该值。训练快照(数据版本/切分/λ/标准化统计量)完整入库,可复算。
           </p>
           <div className="market-toolbar">
             <input
               className="market-symbol-input model-lambda-input"
-              placeholder="λ 正则强度,如 1.0"
+              placeholder="λ(留空=自动选择)"
               aria-label="模型正则强度"
               value={modelLambda}
               onChange={(event) => setModelLambda(event.target.value)}
@@ -696,9 +956,39 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
               <div className="ps-metrics">
                 <span>训练 IC <b>{modelResult.metrics.train_ic.toFixed(4)}</b></span>
                 <span>验证 IC <b>{modelResult.metrics.valid_ic.toFixed(4)}</b></span>
+                {modelResult.metrics.test_ic !== undefined && <span>测试 IC <b>{modelResult.metrics.test_ic.toFixed(4)}</b></span>}
                 <span>样本 <b>{modelResult.metrics.samples}</b></span>
                 {modelResult.training?.lambda !== undefined && <span>λ <b>{modelResult.training.lambda}</b></span>}
               </div>
+              {modelResult.metrics.ic_suite && (
+                <p className="foot-note">
+                  IC 套件 v{modelResult.metrics.ic_suite.spec_version}:逐期 ICIR{" "}
+                  {modelResult.metrics.ic_suite.period_ic.icir === null ? "—" : modelResult.metrics.ic_suite.period_ic.icir.toFixed(2)} ·
+                  逐期正 IC 占比{" "}
+                  {modelResult.metrics.ic_suite.period_ic.positive_ratio === null ? "—" : `${(modelResult.metrics.ic_suite.period_ic.positive_ratio * 100).toFixed(0)}%`} ·
+                  分位价差{" "}
+                  {modelResult.metrics.ic_suite.group_returns.spread_top_bottom === null
+                    ? "—"
+                    : modelResult.metrics.ic_suite.group_returns.spread_top_bottom.toFixed(5)} ·
+                  衰减{" "}
+                  {modelResult.metrics.ic_suite.ic_decay.map((point) => `${point.days}d ${point.ic.toFixed(3)}`).join(" / ")}
+                </p>
+              )}
+              {modelResult.training?.lambda_selection?.method === "walk_forward_grid" && (
+                <p className="foot-note">
+                  λ 选择({String(modelResult.training.lambda_selection.criterion ?? "中位超额 → 折间一致性 → 较小 λ")}）:
+                  {modelResult.training.lambda_selection.reports?.map((report) => (
+                    `λ=${report.lambda}${report.available === false ? "(不可折分)" : ` → 超额 ${report.median_excess_vs_baseline}`}`
+                  )).join(" · ")}
+                </p>
+              )}
+              {modelResult.standardization && (
+                <p className="foot-note">
+                  标准化统计量(训练段冻结):{modelResult.feature_order?.map((name, index) => (
+                    `${name}: μ=${modelResult.standardization?.mean[index]}, σ=${modelResult.standardization?.std[index]}`
+                  )).join(" · ")}
+                </p>
+              )}
               <div className="ps-meta">
                 {(modelResult.weights ?? []).map((w, index) => (
                   <span key={index}>{index === 0 ? "截距" : modelResult.feature_order?.[index - 1]} = {w}</span>
@@ -779,7 +1069,15 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
           )}
         </div>
 
-        <div className="block-title"><h4>指标与口径</h4><span>训练/验证 70/30 切分 · IC = 与未来 5 日收益的秩相关</span></div>
+        <div className="block-title">
+          <h4>指标与口径</h4>
+          <span>
+            {ps.metrics.split
+              ? `三段式切分 train ${ps.metrics.split.planned.train} / valid ${ps.metrics.split.planned.valid} / test ${ps.metrics.split.planned.test} 根`
+              : "三段式切分(train 选模 / valid 调阈值 / test 只确认一次)"}
+            {" · "}IC = 与未来 5 日收益的秩相关（并列取平均秩）
+          </span>
+        </div>
         <div className="qmetric-band">
           <div className="qmetric">
             <span className="m-label">训练 IC</span>
@@ -791,12 +1089,73 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
             <span className="m-value">{ps.metrics.valid_ic.toFixed(4)}</span>
             <span className="caliber backtest">样本外</span>
           </div>
+          {ps.metrics.test_ic !== undefined && (
+            <div className="qmetric">
+              <span className="m-label">测试 IC</span>
+              <span className="m-value">{ps.metrics.test_ic.toFixed(4)}</span>
+              <span className="caliber backtest">
+                {ps.metrics.test_t_stat === null || ps.metrics.test_t_stat === undefined
+                  ? "确认段"
+                  : `t=${ps.metrics.test_t_stat.toFixed(2)} · p=${(ps.metrics.test_p_value ?? 1) < 0.001 ? (ps.metrics.test_p_value ?? 1).toExponential(1) : (ps.metrics.test_p_value ?? 1).toFixed(4)}`}
+              </span>
+            </div>
+          )}
           <div className="qmetric">
             <span className="m-label">样本数</span>
             <span className="m-value">{ps.metrics.samples}</span>
             <span className="caliber backtest">bars</span>
           </div>
         </div>
+
+        {ps.metrics.ic_suite && (
+          <>
+            <div className="block-title">
+              <h4>IC 评估套件</h4>
+              <span>
+                ICIR / 逐期 IC / IC 衰减 / 因子自相关 / 分位分组收益 · 套件 v{ps.metrics.ic_suite.spec_version}
+              </span>
+            </div>
+            <div className="qmetric-band">
+              <div className="qmetric">
+                <span className="m-label">ICIR</span>
+                <span className="m-value">
+                  {ps.metrics.ic_suite.period_ic.icir === null ? "—" : ps.metrics.ic_suite.period_ic.icir.toFixed(3)}
+                </span>
+                <span className="caliber backtest">{ps.metrics.ic_suite.period_ic.folds} 期</span>
+              </div>
+              <div className="qmetric">
+                <span className="m-label">IC&gt;0 占比</span>
+                <span className="m-value">
+                  {ps.metrics.ic_suite.period_ic.positive_ratio === null
+                    ? "—"
+                    : `${(ps.metrics.ic_suite.period_ic.positive_ratio * 100).toFixed(0)}%`}
+                </span>
+                <span className="caliber backtest">逐期</span>
+              </div>
+              <div className="qmetric">
+                <span className="m-label">分组多空差</span>
+                <span className="m-value">
+                  {ps.metrics.ic_suite.group_returns.spread_top_bottom === null
+                    ? "—"
+                    : ps.metrics.ic_suite.group_returns.spread_top_bottom.toFixed(4)}
+                </span>
+                <span className="caliber backtest">顶−底 {ps.metrics.ic_suite.group_returns.groups} 组</span>
+              </div>
+              <div className="qmetric">
+                <span className="m-label">自相关 lag-1</span>
+                <span className="m-value">
+                  {(ps.metrics.ic_suite.autocorrelation.lag_1 ?? 0).toFixed(3)}
+                </span>
+                <span className="caliber backtest">换手代理</span>
+              </div>
+            </div>
+            <p className="foot-note">
+              IC 衰减（与未来 N 日收益的秩相关）:
+              {ps.metrics.ic_suite.ic_decay.map((point) => ` ${point.days}日 ${point.ic.toFixed(4)}`).join(" ·")}。
+              {ps.metrics.ic_suite.period_ic.degraded_reason ? ` ${ps.metrics.ic_suite.period_ic.degraded_reason}` : ""}
+            </p>
+          </>
+        )}
 
         <div className="block-title"><h4>确定性回放</h4><span>tanh 仓位 × 次日收益 · 闭 K 线 · 同输入同结果</span></div>
         {psDetailLoading && <p className="evidence-group-empty">回放计算中…</p>}
@@ -805,11 +1164,20 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
           <>
             <ReplayCurve curve={replay.curve} />
             <div className="ps-metrics ps-stats">
-              <span>最终权益 <b>{replay.equity}</b></span>
+              {/* 第四轮审计：标出这是**毛收益**，与「我的实验」页的净收益不是同一个东西。
+                  此前两处都不说，用户按本页净值判断策略、按实验页净值下单，差额无从解释。 */}
+              <span>最终权益（毛收益） <b>{replay.equity}</b></span>
               <span>胜率 <b>{replay.win_rate === null ? "—" : `${(replay.win_rate * 100).toFixed(1)}%`}</b></span>
               <span>回放样本 <b>{replay.bars}</b></span>
               {replay.source && <span>数据源 <b>{replay.source}</b></span>}
             </div>
+            {replay.caliber && (
+              <p className="foot-note">
+                口径：{replay.caliber.detail}与「{replay.caliber.compare_with}」
+                的净值<b>不可直接比较</b>（后者已计手续费 {replay.caliber.net_costs?.commission_bps} bps
+                与滑点 {replay.caliber.net_costs?.slippage_bps} bps，并施加仓位/换手/涨跌停约束）。
+              </p>
+            )}
             <p className="foot-note">{replay.note}</p>
           </>
         )}
@@ -1014,6 +1382,19 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
         </button>)}
       </nav>
       {catalogLoading && <p role="status">正在读取实验记录…</p>}
+      {/* T6：刷新入口此前只存在于**错误横幅**里（catalogError 为真才渲染），
+          正常状态下用户没有任何手动刷新手段——面板构建在服务端跑完也看不到结果。
+          这里给一个常驻控件，与错误横幅里的「重新读取」共用同一个 revision 触发器。 */}
+      <div className="quant-refresh">
+        <button
+          className="text-button"
+          onClick={() => setCatalogRevision(value => value + 1)}
+          disabled={catalogLoading}
+          title="重新读取参数集、开放阶段与策略包"
+        >
+          {catalogLoading ? "刷新中…" : "刷新数据"}
+        </button>
+      </div>
       {catalogError && <div className="ps-alert" role="alert">{catalogError}<button className="text-button" onClick={() => setCatalogRevision(value => value + 1)}>重新读取</button></div>}
       <details className="quant-capabilities"><summary>能力开放状态</summary>
       <div className="stage-bar">
@@ -1061,6 +1442,8 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
       <p className="quant-risk">研究与回测结果不构成收益承诺；实盘自报与已核验记录分别展示。</p>
 
       <ExperimentSection coreRequest={coreRequest} />
+
+      <QuantCrossSection active={active} />
     </section>
   );
 }

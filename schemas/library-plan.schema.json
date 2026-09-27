@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "description": "AI 荐读计划（G5-2）：只进 today.learning 学习流，永不写投资原则。",
+  "properties": {
+    "plan_id": {
+      "format": "uuid",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "book_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Book Ref"
+    },
+    "daily_task": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Daily Task",
+      "type": "string"
+    },
+    "source_chapter": {
+      "maxLength": 500,
+      "minLength": 0,
+      "title": "Source Chapter",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 2000,
+      "minLength": 0,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "slot": {
+      "default": "today.learning",
+      "title": "Slot",
+      "type": "string"
+    },
+    "renderer": {
+      "default": "summary_row",
+      "title": "Renderer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "daily_task",
+    "source_chapter",
+    "rationale"
+  ],
+  "title": "LibraryPlan",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/library-plan/1.0"
+}

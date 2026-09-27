@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "HoldingStatus": {
+      "enum": [
+        "holding",
+        "watchlist"
+      ],
+      "title": "HoldingStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "holding_id": {
+      "format": "uuid",
+      "title": "Holding Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "instrument": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Instrument",
+      "type": "string"
+    },
+    "label": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/HoldingStatus",
+      "default": "watchlist"
+    },
+    "strategy_note": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Strategy Note",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "holding_id",
+    "user_id",
+    "instrument",
+    "label"
+  ],
+  "title": "Holding",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/holding/1.0"
+}

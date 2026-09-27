@@ -27,7 +27,8 @@ export function useSystem(client: CoreClient) {
   // B02（桌面端升级路线图 2026-09-18）：审计流不再进 boot/系统域——ExtensionsPage 经 client 按页自取。
   const [capabilities, setCapabilities] = useState<PluginCapability[]>([]);
   const [capabilityCount, setCapabilityCount] = useState(0);
-  // 状态栏「数据截至」：`/health` data_as_of（各数据域最新观测时间）。
+  // 状态栏「数据截至」：`/overview` data_as_of（各数据域最新观测时间）。
+  // A01（架构路线图 2026-09-25）：业务字段已从 /health 迁到 /overview，/health 只剩轻量就绪探测。
   const [dataAsOf, setDataAsOf] = useState<Record<string, string | null | undefined> | null>(null);
   const [coreVersion, setCoreVersion] = useState("—");
   const [schemaVersion, setSchemaVersion] = useState("—");

@@ -1041,6 +1041,10 @@ class NotificationTriageReport(SchemaModel):
     #: 被压制的条目本体（供「已分诊未通知」列表展示；含 `triage` 结论与压制原因）。
     suppressed_items: list[Notification] = Field(default_factory=list)
     note: str = ""
+    # A03（架构改进路线图 2026-09-25）：前端一直按 `schema_version: "1.0"` 声明与断言本响应，
+    # 但模型漏了这个字段——契约对账因此报出「TS 有、Python 无」。以模型补齐为准
+    # （与 DecisionEntry 等模型一致），而不是删掉前端的声明。
+    schema_version: str = "1.0"
 
 
 class FreshnessPatrolResult(SchemaModel):

@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -152,9 +152,7 @@ def test_stock_report_returns_chart_pack_and_source_meta(client, tmp_path, monke
 
     monkeypatch.setattr(mc, "_post_json", _fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001", "mode": "quick"}, headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "mode": "quick"})
     assert body["ok"] is True, body
     assert body["report_mode"] == "quick"                      # 模式回显
 
@@ -202,7 +200,7 @@ def test_stock_report_default_mode_is_standard(client, tmp_path, monkeypatch):
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report}}]})
 
-    body = test_client.post("/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True
     assert body["report_mode"] == "standard"
 

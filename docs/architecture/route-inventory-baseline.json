@@ -1,0 +1,1830 @@
+{
+  "generated_at": "2026-09-25T07:02:28.240203+00:00",
+  "core_version": "0.1.0",
+  "count": 234,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/ai-research/reports",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/ai-research/reports/{report_id}",
+      "auth": true,
+      "path_params": [
+        "report_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/reports/{report_id}",
+      "auth": true,
+      "path_params": [
+        "report_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/reports/{report_id}/follow-ups",
+      "auth": true,
+      "path_params": [
+        "report_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/ai-research/reports/{report_id}/follow-ups",
+      "auth": true,
+      "path_params": [
+        "report_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/review-queue",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/audit",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/brief/today",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/brief/today/generate",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/capabilities",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/cards/slots/{slot}",
+      "auth": true,
+      "path_params": [
+        "slot"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/channels",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/credentials",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/credentials/{key_id}",
+      "auth": true,
+      "path_params": [
+        "key_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/credentials/{key_id}",
+      "auth": true,
+      "path_params": [
+        "key_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/credentials/{key_id}",
+      "auth": true,
+      "path_params": [
+        "key_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/credentials/{key_id}/test",
+      "auth": true,
+      "path_params": [
+        "key_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/data-source/failures",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/data-source/quality",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/data-source/retry",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/decisions",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/decisions",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/decisions/inaction-stats",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/announcements/{symbol:path}",
+      "auth": true,
+      "path_params": [
+        "symbol:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/collab-next",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/collab-run",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/collab-state",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/compare-synthesis",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/comtrade",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/decision-outcome",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/dedup",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/direction-research",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/financials/{symbol:path}",
+      "auth": true,
+      "path_params": [
+        "symbol:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/freshness/patrol",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/calendar",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/events",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/impacts",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/releases",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/research-evidence",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/research-evidence",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/trade",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/weights",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/weights",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/weights/ai-proposal",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/analysis",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/analysis",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/anomalies",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/my-view",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/evidence/macro/{region}/my-view",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/pricing",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/signals",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/signals",
+      "auth": true,
+      "path_params": [
+        "region"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/signals/{signal_id}/interpret",
+      "auth": true,
+      "path_params": [
+        "region",
+        "signal_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/news/{symbol:path}",
+      "auth": true,
+      "path_params": [
+        "symbol:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/stock-research-report",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/support-resistance/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": false
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/{evidence_id}",
+      "auth": true,
+      "path_params": [
+        "evidence_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/export/all",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/holdings",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/holdings",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/holdings/by-instrument",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/holdings/{holding_id}",
+      "auth": true,
+      "path_params": [
+        "holding_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/import/apply",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/import/preview",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/instruments/lookup",
+      "auth": false,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/instruments/resolve",
+      "auth": false,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/investment-policies",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/investment-policies",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/investment-policies/{policy_id}/confirm",
+      "auth": true,
+      "path_params": [
+        "policy_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/investor/profile",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/investor/profile",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/jev/config",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/jev/config",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/jev/models",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/jev/probe",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/judgments",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/judgments",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/judgments/hit-rate",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/judgments/{judgment_id}",
+      "auth": true,
+      "path_params": [
+        "judgment_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/judgments/{judgment_id}/verify",
+      "auth": true,
+      "path_params": [
+        "judgment_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/learning/activities",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/learning/activities",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/learning/activities/{activity_id}",
+      "auth": true,
+      "path_params": [
+        "activity_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/learning/activities/{activity_id}/propose-policy-change",
+      "auth": true,
+      "path_params": [
+        "activity_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/learning/goals/current",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/learning/reflections/export",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/learning/unit/today",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/library/annotations/{annotation_id}/to-research",
+      "auth": true,
+      "path_params": [
+        "annotation_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/library/books",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/library/books",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/library/books/lookup/{isbn}",
+      "auth": true,
+      "path_params": [
+        "isbn"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/library/books/{book_id}",
+      "auth": true,
+      "path_params": [
+        "book_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/library/books/{book_id}",
+      "auth": true,
+      "path_params": [
+        "book_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/library/insights",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/library/plan/generate",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/market/candles/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/market/catalog",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/market/install",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/model-profiles",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/discover-models",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/probe",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/model-profiles/{profile_id}",
+      "auth": true,
+      "path_params": [
+        "profile_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/model-profiles/{profile_id}",
+      "auth": true,
+      "path_params": [
+        "profile_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/{profile_id}/activate",
+      "auth": true,
+      "path_params": [
+        "profile_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/{profile_id}/test",
+      "auth": true,
+      "path_params": [
+        "profile_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/model-usage",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/channels",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/evaluate",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/graded",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/pending",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/triage",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/{notification_id}/read",
+      "auth": true,
+      "path_params": [
+        "notification_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/openapi.json",
+      "auth": false,
+      "path_params": [],
+      "bridge_exposed": false
+    },
+    {
+      "method": "GET",
+      "path": "/personal/settings",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/personal/settings",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/plans",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plans",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plans/{plan_id}/transition",
+      "auth": true,
+      "path_params": [
+        "plan_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/plugins/catalog",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/plugins/{plugin_id:path}/app",
+      "auth": true,
+      "path_params": [
+        "plugin_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/disable",
+      "auth": true,
+      "path_params": [
+        "plugin_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/install",
+      "auth": true,
+      "path_params": [
+        "plugin_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/revoke",
+      "auth": true,
+      "path_params": [
+        "plugin_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/update",
+      "auth": true,
+      "path_params": [
+        "plugin_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/portfolio/risk",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/artifacts",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/experiments",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/leakage-check",
+      "auth": true,
+      "path_params": [
+        "experiment_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/reproduce",
+      "auth": true,
+      "path_params": [
+        "experiment_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/walk-forward",
+      "auth": true,
+      "path_params": [
+        "experiment_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/factors/compute/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/factors/mine/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/lineage/{artifact_id:path}",
+      "auth": true,
+      "path_params": [
+        "artifact_id:path"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/models/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/build",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/build/{job_id}",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/build/{job_id}/cancel",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/load",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/mine",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/mine/{job_id}",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/mine/{job_id}/cancel",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/snapshots",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/fork",
+      "auth": true,
+      "path_params": [
+        "artifact_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets/{artifact_id}/lineage",
+      "auth": true,
+      "path_params": [
+        "artifact_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets/{artifact_id}/replay",
+      "auth": true,
+      "path_params": [
+        "artifact_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/track-records",
+      "auth": true,
+      "path_params": [
+        "artifact_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/track-records/verify",
+      "auth": true,
+      "path_params": [
+        "artifact_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/portfolio/backtest",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/runs",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/stages",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/quant/strategy-packs",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/strategy-packs",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/quant/strategy-packs/{pack_id}/run",
+      "auth": true,
+      "path_params": [
+        "pack_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/questions/latest",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/research/runs/{run_id}",
+      "auth": true,
+      "path_params": [
+        "run_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs/{run_id}",
+      "auth": true,
+      "path_params": [
+        "run_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs/{run_id}/response",
+      "auth": true,
+      "path_params": [
+        "run_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs/{run_id}/run",
+      "auth": true,
+      "path_params": [
+        "run_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs/{run_id}/transition",
+      "auth": true,
+      "path_params": [
+        "run_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/snapshots",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/research/snapshots",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/snapshots/{snapshot_id}",
+      "auth": true,
+      "path_params": [
+        "snapshot_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/research/templates",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/research/templates",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/research/templates/{template_id}",
+      "auth": true,
+      "path_params": [
+        "template_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/review/weekly",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/runner/config",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/session",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/slots",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/storage/backups",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/storage/backups/{name}/restore",
+      "auth": true,
+      "path_params": [
+        "name"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/storage/layout",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/migrate",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/migrate/preview",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/reset-default",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/verify",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/storage/lifecycle",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/sync/apply",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/sync/config",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/sync/config/reveal",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/sync/inbox",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/sync/pairing-code",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/sync/run",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/sync/status",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/ai-review",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/ai-reviews",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/ai-reviews/{review_id}",
+      "auth": true,
+      "path_params": [
+        "review_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/catalog",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/notes/{note_id}",
+      "auth": true,
+      "path_params": [
+        "note_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan-market",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/scan-market/{job_id}",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan-market/{job_id}/cancel",
+      "auth": true,
+      "path_params": [
+        "job_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/sectors",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/signals/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/watchlist",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/watchlist/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/tactics/watchlist/{symbol}",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/watchlist/{symbol}/notes",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/watchlist/{symbol}/notes",
+      "auth": true,
+      "path_params": [
+        "symbol"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/thesis",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/thesis",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/thesis/{thesis_id}",
+      "auth": true,
+      "path_params": [
+        "thesis_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/timeline/decision/{decision_id}",
+      "auth": true,
+      "path_params": [
+        "decision_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/transfer/requests",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/decide",
+      "auth": true,
+      "path_params": [
+        "request_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/receive",
+      "auth": true,
+      "path_params": [
+        "request_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/send",
+      "auth": true,
+      "path_params": [
+        "request_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/watch-items",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/watch-items/{watch_id}/checks",
+      "auth": true,
+      "path_params": [
+        "watch_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items/{watch_id}/checks",
+      "auth": true,
+      "path_params": [
+        "watch_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items/{watch_id}/transition",
+      "auth": true,
+      "path_params": [
+        "watch_id"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/cffex",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/cross-check",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/curriculum",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/profile/{operatedept_code}",
+      "auth": true,
+      "path_params": [
+        "operatedept_code"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/replay/{security_code}",
+      "auth": true,
+      "path_params": [
+        "security_code"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/seats/{security_code}",
+      "auth": true,
+      "path_params": [
+        "security_code"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/tactics",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/tactics/{day}",
+      "auth": true,
+      "path_params": [
+        "day"
+      ],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/today",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/watchlist",
+      "auth": true,
+      "path_params": [],
+      "bridge_exposed": true
+    }
+  ]
+}

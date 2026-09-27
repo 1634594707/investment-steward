@@ -1,0 +1,98 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "decision_id": {
+      "format": "uuid",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "made_at": {
+      "format": "date-time",
+      "title": "Made At",
+      "type": "string"
+    },
+    "theme": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Theme",
+      "type": "string"
+    },
+    "decision_summary": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Decision Summary",
+      "type": "string"
+    },
+    "rationale": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "outcome": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Outcome",
+      "type": "string"
+    },
+    "retrospective": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Retrospective",
+      "type": "string"
+    },
+    "linked_evidence_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Linked Evidence Ids",
+      "type": "array"
+    },
+    "plan_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Id"
+    },
+    "inaction_reason": {
+      "anyOf": [
+        {
+          "pattern": "^(insufficient_evidence|counter_not_excluded|against_principles|waiting_watch|other)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Inaction Reason"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision_id",
+    "user_id",
+    "theme",
+    "decision_summary"
+  ],
+  "title": "DecisionEntry",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/decision-entry/1.0"
+}

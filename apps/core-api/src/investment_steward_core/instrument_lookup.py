@@ -43,9 +43,31 @@ _TX_REFERER = "https://gu.qq.com/"
 # 腾讯类型标记：GP-A=A 股，ETF=场内基金；GP（港股）/QZ（权证）等剔除。
 _TX_TYPE_KEEP = frozenset({"GP-A", "ETF"})
 
-# 搜索结果短缓存：搜索框逐字触发，避免连打供应方；失败不缓存（允许重试）。
+# 搜索结果短缓存：搜索框逐字触发，避免连打供应方。
+#
+# T9（用户视角路线图 2026-09-26）两处修正：
+#  1) **失败不缓存**（兑现本行原注释）。改造前异常在 `_fetch_*` 处被吞成 `rows=[]`，
+#     随后无条件写缓存，于是「网络失败」会被当成「查无此票」冻结 60 秒——用户在网络
+#     抖动后重试同一个词，60 秒内始终拿到空列表，且没有任何迹象说明这是故障。
+#     现在只在**至少有一次真实取数成功**（含「成功但无命中」）时才写缓存。
+#  2) **缓存有上限**。原先是模块级无界 dict：搜索框逐字触发，每个不同前缀都留一条，
+#     常驻内存无上限回收。
 _CACHE_TTL_SECONDS = 60.0
+_CACHE_MAX_ENTRIES = 256
 _cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
+
+
+def _cache_put(key: str, stamp: float, value: list[dict[str, str]]) -> None:
+    """写入缓存并维持上限（超出时按插入顺序淘汰最老的一条）。
+
+    dict 自 3.7 起保持插入顺序，`next(iter(...))` 即最老键。
+    """
+    # 命中已有键：先删后插，把它挪到队尾（LRU 语义的近似，避免热点词被淘汰）。
+    _cache.pop(key, None)
+    _cache[key] = (stamp, value)
+    while len(_cache) > _CACHE_MAX_ENTRIES:
+        oldest = next(iter(_cache))
+        del _cache[oldest]
 
 
 def _build_entry(code: str, name: str) -> dict[str, str] | None:
@@ -163,6 +185,9 @@ def lookup_instruments(query: str, *, limit: int = 8) -> list[dict[str, str]]:
         return cached[1][:limit]
 
     found: list[dict[str, str]] = []
+    # T9：区分「取数失败」与「成功但无命中」。前者**不写缓存**，让下一次输入立刻重试；
+    # 后者要缓存——否则用户每敲一个字就问一遍供应方，正是本缓存要防的连打。
+    any_source_answered = False
     # 先按变体顺序试主源；主源全部无命中再试回退源。
     for source, fetch in (("em", _fetch_em), ("tx", _fetch_tx)):
         for variant in _query_variants(clean):
@@ -170,14 +195,16 @@ def lookup_instruments(query: str, *, limit: int = 8) -> list[dict[str, str]]:
                 rows = fetch(variant)
             except Exception as error:  # noqa: BLE001 - 搜索失败即降级，不打断调用方
                 logger.warning("instrument lookup 源 %s 查询 %r 失败：%s", source, variant, error)
-                rows = []
+                continue
+            any_source_answered = True
             if rows:
                 found = rows
                 break
         if found:
             break
 
-    _cache[clean] = (now, found)
+    if any_source_answered:
+        _cache_put(clean, now, found)
     return found[:limit]
 
 

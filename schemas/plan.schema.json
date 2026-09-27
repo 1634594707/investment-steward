@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "PlanStatus": {
+      "enum": [
+        "planned",
+        "active",
+        "completed",
+        "cancelled"
+      ],
+      "title": "PlanStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "plan_id": {
+      "format": "uuid",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/PlanStatus",
+      "default": "planned"
+    },
+    "decision_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Decision Id"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "user_id",
+    "title"
+  ],
+  "title": "Plan",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/plan/1.0"
+}

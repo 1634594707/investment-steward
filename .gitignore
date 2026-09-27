@@ -28,6 +28,8 @@ scripts/_inline.tmp.js
 .pytest-tmp*
 .tmp-verify-data/
 _tmp_*
+apps/core-api/tmp*/
+apps/core-api/pytest-of-*/
 .cleanup-trash/
 dist-desktop/
 dist-desktop2/

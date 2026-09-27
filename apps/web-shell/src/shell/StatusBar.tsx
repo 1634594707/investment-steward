@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PluginCatalogEntry } from "@investment-steward/domain-contracts";
 import type { CoreConnection } from "../state/coreClient";
 import type { TaskCenterEntry } from "../state/taskCenter";
+import type { WorkerSummary } from "../state/workerSummary";
 import { FreshnessIndicator } from "../components/FreshnessIndicator";
 import { useZoomPercent } from "./zoom";
 import { useUiPrefs } from "./uiprefs";
@@ -9,7 +10,7 @@ import { useUiPrefs } from "./uiprefs";
 interface Props {
   connection: CoreConnection;
   plugins: PluginCatalogEntry[];
-  /** 各数据域最新观测时间（`/health` data_as_of）：状态栏「数据截至」段的数据源。 */
+  /** 各数据域最新观测时间（`/overview` data_as_of）：状态栏「数据截至」段的数据源。 */
   dataAsOf?: Record<string, string | null | undefined>;
   /** R1-4：顶栏移交的数据时效指示（由行情/证据推导的最新 as_of）。 */
   asOf?: string | null | undefined;
@@ -20,9 +21,13 @@ interface Props {
   schemaVersion?: string;
   /** C03（桌面端升级路线图 2026-09-18）：Core 请求连续超时——状态栏给可点逃生提示。 */
   coreHung?: boolean;
+  /** T5：Core 活着但拒绝本会话（401/403）——与 coreHung 同款可点逃生提示。 */
+  coreAuthFailed?: boolean;
   onRestartCore?: () => void;
   /** D02（桌面端升级路线图 2026-09-18）：进行中任务条目（可展开 + 停止）。 */
   tasks?: TaskCenterEntry[];
+  /** T4：后台巡查（agent-worker）状态摘要。数据本就在 `host:get-core-status` 里，此前被丢弃。 */
+  worker?: WorkerSummary | null;
 }
 
 /**
@@ -99,7 +104,7 @@ function formatAsOf(date: Date): string {
 }
 
 /** 底部状态栏（R1-5）：连接 / 数据时效+截至 / 插件 / 插槽占用 / 缩放档，等宽 11px，常驻不滚动。 */
-export function StatusBar({ connection, plugins, dataAsOf, asOf, isDemo, slotUsage: serverUsage, coreVersion = "—", schemaVersion = "—", coreHung = false, onRestartCore, tasks = [] }: Props) {
+export function StatusBar({ connection, plugins, dataAsOf, asOf, isDemo, slotUsage: serverUsage, coreVersion = "—", schemaVersion = "—", coreHung = false, coreAuthFailed = false, onRestartCore, tasks = [], worker = null }: Props) {
   // D02：任务中心条目默认收起，点击展开看每个任务的进度与停止按钮。
   const [tasksOpen, setTasksOpen] = useState(false);
   const counts = pluginCounts(plugins);
@@ -126,6 +131,20 @@ export function StatusBar({ connection, plugins, dataAsOf, asOf, isDemo, slotUsa
           <span>⚠ Core 响应异常</span>
         )
       )}
+      {/* T5：鉴权失败与「挂起」是不同的两种状态，文案要说清——重启能解决前者。 */}
+      {coreAuthFailed && (
+        onRestartCore ? (
+          <button
+            className="text-button"
+            title="本地 Core 拒绝了当前会话（HTTP 401/403），数据未能加载。点击重启本地 Core 重新协商会话令牌。"
+            onClick={onRestartCore}
+          >
+            ⚠ 会话被拒 · 点击重启 Core
+          </button>
+        ) : (
+          <span>⚠ 会话被拒（HTTP 401/403）</span>
+        )
+      )}
       <FreshnessIndicator asOf={asOf} isDemo={Boolean(isDemo)} />
       <span>
         数据截至{" "}
@@ -134,6 +153,16 @@ export function StatusBar({ connection, plugins, dataAsOf, asOf, isDemo, slotUsa
       <span>
         插件 <span className="sb-strong">{counts.enabled} 启用 · {counts.disabled} 停用 · {counts.available} 可安装</span>
       </span>
+      {/* T4：后台巡查状态。托盘常驻时这是用户唯一能看到的「它还活着吗」信号。 */}
+      {worker && (
+        <span
+          className={`sb-worker sb-worker-${worker.tone}`}
+          title={worker.detail}
+          aria-label="后台巡查状态"
+        >
+          {worker.text}
+        </span>
+      )}
       <span>
         插槽占用 <span className="sb-strong">{usage.used}/{usage.cap}</span>
       </span>

@@ -30,8 +30,6 @@ from investment_steward_core.domain import (
     ModelProfile,
     ModelProfileStatus,
     Notification,
-    PERSONAL_DEFAULT_VIEWS,
-    PersonalNotifyPrefs,
     PersonalSettings,
     Plan,
     PluginInstallation,
@@ -44,7 +42,16 @@ from investment_steward_core.domain import (
 )
 from investment_steward_core.instruments import canonical_key
 
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
+
+# S2（用户视角路线图 2026-09-26）：后台任务心跳超时阈值。
+# 旧实现把 30 分钟硬编码在 `get_scan_job` 内，且只在**返回值**上把超时的 running 改写成
+# error、从不落库；而 `create_scan_job` 的裁剪语句又显式排除 state='running'，于是崩溃/
+# 合盖留下的僵尸行会永久存活：`find_running_scan_job` 必然命中它，扫描入口永远返回
+# 同一个死 job_id，用户反复重扫只会反复看到「任务中断」，该输入的扫描就此报废。
+# 提取为常量，供「读取时落库」与「查找时排除」两处共用同一口径。
+SCAN_JOB_STALE_MINUTES = 30
+SCAN_JOB_STALE_REASON = "任务中断（Core 重启或心跳超时）——请重新发起扫描"
 
 
 # E01（桌面端升级路线图 2026-09-18）：/export/all 覆盖的**用户产出**表白名单（raw 导出）。
@@ -108,6 +115,16 @@ class Database:
     def _connection(self) -> Iterator[Connection]:
         with self.engine.begin() as connection:
             yield connection
+
+    def ping(self) -> None:
+        """存储层存活探测（A01）：一次 `SELECT 1`，成本与库内数据量无关。
+
+        就绪探测必须能识别「进程活着但存储不可用」这种半死状态，否则宿主会对着
+        一个打不开库的 Core 反复宣告 ready。这里刻意不做任何业务读取——探活不该
+        随研究资料积累而变慢。
+        """
+        with self._connection() as connection:
+            connection.exec_driver_sql("SELECT 1").scalar_one()
 
     def _migrate(self) -> None:
         with self._connection() as connection:
@@ -580,6 +597,25 @@ class Database:
                 connection.exec_driver_sql("ALTER TABLE tactics_ai_reviews ADD COLUMN confidence REAL")
                 connection.exec_driver_sql("ALTER TABLE tactics_ai_reviews ADD COLUMN ai_score_raw REAL")
                 connection.exec_driver_sql("PRAGMA user_version = 33")
+            if current < 34:
+                # T10（用户视角路线图 2026-09-26）：个股深研生成任务化。
+                # 此前 POST /evidence/stock-research-report 是一个**同步**请求——单份最坏
+                # 6 次模型调用 × 2 次重试 × 120s ≈ 24 分钟，全程占住一个请求线程；切页面、
+                # 崩溃、重启都会让已付费的调用凭空蒸发，且服务端没有任何可重挂的凭据。
+                # 形态照抄 v29 的 scan_jobs（同一套心智：fingerprint 去重 + 进度 + 取消 + 心跳）。
+                # summary 只在终态写库；逐阶段进度只写 stage 字段。
+                connection.exec_driver_sql(
+                    "CREATE TABLE IF NOT EXISTS research_jobs ("
+                    "job_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, state TEXT NOT NULL, "
+                    "stage TEXT, done INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, "
+                    "request_body TEXT, summary TEXT, error TEXT, "
+                    "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+                )
+                connection.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS idx_research_jobs_fingerprint "
+                    "ON research_jobs (fingerprint, state)"
+                )
+                connection.exec_driver_sql("PRAGMA user_version = 34")
             if current > SCHEMA_VERSION:
                 raise RuntimeError(f"database schema {current} is newer than Core {SCHEMA_VERSION}")
 
@@ -724,6 +760,50 @@ class Database:
                 .all()
             )
         return [Evidence.model_validate(self._load(row["payload"])) for row in rows]
+
+    def list_evidence_fingerprint_rows(self, tenant_id: UUID) -> list[tuple[str, str]]:
+        """只要 (evidence_id, content_hash) 两个标量。
+
+        S9（用户视角路线图 2026-09-26）：`/overview` 仅为算 CONTENT 通道指纹而调用
+        `list_evidence()`——那会把**整条 payload** 读出来、逐条 `json.loads`、
+        再逐条 Pydantic `model_validate`，全首屏装载的耗时与内存都随证据总数线性放大。
+        这两列本来就是 `evidence` 表的真实列（不是 JSON 内的字段），因此可直接取，
+        指纹算法与结果**逐字节不变**。
+        """
+        with self._connection() as connection:
+            rows = connection.execute(
+                text("SELECT evidence_id, content_hash FROM evidence WHERE tenant_id = :tenant_id"),
+                {"tenant_id": str(tenant_id)},
+            ).all()
+        return [(str(row[0]), str(row[1])) for row in rows]
+
+    def latest_evidence_collected_at(self, tenant_id: UUID) -> datetime | None:
+        """最新一条证据的 `collected_at`（`_data_as_of` 的 evidence 项数据源）。
+
+        S9（用户视角路线图 2026-09-26）：`/overview` 经 `_data_as_of` **第二次**全量装载
+        证据——只为了取一个最大时间戳。此前走 `list_evidence()`：整条 payload 读出、
+        逐条 JSON 解析、逐条 Pydantic 校验。
+
+        口径依据（照 `domain/models.py` 的 `Evidence` 实际字段，不猜）：
+        `Evidence` 只有 `collected_at`（`default_factory`，恒有值），**没有 `updated_at`
+        也没有 `created_at`**。而 `_latest_datetime(rows, "collected_at", "updated_at",
+        "created_at")` 是「取第一个非空候选」，所以实际生效的一直只有 `collected_at`。
+
+        时间比较仍在 Python 侧按 `datetime` 做，**不**改成 SQL 的 `MAX(字符串)`——
+        ISO 串含不同时区时字典序不等于时间序，那样会悄悄给出错误答案。
+        """
+        with self._connection() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT json_extract(payload, '$.collected_at') AS collected_at "
+                    "FROM evidence WHERE tenant_id = :tenant_id"
+                ),
+                {"tenant_id": str(tenant_id)},
+            ).all()
+        stamps = [row[0] for row in rows if row[0] is not None]
+        if not stamps:
+            return None
+        return max(datetime.fromisoformat(str(value)) for value in stamps)
 
     def list_evidence_page(
         self,
@@ -1510,7 +1590,6 @@ class Database:
         return None if row is None else self._snapshot_row(row, ResearchSnapshot)
 
     def upsert_research_template(self, template: Any) -> None:
-        from investment_steward_core.domain.longterm import ResearchTemplate
 
         payload = template.model_dump(mode="json")
         with self._connection() as connection:
@@ -2901,6 +2980,21 @@ class Database:
                 ),
                 {"job_id": job_id, "fingerprint": fingerprint, "request_body": self._json(request_body), "now": now},
             )
+            # S2：原裁剪语句显式保留 state='running'，而崩溃残留的 running 行本就是死的
+            # （心跳早就断了），只会无限堆积。**先**把心跳超时的 running 行落成 error，
+            # **再**执行下面的裁剪——这样僵尸行本次就被清走，不必等下一轮。
+            now = datetime.now(UTC)
+            connection.execute(
+                text(
+                    "UPDATE scan_jobs SET state = 'error', error = :error, updated_at = :now "
+                    "WHERE state = 'running' AND updated_at < :stale_before"
+                ),
+                {
+                    "error": SCAN_JOB_STALE_REASON,
+                    "now": now.isoformat(),
+                    "stale_before": (now - timedelta(minutes=SCAN_JOB_STALE_MINUTES)).isoformat(),
+                },
+            )
             connection.execute(
                 text(
                     "DELETE FROM scan_jobs WHERE state != 'running' AND job_id NOT IN "
@@ -2909,14 +3003,23 @@ class Database:
             )
 
     def find_running_scan_job(self, fingerprint: str) -> dict[str, Any] | None:
+        """查找同指纹的**存活** running 任务；心跳已超时的僵尸行必须排除。
+
+        S2：旧实现只按 `state='running'` 匹配。配合 `get_scan_job` 的「只改返回值不落库」
+        缺陷，崩溃残留的僵尸行会永久命中，导致同一参数的扫描再也建不出新任务。
+        这里显式排除 `updated_at` 早于阈值的行；`get_scan_job` 负责把那行真正落库为 error。
+        """
+        stale_before = (datetime.now(UTC) - timedelta(minutes=SCAN_JOB_STALE_MINUTES)).isoformat()
         with self._connection() as connection:
             row = (
                 connection.execute(
                     text(
                         "SELECT job_id, done, total FROM scan_jobs "
-                        "WHERE fingerprint = :fingerprint AND state = 'running' ORDER BY created_at DESC LIMIT 1"
+                        "WHERE fingerprint = :fingerprint AND state = 'running' "
+                        "AND updated_at >= :stale_before "
+                        "ORDER BY created_at DESC LIMIT 1"
                     ),
-                    {"fingerprint": fingerprint},
+                    {"fingerprint": fingerprint, "stale_before": stale_before},
                 )
                 .mappings()
                 .first()
@@ -2924,7 +3027,12 @@ class Database:
         return None if row is None else dict(row)
 
     def get_scan_job(self, job_id: str) -> dict[str, Any] | None:
-        """读任务；running 且 30 分钟无心跳按 error（任务中断）呈现，不假装还在跑。"""
+        """读任务；running 且心跳超时按 error 呈现，**并落库**，不假装还在跑。
+
+        S2：旧实现只改返回 dict、不写回数据库，僵尸 running 行会一直留在表里。
+        现在检测到超时就在同一事务里把 state 落成 error，使它不再被
+        `find_running_scan_job` 复用、也能被 `create_scan_job` 的裁剪语句清走。
+        """
         with self._connection() as connection:
             row = (
                 connection.execute(
@@ -2937,16 +3045,23 @@ class Database:
                 .mappings()
                 .first()
             )
-        if row is None:
-            return None
-        job = dict(row)
+            if row is None:
+                return None
+            job = dict(row)
+            if job["state"] == "running":
+                updated = datetime.fromisoformat(str(job["updated_at"]))
+                if datetime.now(UTC) - updated > timedelta(minutes=SCAN_JOB_STALE_MINUTES):
+                    job["state"] = "error"
+                    job["error"] = SCAN_JOB_STALE_REASON
+                    connection.execute(
+                        text(
+                            "UPDATE scan_jobs SET state = 'error', error = :error, updated_at = :now "
+                            "WHERE job_id = :job_id AND state = 'running'"
+                        ),
+                        {"error": SCAN_JOB_STALE_REASON, "now": datetime.now(UTC).isoformat(), "job_id": job_id},
+                    )
         if isinstance(job.get("summary"), str) and job["summary"]:
             job["summary"] = self._load(job["summary"])
-        if job["state"] == "running":
-            updated = datetime.fromisoformat(str(job["updated_at"]))
-            if datetime.now(UTC) - updated > timedelta(minutes=30):
-                job["state"] = "error"
-                job["error"] = "任务中断（Core 重启或心跳超时）——请重新发起扫描"
         return job
 
     def get_scan_job_state(self, job_id: str) -> str | None:
@@ -2971,6 +3086,155 @@ class Database:
                 {"now": datetime.now(UTC).isoformat(), "job_id": job_id},
             )
         return result.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # T10：个股深研生成任务（research_jobs）。与 scan_jobs 同一套心智，
+    # 且**共享 S2 的僵尸任务处理口径**——心跳超时的 running 行必须落库并被排除复用，
+    # 否则重扫会永远拿到同一个死 job_id。
+    # ------------------------------------------------------------------
+
+    def create_research_job(self, job_id: str, fingerprint: str, request_body: dict[str, Any]) -> None:
+        """登记 running 任务；顺带把已结束任务裁剪到最近 20 个，并回收僵尸 running 行。"""
+        now = datetime.now(UTC)
+        with self._connection() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO research_jobs "
+                    "(job_id, fingerprint, state, done, total, request_body, created_at, updated_at) "
+                    "VALUES (:job_id, :fingerprint, 'running', 0, 0, :request_body, :now, :now)"
+                ),
+                {
+                    "job_id": job_id,
+                    "fingerprint": fingerprint,
+                    "request_body": self._json(request_body),
+                    "now": now.isoformat(),
+                },
+            )
+            connection.execute(
+                text(
+                    "UPDATE research_jobs SET state = 'error', error = :error, updated_at = :now "
+                    "WHERE state = 'running' AND updated_at < :stale_before"
+                ),
+                {
+                    "error": SCAN_JOB_STALE_REASON,
+                    "now": now.isoformat(),
+                    "stale_before": (now - timedelta(minutes=SCAN_JOB_STALE_MINUTES)).isoformat(),
+                },
+            )
+            connection.execute(
+                text(
+                    "DELETE FROM research_jobs WHERE state != 'running' AND job_id NOT IN "
+                    "(SELECT job_id FROM research_jobs WHERE state != 'running' ORDER BY updated_at DESC LIMIT 20)"
+                )
+            )
+
+    def find_running_research_job(self, fingerprint: str) -> dict[str, Any] | None:
+        """查找同指纹的**存活** running 任务；心跳已超时的僵尸行必须排除（S2 同款）。"""
+        stale_before = (datetime.now(UTC) - timedelta(minutes=SCAN_JOB_STALE_MINUTES)).isoformat()
+        with self._connection() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT job_id, stage, done, total FROM research_jobs "
+                        "WHERE fingerprint = :fingerprint AND state = 'running' "
+                        "AND updated_at >= :stale_before ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"fingerprint": fingerprint, "stale_before": stale_before},
+                )
+                .mappings()
+                .first()
+            )
+        return None if row is None else dict(row)
+
+    def get_research_job(self, job_id: str) -> dict[str, Any] | None:
+        """读任务；心跳超时按 error 呈现**并落库**（S2 同款，不再只改返回值）。"""
+        with self._connection() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT job_id, fingerprint, state, stage, done, total, summary, error, "
+                        "created_at, updated_at FROM research_jobs WHERE job_id = :job_id"
+                    ),
+                    {"job_id": job_id},
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                return None
+            job = dict(row)
+            if job["state"] == "running":
+                updated = datetime.fromisoformat(str(job["updated_at"]))
+                if datetime.now(UTC) - updated > timedelta(minutes=SCAN_JOB_STALE_MINUTES):
+                    job["state"] = "error"
+                    job["error"] = SCAN_JOB_STALE_REASON
+                    connection.execute(
+                        text(
+                            "UPDATE research_jobs SET state = 'error', error = :error, updated_at = :now "
+                            "WHERE job_id = :job_id AND state = 'running'"
+                        ),
+                        {
+                            "error": SCAN_JOB_STALE_REASON,
+                            "now": datetime.now(UTC).isoformat(),
+                            "job_id": job_id,
+                        },
+                    )
+        if isinstance(job.get("summary"), str) and job["summary"]:
+            job["summary"] = self._load(job["summary"])
+        return job
+
+    def get_research_job_state(self, job_id: str) -> str | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                text("SELECT state FROM research_jobs WHERE job_id = :job_id"), {"job_id": job_id}
+            ).first()
+        return None if row is None else str(row[0])
+
+    def update_research_job_progress(self, job_id: str, done: int, total: int, stage: str | None = None) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                text(
+                    "UPDATE research_jobs SET done = :done, total = :total, stage = COALESCE(:stage, stage), "
+                    "updated_at = :now WHERE job_id = :job_id"
+                ),
+                {
+                    "done": int(done),
+                    "total": int(total),
+                    "stage": stage,
+                    "now": datetime.now(UTC).isoformat(),
+                    "job_id": job_id,
+                },
+            )
+
+    def cancel_research_job(self, job_id: str) -> bool:
+        """标记取消；仅 running 可取消。执行线程在阶段边界检测到后停止。"""
+        with self._connection() as connection:
+            result = connection.execute(
+                text(
+                    "UPDATE research_jobs SET state = 'cancelled', updated_at = :now "
+                    "WHERE job_id = :job_id AND state = 'running'"
+                ),
+                {"now": datetime.now(UTC).isoformat(), "job_id": job_id},
+            )
+        return result.rowcount > 0
+
+    def finish_research_job(
+        self, job_id: str, state: str, summary: dict[str, Any] | None, error: str | None = None
+    ) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                text(
+                    "UPDATE research_jobs SET state = :state, summary = :summary, error = :error, "
+                    "updated_at = :now WHERE job_id = :job_id AND state = 'running'"
+                ),
+                {
+                    "state": state,
+                    "summary": self._json(summary) if summary is not None else None,
+                    "error": error,
+                    "now": datetime.now(UTC).isoformat(),
+                    "job_id": job_id,
+                },
+            )
 
     def finish_scan_job(self, job_id: str, state: str, summary: dict[str, Any] | None) -> None:
         with self._connection() as connection:
@@ -3142,13 +3406,30 @@ class Database:
             pass
 
     def summarize_model_usage(self, window_days: int) -> list[dict[str, Any]]:
-        """F01：按方案聚合窗口内的调用次数/结果/token 三项/耗时（since 由端点换算传入）。"""
+        """F01：按方案聚合窗口内的调用次数/结果/token 三项/耗时（since 由端点换算传入）。
+
+        Q2（用户视角路线图 2026-09-26）两处修正：
+
+        1) **按 `purpose` 分组并返回**。改造前只 `GROUP BY profile_id, model`，
+           而 Jev 记 `profile_id=NULL`，于是 Jev 的所有场景（`jev:claim-support` /
+           `jev:scan-review` / `jev:tactics-review` …）全并进同一个 `(NULL, model)` 桶。
+           `purpose` 这一列一直在写（`_record` 里连默认值 `jev:unspecified` 都备好了），
+           注释也自称「分场景对账的唯一依据」，却从未被任何端点分组或返回。
+
+        2) **排序键改为 `prompt + completion`**。原先 `ORDER BY total_tokens DESC`，
+           而 Jev 的 `total_tokens` 按 F01 口径**恒记 NULL**（服务端口径，不本地相加），
+           于是 `SUM(COALESCE(total_tokens,0))=0`——不管 Jev 实际花了多少，
+           它在用量面板里永远排最后一条。对走 OpenAI 兼容协议并如实回报
+           `total_tokens` 的方案，`total ≈ prompt + completion`，排序结果不变；
+           对不回报该字段的协议（目前只有 Jev），它不再被系统性地沉底。
+           `total_tokens` 仍照原样返回，不做任何推算。
+        """
         since = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
         with self._connection() as connection:
             rows = (
                 connection.execute(
                     text(
-                        "SELECT profile_id, model, "
+                        "SELECT profile_id, model, COALESCE(purpose, '') AS purpose, "
                         "COUNT(*) AS calls, "
                         "SUM(CASE WHEN outcome = 'ok' THEN 1 ELSE 0 END) AS ok_calls, "
                         "SUM(CASE WHEN outcome = 'timeout' THEN 1 ELSE 0 END) AS timeouts, "
@@ -3160,7 +3441,9 @@ class Database:
                         "SUM(CASE WHEN prompt_tokens IS NULL THEN 1 ELSE 0 END) AS usage_missing, "
                         "AVG(latency_ms) AS avg_latency_ms, MAX(latency_ms) AS max_latency_ms "
                         "FROM model_calls WHERE created_at >= :since "
-                        "GROUP BY profile_id, model ORDER BY total_tokens DESC"
+                        "GROUP BY profile_id, model, COALESCE(purpose, '') "
+                        "ORDER BY (SUM(COALESCE(prompt_tokens, 0)) "
+                        "        + SUM(COALESCE(completion_tokens, 0))) DESC"
                     ),
                     {"since": since},
                 )

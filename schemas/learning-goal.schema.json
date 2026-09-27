@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "本周学习目标：以「完成 N 个与自身持仓相关的练习」为进度口径。",
+  "properties": {
+    "goal_id": {
+      "format": "uuid",
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "period_label": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Period Label",
+      "type": "string"
+    },
+    "target_count": {
+      "minimum": 0,
+      "title": "Target Count",
+      "type": "integer"
+    },
+    "completed_count": {
+      "minimum": 0,
+      "title": "Completed Count",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "goal_id",
+    "user_id",
+    "period_label",
+    "target_count",
+    "completed_count"
+  ],
+  "title": "LearningGoal",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/learning-goal/1.0"
+}

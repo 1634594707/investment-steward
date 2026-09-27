@@ -1,0 +1,76 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "actor_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actor Id"
+    },
+    "action": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Action",
+      "type": "string"
+    },
+    "resource_type": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Resource Type",
+      "type": "string"
+    },
+    "resource_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resource Id"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "tenant_id",
+    "action",
+    "resource_type"
+  ],
+  "title": "AuditEvent",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/audit-event/1.0"
+}

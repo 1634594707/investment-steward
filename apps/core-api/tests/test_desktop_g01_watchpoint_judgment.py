@@ -20,7 +20,7 @@ from uuid import UUID
 
 import pytest
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -74,9 +74,7 @@ def _seed_report_with_watchpoints(tmp_path, monkeypatch, watchpoints: list[dict[
     report = _report_json(watchpoints=watchpoints)
     fake, _ = _two_call_model(report, None)
     monkeypatch.setattr(mc, "_post_json", fake)
-    assert test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600002"}, headers=headers
-    ).json()["ok"] is True
+    assert run_stock_report(test_client, headers, **{"symbol": "600002"})["ok"] is True
     return test_client, headers
 
 

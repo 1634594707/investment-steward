@@ -657,21 +657,41 @@ function UserViewEditor({ region, ruleBand, aiDirection, onFetch, onSave }: {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // 第四轮审计：读失败必须与「没写过」分开，否则用户会用默认值整条覆盖已有内容。
+  // loadError 非空 / loadState 尚未成功时，一律禁止进入编辑与保存。
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadOk, setLoadOk] = useState(false);
+  // 重新读取用：把 region 不变的情况下再触发一次 effect
+  const [reloadKey, setReloadKey] = useState(0);
 
-  if (!loaded) {
-    setLoaded(true);
-    onFetch(region).then((v) => {
-      if (v) {
-        setView(v);
-        setDir(v.direction);
-        setHorizon(v.horizon);
-        setConf(v.confidence);
-        setText(v.text);
-      }
-    }).catch(() => undefined);
-  }
+  useEffect(() => {
+    let cancelled = false;
+    onFetch(region)
+      .then((v) => {
+        if (cancelled) return;
+        if (v) {
+          setView(v);
+          setDir(v.direction);
+          setHorizon(v.horizon);
+          setConf(v.confidence);
+          setText(v.text);
+        }
+        setLoadOk(true);
+        setLoadError(null);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : "读取失败");
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, reloadKey]);
 
   async function save() {
+    if (!loadOk) {
+      setErr("尚未成功读取原内容，为避免用默认值覆盖你已写的判断，本次不保存。");
+      return;
+    }
     setBusy(true);
     setErr(null);
     const saved = await onSave(region, { direction: dir, horizon: horizon.trim() || "未填", confidence: conf, text });
@@ -692,9 +712,19 @@ function UserViewEditor({ region, ruleBand, aiDirection, onFetch, onSave }: {
         <span className="mini-note">我的分析（仅本机 · 永不参与规则计算）</span>
         {diverged && <span className="soft-tag amber">与规则基线（{ruleBand}）分歧 —— 差异即信息，不做仲裁</span>}
         {divergedFromAi && <span className="soft-tag amber">与模型方向（{aiDirection}）分歧</span>}
-        {!editing && (
+        {loadError && (
+          <div className="uv-block-error" role="alert">
+            读取你的判断失败：{loadError}。为避免用默认值覆盖你已写的内容，编辑与保存已暂停。
+          </div>
+        )}
+        {!editing && !loadError && (
           <button className="text-btn" onClick={() => setEditing(true)}>
             {view ? "修改" : "写下我的判断"} <span>→</span>
+          </button>
+        )}
+        {loadError && !editing && (
+          <button className="text-btn" onClick={() => { setLoadOk(false); setLoadError(null); setReloadKey((n) => n + 1); }}>
+            重新读取 <span>→</span>
           </button>
         )}
       </div>
@@ -1103,16 +1133,49 @@ function realCountryCard(
   );
 }
 
-/** 背景层三卡分组：FX（美元/CFETS/有效汇率）、OIL（WTI/布伦特）、AU（金价）。 */
+/** 背景层三卡分组（FX 汇率与货币指数 / OIL 油价 / AU 金价）。
+ *
+ *  T1（用户视角路线图 2026-09-26，按用户决定修正口径）：key 必须与 Core 侧
+ *  `macro_feed._background_defs()` 实际定义的对齐。原表列了 `effective_fx`——该 key 在
+ *  后端**从不存在**，而 Core 又会过滤掉非 ok 行，于是这一项永远查不到、被静默丢弃，
+ *  分母还因此塌成 1。后端实际可用/待接的是 `eur_fx`、`jpy_fx` 两个直盘报价
+ *  （其 note 记载「BIS 有效汇率（贸易加权口径）待接」），故按实际存在的 key 修正分组。
+ *  改后 FX 组为 4 项：dxy_twi / cfets_rmb（待接）/ eur_fx / jpy_fx。 */
 const BG_GROUPS = [
-  { flag: "FX", name: "货币指数", tagColor: "blue", keys: ["dxy_twi", "cfets_rmb", "effective_fx"] },
+  { flag: "FX", name: "汇率与货币指数", tagColor: "blue", keys: ["dxy_twi", "cfets_rmb", "eur_fx", "jpy_fx"] },
   { flag: "OIL", name: "油价", tagColor: "amber", keys: ["wti", "brent"] },
   { flag: "AU", name: "金价", tagColor: "amber", keys: ["gold"] },
 ] as const;
 
+type BgGroupKey = (typeof BG_GROUPS)[number]["keys"][number];
+
+/**
+ * T1（用户视角路线图 2026-09-26）：背景层分组卡的「实拉」口径。
+ *
+ * 分母必须是**声明数**（group.keys.length），不是实际拿到的行数。Core 侧在返回前把
+ * 所有非 ok 行过滤掉（`macro_feed` 中 `rows = [r for r in rows if r.status == "ok"]`，
+ * 属 2026-09-06 用户定稿的有意设计），前端再按 key 反查并丢弃查不到的——两层过滤后
+ * 行数会塌到 1，于是「声明 3 项、只拉到 1 项」被渲染成绿色「1/1 实拉」；全空时
+ * `[].every()` 恒为 true，「0/0 实拉」同样穿健康色。
+ *
+ * 未接入的 key 一并点名，让「1/4 实拉」可追责。
+ */
+export function summarizeBackgroundGroup<T extends { key: string; status?: string }>(
+  group: { keys: readonly string[] },
+  background: readonly T[],
+): { rows: T[]; declared: number; okCount: number; missing: string[]; allOk: boolean } {
+  const rows = group.keys
+    .map((key) => background.find((row) => row.key === key))
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const declared = group.keys.length;
+  const okCount = rows.filter((row) => row.status === "ok").length;
+  const missing = group.keys.filter((key) => !rows.some((row) => row.key === key));
+  return { rows, declared, okCount, missing, allOk: declared > 0 && okCount === declared };
+}
+
 const DEMO_BACKGROUND = [
   {
-    flag: "FX", name: "货币指数", tagColor: "blue",
+    flag: "FX", name: "汇率与货币指数", tagColor: "blue",
     inds: [
       ["美元指数 DXY", "103.2", "5 日 +0.6%"],
       ["人民币 CFETS 指数", "98.6", "5 日 -0.2%"],
@@ -1439,22 +1502,31 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
         <div className="macro-grid mt-12">
           {globalSnapshot
             ? BG_GROUPS.map((group) => {
-                const rows = group.keys.map((key) => globalSnapshot.background.find((row) => row.key === key)).filter((row): row is NonNullable<typeof row> => Boolean(row));
+                const { rows, declared, okCount, missing, allOk } = summarizeBackgroundGroup(
+                  group,
+                  globalSnapshot.background,
+                );
                 return (
                   <div className="macro-card" key={group.flag}>
                     <div className="mc-head">
                       <span className="mc-flag">{group.flag}</span>
                       <b>{group.name}</b>
-                      <span className={`soft-tag ${rows.every((row) => row.status === "ok") ? "mint" : rows.some((row) => row.status === "ok") ? "amber" : "coral"}`}>
-                        {rows.filter((row) => row.status === "ok").length}/{rows.length} 实拉
+                      <span
+                        className={`soft-tag ${allOk ? "mint" : okCount > 0 ? "amber" : "coral"}`}
+                        title={missing.length > 0 ? `未接入：${missing.join("、")}（接入后自动出现，不输出占位数值）` : "本组声明的序列全部实拉"}
+                      >
+                        {okCount}/{declared} 实拉
                       </span>
                     </div>
+                    {missing.length > 0 && (
+                      <p className="evidence-group-empty">未接入：{missing.join("、")}——接入后自动出现，不输出占位数值</p>
+                    )}
                     {rows.map((row) => readingRow(row.key, row.label, row.status, row.latest, row.obs_date, "", row.note))}
                     <div className="mc-foot">
                       <DataMetaBadge
                         source="EIA · FRED · CFETS · BIS"
                         asOf={rows.map((row) => row.obs_date).filter(Boolean).sort().at(-1) ?? null}
-                        freshness={rows.every((row) => row.status === "ok") ? "realtime" : "partial"}
+                        freshness={allOk ? "realtime" : "partial"}
                       />
                       白名单公开接口 · 不参与国别打分
                     </div>

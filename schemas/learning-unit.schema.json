@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "LearningUnitType": {
+      "enum": [
+        "lesson",
+        "exercise",
+        "reflection"
+      ],
+      "title": "LearningUnitType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "学习单元卡：由学习插件经 today.learning 插槽产出，绑定用户自身持仓/自选。\n\n只引导用户练习「用证据核对自身投资逻辑」，不直接给买卖建议。",
+  "properties": {
+    "unit_id": {
+      "format": "uuid",
+      "title": "Unit Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "unit_type": {
+      "$ref": "#/$defs/LearningUnitType",
+      "default": "exercise"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "objective": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Objective",
+      "type": "string"
+    },
+    "content": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Content",
+      "type": "string"
+    },
+    "guidance": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Guidance",
+      "type": "string"
+    },
+    "bound_instrument": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bound Instrument"
+    },
+    "bound_instrument_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bound Instrument Label"
+    },
+    "related_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Related Conditions",
+      "type": "array"
+    },
+    "source_plugin_id": {
+      "default": "official.investing-learning",
+      "title": "Source Plugin Id",
+      "type": "string"
+    },
+    "source_plugin_release": {
+      "default": "0.1.0",
+      "title": "Source Plugin Release",
+      "type": "string"
+    },
+    "data_time": {
+      "format": "date-time",
+      "title": "Data Time",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unit_id",
+    "user_id",
+    "title",
+    "objective",
+    "content"
+  ],
+  "title": "LearningUnit",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/learning-unit/1.0"
+}

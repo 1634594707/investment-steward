@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 
 
@@ -253,6 +253,8 @@ def test_research_report_requires_active_profile(client, tmp_path, monkeypatch):
     test_client, headers = _file_client(tmp_path, monkeypatch)
     assert test_client.post("/plugins/official.cn-market-data/install", headers=headers).status_code == 200
     _mock_sources(monkeypatch)
+    # T10：建任务前的**前置校验**仍在 POST 同步完成（无「使用中」方案 → 409，不建任务），
+    # 所以这里仍直接 POST，响应形状未变。
     response = test_client.post("/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers)
     assert response.status_code == 409
     assert "使用中" in response.json()["detail"]
@@ -273,13 +275,7 @@ def test_research_report_success_with_citations(client, tmp_path, monkeypatch):
         "confidence": "medium",
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
-    response = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "question": "趋势是否延续"},
-        headers=headers,
-    )
-    assert response.status_code == 200, response.text
-    body = response.json()
+    body = run_stock_report(test_client, headers, symbol="600001", question="趋势是否延续")
     assert body["ok"] is True and body["symbol"] == "600001"
     assert set(body["citations"]) == {"S1", "S2", "S3", "S4"}
     assert body["model"] == "deepseek-v4-flash"
@@ -310,9 +306,9 @@ def test_research_report_all_sources_fail_no_model_call(client, tmp_path, monkey
         return {"choices": [{"message": {"content": "{}"}}]}
 
     monkeypatch.setattr(mc, "_post_json", _spy)
-    response = test_client.post("/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers)
-    assert response.status_code == 200
-    body = response.json()
+    # T10：业务失败（证据不可用）也算终态，经 run_stock_report 轮询取回，
+    # 报告体形状与改造前的同步 POST 一致。
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is False and body["stage"] == "evidence_unavailable"
     assert called["count"] == 0  # 无证据不调模型（不编造）
     # v22：周/月线补充层失败也如实计入 source_errors（kline_week / kline_month）；
@@ -334,6 +330,6 @@ def test_research_report_rejects_uncited_output(client, tmp_path, monkeypatch):
         lambda *a, **k: {"choices": [{"message": {"content": json.dumps({
             "title": "无引用报告", "report": "全部是判断没有来源标注。", "citations": []})}}]},
     )
-    body = test_client.post("/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is False and body["stage"] == "parse"
     assert "无引用不发布" in body["detail"]

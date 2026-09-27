@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -487,11 +487,7 @@ def test_q20_endpoint_applies_summary_revision_and_keeps_original(client, tmp_pa
 
     monkeypatch.setattr(mc, "_post_json", _fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "mode": "deep", "with_auto_repair": False},
-        headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "mode": "deep", "with_auto_repair": False})
     assert body["ok"] is True, body
     # 两次调用：报告 + 反方检查（反方检查的用户消息以【标的】开头）
     assert len(calls) >= 2, [str(call["messages"][-1]["content"])[:60] for call in calls]
@@ -532,11 +528,7 @@ def test_q20_endpoint_without_counter_check_leaves_summary_untouched(client, tmp
         mc, "_post_json",
         lambda *a, **k: {"choices": [{"message": {"content": json.dumps(payload, ensure_ascii=False)}}]},
     )
-    body = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "002468", "with_counter_check": False, "with_auto_repair": False},
-        headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "002468", "with_counter_check": False, "with_auto_repair": False})
     assert body["ok"] is True, body
     assert body["executive_summary"] == payload["executive_summary"]
     assert body["summary_overreach"]["reviewed"] is False

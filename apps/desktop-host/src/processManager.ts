@@ -23,7 +23,8 @@ const SECRET_ENV_MARKERS = [
 ];
 
 // G3-5 零密钥：sidecar 子进程不继承父进程环境里的疑似凭据变量。
-// 子进程（尤其 plugin-runner）应只拿到显式注入的非敏感白名单，而不是整份宿主 env。
+// 注：实为对完整 process.env 按名称标记的**排除**（denylist），不是白名单——
+// 名字不含这 8 个标记的凭据仍会透传。属已知边界，见路线图 S 系列。
 function sanitizeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const clean: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(env)) {
@@ -32,6 +33,19 @@ function sanitizeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
   return clean;
 }
+
+/**
+ * S6（用户视角路线图 2026-09-26）：单次 JSON-RPC 调用的上限。
+ *
+ * 改造前 `sendJsonRpc` 构造的 Promise **没有 setTimeout、没有 race、没有 deadline**，
+ * 只在「stdout 出一行」「子进程退出」「stdin.write 抛错」三种情况下 settle。一个活着
+ * 却永不回行的 runner 会让该 Promise 永久 pending；又因为 `requestJsonRpc` 用
+ * `rpcQueue` 把调用**串行化**，一次未 settle 的调用会把其后所有调用一起堵死——而
+ * 渲染层那边就是一个永不落地的 `await`，没有报错也没有超时。
+ *
+ * 超过该时限即以可读错误结束本次调用，保证队列能继续推进。
+ */
+const RPC_CALL_TIMEOUT_MS = 30_000;
 
 export class SidecarProcess {
   private child: ChildProcess | undefined;
@@ -107,26 +121,54 @@ export class SidecarProcess {
       return Promise.reject(new Error(`${this.spec.name} is not running with an RPC channel`));
     }
     return new Promise((resolve, reject) => {
-      this.stdoutWaiters.push({
-        resolve: (line) => {
-          try {
-            const parsed: unknown = JSON.parse(line);
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-              reject(new Error(`${this.spec.name} returned a non-object JSON-RPC response`));
-              return;
+      // S6：给本次调用装一个上限。定时器与 waiter 同生共死——settle  whichever 先到
+      // 都必须清掉另一方，否则会留下悬挂定时器或在已完成后误拒。
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        fn();
+      };
+      const waiter = {
+        resolve: (line: string) => {
+          finish(() => {
+            try {
+              const parsed: unknown = JSON.parse(line);
+              if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                reject(new Error(`${this.spec.name} returned a non-object JSON-RPC response`));
+                return;
+              }
+              resolve(parsed as Record<string, unknown>);
+            } catch (error) {
+              reject(error instanceof Error ? error : new Error(String(error)));
             }
-            resolve(parsed as Record<string, unknown>);
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
-          }
+          });
         },
-        reject,
-      });
+        reject: (error: Error) => finish(() => reject(error)),
+      };
+      timer = setTimeout(() => {
+        // 只摘掉**自己**这个 waiter：后面的调用还排在队列里，不能连带拒掉。
+        const index = this.stdoutWaiters.indexOf(waiter);
+        if (index >= 0) this.stdoutWaiters.splice(index, 1);
+        this.lastError = `${this.spec.name} JSON-RPC 超时（>${RPC_CALL_TIMEOUT_MS / 1000}s 无应答）`;
+        finish(() =>
+          reject(
+            new Error(
+              `${this.spec.name} JSON-RPC 调用超时（${RPC_CALL_TIMEOUT_MS / 1000}s 无应答）：` +
+                "插件可能已卡死。请重启应用后再试。",
+            ),
+          ),
+        );
+      }, RPC_CALL_TIMEOUT_MS);
+      this.stdoutWaiters.push(waiter);
       try {
         stdin.write(`${JSON.stringify(request)}\n`, "utf8");
       } catch (error) {
-        this.stdoutWaiters.pop();
-        reject(error instanceof Error ? error : new Error(String(error)));
+        const index = this.stdoutWaiters.indexOf(waiter);
+        if (index >= 0) this.stdoutWaiters.splice(index, 1);
+        finish(() => reject(error instanceof Error ? error : new Error(String(error))));
       }
     });
   }

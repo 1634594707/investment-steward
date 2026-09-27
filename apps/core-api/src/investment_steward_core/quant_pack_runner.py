@@ -10,6 +10,18 @@
 已知边界(诚实声明):这不等同于容器级隔离——CPython 解释器自身的原生层漏洞、
 纯计算资源耗尽(以超时兜底)不在钩子能防的范围内;容器/远程执行作为后续硬化路径。
 
+S1 加固后的准确边界(2026-09-26 实测校正):
+
+- **强制点是审计黑名单,不是内省封锁。** CPython 不允许覆盖内置类型的 `__subclasses__`
+  (`object` 是 immutable type),所以 `().__class__.__mro__[1].__subclasses__()` 永远
+  可达,拿得到已加载类、再经 `.__init__.__globals__` 摸到模块全局。纯 Python 无法禁掉它。
+- 因此黑名单按「同一能力的所有入口」列全(进程创建 os.spawn*/os.startfile、文件改写与
+  目录枚举、UDP/DNS 外发),使「摸到 `os` 模块对象」不再等于「能做事」。
+- exec 前会清空本模块全局,堵掉「经 `__import__.__globals__` 白拿 os/sys/subprocess」这条路;
+  并从命名空间去掉 `type`/`object`/`super`/`vars`/`globals`/`locals`/`dir`——抬高成本,
+  但**不构成安全边界**。
+- 仍然明确不在防护内:解释器原生层漏洞、纯计算资源耗尽(仅靠 30s 超时兜底)。
+
 包代码契约:定义 ``def run(bars: list[dict]) -> list[float]``,输入为 OHLCV K 线
 (闭 K 线口径),输出逐 bar 仓位序列(数值将被截断到 [-1, 1])。结果必须由输入
 确定性推导,不得使用随机数或时钟。
@@ -28,25 +40,56 @@ ALLOWED_IMPORTS = frozenset({
     "collections", "bisect", "operator",
 })
 # 无论事件名,直接阻断的系统访问面。
+# S1（用户视角路线图 2026-09-26）补齐：原表只挡了 `os.system` / `os.exec` /
+# `subprocess.Popen`，漏掉了它们在 Windows 上的**同族**入口。实测（真实 `_install_audit_hook`
+# + `_restricted_builtins` 配置下执行包代码）`os.spawnv` / `os.startfile` 抛的是
+# `FileNotFoundError` 而非 `PermissionError`——说明调用已抵达操作系统层，只是探针指向了
+# 不存在的目标。换真实目标即执行成功。黑名单按「同一能力的所有入口」而非「已知的那几个」
+# 来列：进程创建（os.spawn* / os.startfile）、文件改写与目录枚举、UDP/DNS 外发。
 BLOCKED_EVENTS = frozenset({
-    "open", "socket.connect", "socket.bind", "socket.listen", "socket.socketpair",
+    # —— 进程创建 ——
     "subprocess.Popen", "os.system", "os.exec", "os.fork", "os.kill", "os.posix_spawn",
+    "os.spawn", "os.startfile", "os.startfile/1", "os.startfile/2",
+    # —— 文件与目录 ——
+    "open", "os.remove", "os.rename", "os.replace", "os.mkdir", "os.rmdir", "os.listdir",
+    "os.scandir", "os.walk", "os.truncate", "os.chmod", "os.chown", "os.link", "os.symlink",
+    # —— 网络 ——
+    "socket.connect", "socket.bind", "socket.listen", "socket.socketpair", "socket.sendto",
+    "socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr", "socket.__new__",
+    # —— 动态库 / 其它系统面 ——
     "ctypes.dlopen", "ctypes.dlsym", "ctypes.seh", "mmap", "winreg.OpenKey",
 })
 RUN_TIMEOUT_SECONDS = 30
 
+# S1：内省相关的内建名也从命名空间里去掉。CPython **不允许**覆盖内置类型的
+# `__subclasses__`（`object` 是 immutable type，`object.__subclasses__ = f` 抛
+# TypeError），所以「让 `__subclasses__` 本身不可达」在纯 Python 里做不到——
+# `().__class__.__mro__[1].__subclasses__()` 永远拿得到解释器里已加载的类。
+#
+# 因此本执行器的**实际强制点是审计黑名单**，不是内省封锁：即使包代码经内省链摸到 `os`
+# 模块对象，`os.spawn*` / `os.startfile` / `os.remove` / `socket.*` 也一律被钩子拦下。
+# 这里再去掉 `type` / `object` / `super` 只是**抬高成本**、缩小顺手可用的面，
+# 不是安全边界本身。剩余已知边界见模块 docstring。
+_INTROSPECTION_BUILTINS = ("type", "object", "super", "vars", "globals", "locals", "dir")
+
 
 def _install_audit_hook() -> None:
-    """阻断系统访问面与未放行 import。仅覆盖包代码执行期(安装于全部引导 import 之后)。"""
+    """阻断系统访问面与未放行 import。仅覆盖包代码执行期(安装于全部引导 import 之后)。
 
-    def hook(event: str, args: tuple[Any, ...]) -> None:
-        if event in BLOCKED_EVENTS:
+    S1：黑名单与白名单经**默认参数**捕获，不读模块全局——`_child_main` 在 exec 前会清空
+    本模块的 `__dict__`（防 `__globals__` 逃逸），闭包/默认值是这里唯一还能活着的引用。
+    """
+    blocked = BLOCKED_EVENTS
+    allowed = ALLOWED_IMPORTS
+
+    def hook(event: str, args: tuple[Any, ...], _blocked=blocked, _allowed=allowed) -> None:
+        if event in _blocked:
             raise PermissionError(f"策略包执行被阻断:{event}(受限执行器不允许该操作)")
         if event == "import":
             module = str(args[0]) if args else ""
             root = module.split(".")[0]
-            if root not in ALLOWED_IMPORTS:
-                raise PermissionError(f"策略包执行被阻断:import {module}(仅放行纯计算标准库:{', '.join(sorted(ALLOWED_IMPORTS))})")
+            if root not in _allowed:
+                raise PermissionError(f"策略包执行被阻断:import {module}(仅放行纯计算标准库:{', '.join(sorted(_allowed))})")
 
     sys.addaudithook(hook)
 
@@ -54,49 +97,88 @@ def _install_audit_hook() -> None:
 def _restricted_builtins() -> dict[str, Any]:
     import builtins
 
-    blocked = ("open", "eval", "exec", "compile", "input", "breakpoint")
+    blocked = ("open", "eval", "exec", "compile", "input", "breakpoint") + _INTROSPECTION_BUILTINS
     namespace = {
         name: getattr(builtins, name)
         for name in dir(builtins)
         if name not in blocked and not name.startswith("_")
     }
 
-    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002 - 签名对齐内建
+    # S1：`builtins` 与白名单同样用默认参数捕获——本函数本身是包代码可达的 Python 函数，
+    # 它的 `__globals__` 指向本模块 dict；清空全局后，这里若再读全局就会 NameError。
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0,
+                       _builtins=builtins, _allowed=ALLOWED_IMPORTS):
         root = str(name).split(".")[0]
-        if root not in ALLOWED_IMPORTS:
+        if root not in _allowed:
             raise PermissionError(
-                f"策略包执行被阻断:import {name}(仅放行纯计算标准库:{', '.join(sorted(ALLOWED_IMPORTS))})"
+                f"策略包执行被阻断:import {name}(仅放行纯计算标准库:{', '.join(sorted(_allowed))})"
             )
-        return builtins.__import__(name, globals, locals, fromlist, level)
+        return _builtins.__import__(name, globals, locals, fromlist, level)
 
     namespace["__import__"] = guarded_import
     return namespace
 
 
+# S1：这些名字不能留在模块全局里——包代码可经任意可达 Python 函数的 `__globals__`
+# 读到本模块 dict，进而拿到 `os` / `sys` / `subprocess` 模块对象，绕开审计黑名单调用
+# 进程创建。`__child_main` 在 exec 前把除 dunder 之外的名字全部清空。
+_PRESERVED_GLOBALS = frozenset({
+    "__name__", "__doc__", "__package__", "__loader__", "__spec__", "__file__",
+    "__builtins__", "__path__", "__cached__", "__dict__", "__weakref__",
+})
+
+
+def _purge_module_globals() -> None:
+    """清空本模块全局，防止包代码经 `__globals__` 触达 `os`/`sys`/`subprocess`。"""
+    module_globals = globals()
+    for name in [n for n in module_globals if n not in _PRESERVED_GLOBALS]:
+        del module_globals[name]
+
+
 def _child_main() -> None:  # pragma: no cover - 子进程路径,由父进程调用
     import math
 
-    request = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    # 先把本模块后续还要用到的引用收进局部变量；清空全局后它们仍然有效。
+    stdin_buffer = sys.stdin.buffer
+    loads = json.loads
+    dumps = json.dumps
+    emit = print
+    restricted = _restricted_builtins()  # 注意调用：命名空间里放的是 dict，不是函数本身
+
+    request = loads(stdin_buffer.read().decode("utf-8"))
     code = str(request.get("code", ""))
     bars = request.get("bars")
     if not isinstance(bars, list):
-        print(json.dumps({"ok": False, "error": "bars 数据缺失"}))
+        emit(dumps({"ok": False, "error": "bars 数据缺失"}))
         return
+    # S1 补充：把白名单里的模块在装钩子**之前**全部导入、使其进入 sys.modules。
+    # 否则包代码写 `import statistics` 会触发 `open` 去读 .py 文件，被黑名单拦下——
+    # 实测 statistics / decimal / fractions / bisect 四个「白名单成员」全都因此不可用，
+    # 即 `ALLOWED_IMPORTS` 名义上放行、实际拿不到。先导入即与「开放」语义对齐。
+    for _allowed_name in ALLOWED_IMPORTS:
+        __import__(_allowed_name)
     _install_audit_hook()
-    namespace: dict[str, Any] = {"__name__": "strategy_pack", "math": math, "__builtins__": _restricted_builtins()}
+    namespace: dict[str, Any] = {"__name__": "strategy_pack", "math": math, "__builtins__": restricted}
+    # S1：exec 之前清空模块全局——包代码经任意可达 Python 函数的 `__globals__`
+    # 就能拿到本模块 dict，进而拿到 `os` / `sys` / `subprocess` 模块对象。
+    _purge_module_globals()
     try:
         exec(code, namespace)  # noqa: S102 - 唯一执行点:已验签包代码,审计钩子已生效
         run = namespace.get("run")
         if not callable(run):
-            raise ValueError("策略包必须定义 def run(bars) -> list[float]")
+            # 保持 ValueError（不是 TypeError）：`run_pack_payload` 与端点都以
+            # `except ValueError` 捕获并转成 422，改异常类型会破坏这条既有契约。
+            raise ValueError(  # noqa: TRY004 - 见上：异常类型是跨层契约的一部分
+                "策略包必须定义 def run(bars) -> list[float]"
+            )
         positions = run(bars)
         if not isinstance(positions, list) or not all(isinstance(v, (int, float)) for v in positions):
             raise ValueError("run() 必须返回数值列表(逐 bar 仓位)")
-        print(json.dumps({"ok": True, "positions": [float(v) for v in positions]}))
+        emit(dumps({"ok": True, "positions": [float(v) for v in positions]}))
     except PermissionError as error:
-        print(json.dumps({"ok": False, "error": str(error)}))
+        emit(dumps({"ok": False, "error": str(error)}))
     except Exception as error:  # noqa: BLE001 - 包代码任意异常都只降级为失败结果
-        print(json.dumps({"ok": False, "error": f"策略包运行失败:{error}"}))
+        emit(dumps({"ok": False, "error": f"策略包运行失败:{error}"}))
 
 
 def run_pack_payload(code: str, bars: list[dict[str, Any]], *, timeout_seconds: float = RUN_TIMEOUT_SECONDS) -> dict[str, Any]:
@@ -111,6 +193,9 @@ def run_pack_payload(code: str, bars: list[dict[str, Any]], *, timeout_seconds: 
             input=request,
             capture_output=True,
             timeout=timeout_seconds,
+            # 非零退出码由下面的 returncode 分支自行解读并组装成结构化失败，
+            # 不用 check=True 抛 CalledProcessError。
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"策略包执行超时(>{timeout_seconds:.0f}s),已强制终止"}

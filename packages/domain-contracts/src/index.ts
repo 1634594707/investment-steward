@@ -299,6 +299,18 @@ export interface DecisionEntry {
   retrospective: string;
   linked_evidence_ids: string[];
   plan_id?: string | null;
+  /**
+   * 8.6「不行动」原因，仅当本次决定是不行动时填写。
+   * A03（架构改进路线图 2026-09-25）：此前 TS 漏声明该字段，与 Python 模型漂移；
+   * 取值域与 `DecisionEntry.inaction_reason` 的 pattern 一致。
+   */
+  inaction_reason?:
+    | "insufficient_evidence"
+    | "counter_not_excluded"
+    | "against_principles"
+    | "waiting_watch"
+    | "other"
+    | null;
   schema_version: typeof SCHEMA_VERSION;
 }
 
@@ -456,6 +468,8 @@ export interface NotificationTriageReport {
   priorities: Record<string, number>;
   suppressed_items: Notification[];
   note: string;
+  // A03（架构改进路线图 2026-09-25）：此前 Python 的 NotificationTriageReport 漏了这个字段，
+  // 而前端一直按它声明与断言。以模型补齐为准（见 domain/models.py），契约两侧现已一致。
   schema_version: typeof SCHEMA_VERSION;
 }
 

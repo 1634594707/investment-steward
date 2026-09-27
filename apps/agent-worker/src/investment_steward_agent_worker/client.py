@@ -14,9 +14,11 @@ from typing import Any
 class CoreClientError(Exception):
     """Core 不可达或返回非 2xx。"""
 
-    def __init__(self, message: str, status: int | None = None):
+    def __init__(self, message: str, status: int | None = None, *, timed_out: bool = False):
         super().__init__(message)
         self.status = status
+        # A05：超时与「被拒绝」在调度层是两种不同的失败——超时可重试，参数错重试无意义。
+        self.timed_out = timed_out
 
 
 class CoreClient:
@@ -25,7 +27,16 @@ class CoreClient:
         self.session_token = session_token
         self.timeout = timeout
 
-    def _request(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """单次请求。`timeout` 按调用覆盖默认值——A05 要求每项巡查任务有自己的超时预算。"""
+        effective = self.timeout if timeout is None else timeout
         url = f"{self.base_url}{path}"
         payload = None if body is None else json.dumps(body).encode("utf-8")
         request = urllib.request.Request(
@@ -38,11 +49,17 @@ class CoreClient:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=effective) as response:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
             raise CoreClientError(f"{path} -> HTTP {exc.code}", status=exc.code) from exc
+        except TimeoutError as exc:
+            raise CoreClientError(f"{path} -> 超时（{effective}s）", timed_out=True) from exc
         except urllib.error.URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise CoreClientError(
+                    f"{path} -> 超时（{effective}s）", timed_out=True
+                ) from exc
             raise CoreClientError(f"{path} -> {exc.reason}") from exc
         if not raw:
             return None
@@ -51,12 +68,12 @@ class CoreClient:
         except json.JSONDecodeError as exc:
             raise CoreClientError(f"{path} -> 非 JSON 响应") from exc
 
-    def generate_today_brief(self) -> dict[str, Any]:
-        return self._request("POST", "/brief/today/generate")
+    def generate_today_brief(self, *, timeout: float | None = None) -> dict[str, Any]:
+        return self._request("POST", "/brief/today/generate", timeout=timeout)
 
-    def patrol_evidence(self) -> dict[str, Any]:
-        return self._request("POST", "/evidence/freshness/patrol")
+    def patrol_evidence(self, *, timeout: float | None = None) -> dict[str, Any]:
+        return self._request("POST", "/evidence/freshness/patrol", timeout=timeout)
 
-    def evaluate_notifications(self) -> list[dict[str, Any]]:
-        data = self._request("POST", "/notifications/evaluate")
+    def evaluate_notifications(self, *, timeout: float | None = None) -> list[dict[str, Any]]:
+        data = self._request("POST", "/notifications/evaluate", timeout=timeout)
         return data if isinstance(data, list) else []

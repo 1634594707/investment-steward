@@ -1,0 +1,268 @@
+{
+  "generated_from": "apps/core-api 运行时路由表（route.response_model）",
+  "schema_base": "https://investment-steward.local/schemas",
+  "models": {
+    "AgentResponse": {
+      "schema": "agent-response.schema.json",
+      "routes": [
+        "GET /research/questions/latest",
+        "GET /research/runs/{run_id}/response",
+        "POST /research/runs/{run_id}/run"
+      ]
+    },
+    "AnnouncementBatch": {
+      "schema": "announcement-batch.schema.json",
+      "routes": [
+        "GET /evidence/announcements/{symbol:path}",
+        "GET /evidence/financials/{symbol:path}",
+        "GET /evidence/news/{symbol:path}"
+      ]
+    },
+    "ArtifactLineageView": {
+      "schema": "artifact-lineage-view.schema.json",
+      "routes": [
+        "GET /quant/lineage/{artifact_id:path}"
+      ]
+    },
+    "ArtifactPoolView": {
+      "schema": "artifact-pool-view.schema.json",
+      "routes": [
+        "GET /quant/artifacts"
+      ]
+    },
+    "AuditEvent": {
+      "schema": "audit-event.schema.json",
+      "routes": [
+        "GET /audit"
+      ]
+    },
+    "Book": {
+      "schema": "book.schema.json",
+      "routes": [
+        "GET /library/books",
+        "POST /library/books",
+        "PUT /library/books/{book_id}"
+      ]
+    },
+    "CandleSeries": {
+      "schema": "candle-series.schema.json",
+      "routes": [
+        "GET /market/candles/{symbol}"
+      ]
+    },
+    "CredentialRecord": {
+      "schema": "credential-record.schema.json",
+      "routes": [
+        "GET /credentials",
+        "GET /credentials/{key_id}",
+        "PUT /credentials/{key_id}"
+      ]
+    },
+    "DecisionEntry": {
+      "schema": "decision-entry.schema.json",
+      "routes": [
+        "GET /decisions",
+        "POST /decisions",
+        "POST /evidence/decision-outcome"
+      ]
+    },
+    "Evidence": {
+      "schema": "evidence.schema.json",
+      "routes": [
+        "GET /evidence",
+        "GET /evidence/{evidence_id}",
+        "POST /evidence",
+        "POST /evidence/macro/{region}/anomalies"
+      ]
+    },
+    "FreshnessPatrolResult": {
+      "schema": "freshness-patrol-result.schema.json",
+      "routes": [
+        "POST /evidence/freshness/patrol"
+      ]
+    },
+    "Holding": {
+      "schema": "holding.schema.json",
+      "routes": [
+        "GET /holdings",
+        "GET /holdings/by-instrument",
+        "POST /holdings"
+      ]
+    },
+    "InvestmentPolicyVersion": {
+      "schema": "investment-policy-version.schema.json",
+      "routes": [
+        "GET /investment-policies",
+        "POST /investment-policies",
+        "POST /investment-policies/{policy_id}/confirm",
+        "POST /learning/activities/{activity_id}/propose-policy-change"
+      ]
+    },
+    "InvestorProfile": {
+      "schema": "investor-profile.schema.json",
+      "routes": [
+        "GET /investor/profile",
+        "PUT /investor/profile"
+      ]
+    },
+    "LearningActivity": {
+      "schema": "learning-activity.schema.json",
+      "routes": [
+        "GET /learning/activities",
+        "GET /learning/reflections/export",
+        "POST /learning/activities"
+      ]
+    },
+    "LearningGoal": {
+      "schema": "learning-goal.schema.json",
+      "routes": [
+        "GET /learning/goals/current"
+      ]
+    },
+    "LearningUnit": {
+      "schema": "learning-unit.schema.json",
+      "routes": [
+        "GET /learning/unit/today"
+      ]
+    },
+    "LibraryPlan": {
+      "schema": "library-plan.schema.json",
+      "routes": [
+        "POST /library/plan/generate"
+      ]
+    },
+    "MacroCalendarSnapshot": {
+      "schema": "macro-calendar-snapshot.schema.json",
+      "routes": [
+        "GET /evidence/macro/calendar"
+      ]
+    },
+    "MacroPricingSnapshot": {
+      "schema": "macro-pricing-snapshot.schema.json",
+      "routes": [
+        "GET /evidence/macro/{region}/pricing"
+      ]
+    },
+    "MacroSnapshot": {
+      "schema": "macro-snapshot.schema.json",
+      "routes": [
+        "GET /evidence/macro/{region}"
+      ]
+    },
+    "MacroUserView": {
+      "schema": "macro-user-view.schema.json",
+      "routes": [
+        "PUT /evidence/macro/{region}/my-view"
+      ]
+    },
+    "ModelProfile": {
+      "schema": "model-profile.schema.json",
+      "routes": [
+        "GET /model-profiles",
+        "POST /model-profiles",
+        "POST /model-profiles/{profile_id}/activate",
+        "PUT /model-profiles/{profile_id}"
+      ]
+    },
+    "Notification": {
+      "schema": "notification.schema.json",
+      "routes": [
+        "POST /notifications/evaluate",
+        "POST /notifications/{notification_id}/read"
+      ]
+    },
+    "NotificationPendingPage": {
+      "schema": "notification-pending-page.schema.json",
+      "routes": [
+        "GET /notifications/pending"
+      ]
+    },
+    "NotificationTriageReport": {
+      "schema": "notification-triage-report.schema.json",
+      "routes": [
+        "GET /notifications/triage"
+      ]
+    },
+    "PersonalSettings": {
+      "schema": "personal-settings.schema.json",
+      "routes": [
+        "GET /personal/settings",
+        "PUT /personal/settings"
+      ]
+    },
+    "Plan": {
+      "schema": "plan.schema.json",
+      "routes": [
+        "GET /plans",
+        "POST /plans",
+        "POST /plans/{plan_id}/transition"
+      ]
+    },
+    "PluginCapability": {
+      "schema": "plugin-capability.schema.json",
+      "routes": [
+        "GET /capabilities"
+      ]
+    },
+    "PluginCatalogEntry": {
+      "schema": "plugin-catalog-entry.schema.json",
+      "routes": [
+        "GET /plugins/catalog"
+      ]
+    },
+    "PluginInstallation": {
+      "schema": "plugin-installation.schema.json",
+      "routes": [
+        "POST /market/install",
+        "POST /plugins/{plugin_id:path}/disable",
+        "POST /plugins/{plugin_id:path}/install",
+        "POST /plugins/{plugin_id:path}/revoke",
+        "POST /plugins/{plugin_id:path}/update"
+      ]
+    },
+    "ResearchRun": {
+      "schema": "research-run.schema.json",
+      "routes": [
+        "GET /research/runs",
+        "GET /research/runs/{run_id}",
+        "POST /library/annotations/{annotation_id}/to-research",
+        "POST /research/runs",
+        "POST /research/runs/{run_id}/transition"
+      ]
+    },
+    "SpeakerSignal": {
+      "schema": "speaker-signal.schema.json",
+      "routes": [
+        "GET /evidence/macro/{region}/signals",
+        "POST /evidence/macro/{region}/signals"
+      ]
+    },
+    "Thesis": {
+      "schema": "thesis.schema.json",
+      "routes": [
+        "GET /thesis",
+        "POST /thesis",
+        "PUT /thesis/{thesis_id}"
+      ]
+    },
+    "TodayBrief": {
+      "schema": "today-brief.schema.json",
+      "routes": [
+        "GET /brief/today",
+        "POST /brief/today/generate"
+      ]
+    },
+    "UICard": {
+      "schema": "ui-card.schema.json",
+      "routes": [
+        "GET /cards/slots/{slot}"
+      ]
+    },
+    "WeeklyReview": {
+      "schema": "weekly-review.schema.json",
+      "routes": [
+        "GET /review/weekly"
+      ]
+    }
+  }
+}

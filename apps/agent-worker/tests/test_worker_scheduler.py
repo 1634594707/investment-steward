@@ -13,22 +13,28 @@ DAY_2 = datetime(2026, 9, 5, 8, 0, tzinfo=UTC)
 
 
 class FakeClient:
+    """A05：客户端接口带按调用超时（`timeout=`），假客户端必须同样接受它。"""
+
     def __init__(self) -> None:
         self.counts = {"brief": 0, "patrol": 0, "notif": 0}
         self.fail: set[str] = set()
+        self.timeouts: list[float | None] = []
 
-    def generate_today_brief(self) -> dict[str, Any]:
+    def generate_today_brief(self, *, timeout: float | None = None) -> dict[str, Any]:
         self.counts["brief"] += 1
+        self.timeouts.append(timeout)
         if "brief" in self.fail:
             raise CoreClientError("/brief/today/generate -> HTTP 500", status=500)
         return {"brief_id": "b1"}
 
-    def patrol_evidence(self) -> dict[str, Any]:
+    def patrol_evidence(self, *, timeout: float | None = None) -> dict[str, Any]:
         self.counts["patrol"] += 1
+        self.timeouts.append(timeout)
         return {"checked": 1, "stale": 0, "stale_ids": []}
 
-    def evaluate_notifications(self) -> list[dict[str, Any]]:
+    def evaluate_notifications(self, *, timeout: float | None = None) -> list[dict[str, Any]]:
         self.counts["notif"] += 1
+        self.timeouts.append(timeout)
         return []
 
 

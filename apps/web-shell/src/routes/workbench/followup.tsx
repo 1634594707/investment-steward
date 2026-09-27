@@ -789,7 +789,9 @@ export function FollowUpPanel({
         <nav className="wb-followup-list" aria-label="追问附录列表">
           <span className="wb-counter-label">附录（{turns.length} 条 · 不可变）</span>
           {loading && <p className="report-meta">正在载入追问附录…</p>}
-          {!loading && turns.length === 0 && (
+          {/* 第四轮审计：读失败时**不能**说「还没有追问」——用户会以为此前分析丢了，
+              把同样的问题再问一遍（每次追问都是一次真实模型调用）。上方已渲染 error。 */}
+          {!loading && !error && turns.length === 0 && (
             <p className="wb-history-empty">还没有追问。围绕某个数字、来源或核心判断提问，或粘贴一条外部信息重新评估。</p>
           )}
           <ul>
@@ -818,7 +820,7 @@ export function FollowUpPanel({
           {selected ? (
             <AnalysisTurnCard turn={selected} />
           ) : (
-            !loading && turns.length === 0 && (
+            !loading && !error && turns.length === 0 && (
               <p className="report-meta">提交追问后，附录会出现在这里（先回答，再看受影响判断、情景、材料与验证点）。</p>
             )
           )}

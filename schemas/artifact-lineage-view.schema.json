@@ -1,0 +1,30 @@
+{
+  "description": "制品派生谱系响应：available=False 表示阶段未开放、无任何制品。",
+  "properties": {
+    "available": {
+      "title": "Available",
+      "type": "boolean"
+    },
+    "artifact_id": {
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "lineage": {
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Lineage",
+      "type": "array"
+    }
+  },
+  "required": [
+    "available",
+    "artifact_id"
+  ],
+  "title": "ArtifactLineageView",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/artifact-lineage-view/1.0"
+}

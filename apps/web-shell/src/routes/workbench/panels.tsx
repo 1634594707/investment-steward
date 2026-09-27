@@ -6,6 +6,9 @@ import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart } from "lightweight-charts";
 import type { StockReport, QuarterlyPoint, PriceChartPack, ValuationChartPack, ReviewQueue, DirectionReport, ReportScenario, ReportLevel, ReportWatchpoint, ReportValuation, ClaimFinding, ReportConclusion, CategorizedWarning, ReportDecisionCard, QualityBlocker, SectionState, GenerationTrace, ReportCockpit, SourceCatalogEntry } from "./researchTypes";
 import { formatPrice, formatProbability, scenarioProbabilityDisplay, scenarioProbabilityWording, valuationEvidenceDisplay, deepMetricCell, sourceCatalogUrlText, coreSupportBreakdown, CLAIM_STATUS_LABEL, JEV_SKIP_LABEL, ROBUSTNESS_META, coreSupportState, watchpointDateView, watchpointTriageView, watchpointPriorityView } from "./format";
+// T7：与 K 线卡共用同一套图表配色实现（此前 panels 另写一份并硬编码深色系，浅色主题不可读）。
+import { readChartThemeColors, readMarketColors } from "../../cards/chartTheme";
+import { useUiPrefs } from "../../shell/uiprefs";
 
 /* —— v31 质量恢复（2026-09-13 方案 §2.2/§4.1/§4.2）：三态质量状态 + 首屏状态行 + 正文目录锚点 —— */
 
@@ -1311,23 +1314,23 @@ export function formatMoneyShort(value: number | null | undefined): string {
   return value.toFixed(0);
 }
 
-/** 涨跌语义色：与 KLineCard 同源（--mkt-up/--mkt-down 令牌，红涨绿跌随设置切换）。 */
+/** 涨跌语义色：与 K 线卡同源（`cards/chartTheme.ts`），随设置页的红涨绿跌/mint-amber 切换。 */
 export function readWbMarketColors(): { up: string; down: string } {
-  const style = getComputedStyle(document.body);
-  return {
-    up: style.getPropertyValue("--mkt-up").trim() || "#e2726a",
-    down: style.getPropertyValue("--mkt-down").trim() || "#5fb389",
-  };
+  return readMarketColors();
 }
 
 /** 价格量能图：前复权日线蜡烛 + 成交量副图 + MA5/20/60（MA 由服务端按全序列算好，与 candles 按下标对齐）。 */
 export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // T7：把偏好读进组件，effect 才能在「涨跌色 / 主题」变化时重建图表。
+  // 此前依赖数组只有 [chart]，颜色是建图那一刻烤进 canvas 的——改设置后这张图不动。
+  const prefs = useUiPrefs();
   const rawCandles = chart.candles ?? [];
   const valid = rawCandles
     .map((bar, index) => ({ bar, index }))
     .filter(({ bar }) => bar.open != null && bar.high != null && bar.low != null && bar.close != null && bar.date);
   const market = readWbMarketColors();
+  const themeColors = readChartThemeColors();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1336,16 +1339,18 @@ export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#7b828b",
+        // T7：坐标轴文字/网格改读 --muted 令牌——原来的硬编码 #7b828b / rgba(231,..)
+        // 是深色系取值，浅色 paper 主题下等于看不见。
+        textColor: themeColors.text,
         fontSize: 10,
         fontFamily: "'JetBrains Mono', 'Noto Sans SC', monospace",
       },
       grid: {
-        vertLines: { color: "rgba(231,236,233,.06)" },
-        horzLines: { color: "rgba(231,236,233,.06)" },
+        vertLines: { color: themeColors.grid },
+        horzLines: { color: themeColors.grid },
       },
-      rightPriceScale: { borderColor: "rgba(231,236,233,.14)" },
-      timeScale: { borderColor: "rgba(231,236,233,.14)", timeVisible: false, rightOffset: 3 },
+      rightPriceScale: { borderColor: themeColors.scaleBorder },
+      timeScale: { borderColor: themeColors.scaleBorder, timeVisible: false, rightOffset: 3 },
       crosshair: { mode: CrosshairMode.Normal },
     });
     const candle = chartInstance.addSeries(CandlestickSeries, {
@@ -1385,9 +1390,10 @@ export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
     }
     chartInstance.timeScale().fitContent();
     return () => chartInstance.remove();
-    // valid/market 由 props 派生（每次渲染重建），依赖它们等价于依赖 chart。
+    // valid/market/themeColors 由 props 与偏好派生（每次渲染重建），依赖它们等价于依赖 chart。
+    // T7：加入 prefs.marketColors / prefs.theme——否则改涨跌色或换主题后这张图不重建。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chart]);
+  }, [chart, prefs.marketColors, prefs.theme]);
 
   if (valid.length === 0) {
     return <p className="report-meta">价格量能图数据不可用（本次 K 线取数失败或无有效日线）。</p>;

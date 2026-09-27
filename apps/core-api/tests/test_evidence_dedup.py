@@ -86,6 +86,7 @@ def _seed_evidence(db, tenant, *, hash_value: str, title: str, collected_at: str
 
 
 def test_evidence_dedup_removes_historical_duplicates(client, tmp_path, monkeypatch):
+    """第四轮审计（api-7）：改为**两段式**——默认只预览，显式 confirm 才真删。"""
     from datetime import UTC, datetime
     from pathlib import Path
 
@@ -100,10 +101,50 @@ def test_evidence_dedup_removes_historical_duplicates(client, tmp_path, monkeypa
     _seed_evidence(db2, tenant, hash_value="old-hash-2-000000000000000000000000", title="关于重大诉讼的进展公告", collected_at=now)
     _seed_evidence(db2, tenant, hash_value="unique-hash-00000000000000000000", title="另一条不相关公告", collected_at=now)
 
-    body = test_client.post("/evidence/dedup", headers=headers).json()
+    # ① 默认（不传 body）＝ 预览：一条都不删，并给出待删清单
+    preview = test_client.post("/evidence/dedup", headers=headers).json()
+    assert preview["ok"] is True, preview
+    assert preview["dry_run"] is True
+    assert preview["removed"] == 0
+    assert preview["would_remove"] == 1
+    assert len(preview["candidates"]) == 1
+    # 清单要带 content_hash：分组键不含它，用户靠它判断这组是否真同内容
+    assert preview["candidates"][0]["content_hash"].startswith("old-hash")
+    assert len(test_client.get("/evidence", headers=headers).json()) == 3, "预览不得删任何数据"
+
+    # ② 显式 confirm 才真删
+    body = test_client.post(
+        "/evidence/dedup", headers=headers, json={"dry_run": False, "confirm": True}
+    ).json()
     assert body["ok"] is True, body
     assert body["removed"] == 1  # 只删同组多余的一条，保留最早入账
     assert body["remaining"] == 2
 
-    again = test_client.post("/evidence/dedup", headers=headers).json()
+    again = test_client.post(
+        "/evidence/dedup", headers=headers, json={"dry_run": False, "confirm": True}
+    ).json()
     assert again["removed"] == 0 and again["remaining"] == 2  # 幂等：再跑无可清
+
+
+def test_evidence_dedup_without_confirm_never_deletes(client, tmp_path, monkeypatch):
+    """破坏性操作必须有确认闸门：confirm=False 时即使 dry_run=False 也不删。"""
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from investment_steward_core.storage.database import Database
+
+    test_client, headers = _file_client(tmp_path, monkeypatch)
+    tenant = uuid5(NAMESPACE_URL, str(Path(tmp_path).resolve()))
+    db2 = Database(Path(tmp_path) / "steward.sqlite3")
+    now = datetime.now(UTC).isoformat()
+    _seed_evidence(db2, tenant, hash_value="h1-000000000000000000000000000", title="关于重大诉讼的进展公告", collected_at=now)
+    _seed_evidence(db2, tenant, hash_value="h2-000000000000000000000000000", title="关于重大诉讼的进展公告", collected_at=now)
+
+    # 显式 dry_run=False 但 confirm=False ⇒ 仍只预览（对齐 /import/apply 的 confirm 纪律）
+    body = test_client.post(
+        "/evidence/dedup", headers=headers, json={"dry_run": False, "confirm": False}
+    ).json()
+    assert body["removed"] == 0
+    assert body["dry_run"] is True
+    assert body["would_remove"] == 1
+    assert len(test_client.get("/evidence", headers=headers).json()) == 2, "未确认时不得删除"

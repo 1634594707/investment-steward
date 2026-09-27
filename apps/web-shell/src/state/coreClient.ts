@@ -1,4 +1,6 @@
 
+import type { WorkerStatus } from "@investment-steward/host-bridge";
+
 export interface CoreRequest {
   method: "GET" | "POST" | "PUT" | "DELETE";
   path: `/${string}`;
@@ -20,8 +22,11 @@ const STATUS_TIMEOUT_MS = 10_000;
 /** C01：取消请求的返回状态（非标准 HTTP 码，仅本应用内部语义）。 */
 export const CANCELLED_STATUS = 499;
 
-/** C03：核心健康事件——所有 client 实例上报超时/恢复，供 AppShell 把「重启本地 Core」变成常驻逃生口。 */
-export type CoreHealthEvent = { kind: "timeout" | "recover"; path: string };
+/** C03：核心健康事件——所有 client 实例上报超时/恢复，供 AppShell 把「重启本地 Core」变成常驻逃生口。
+ *  T5：新增 `unauthorized`——401/403 说明 Core 活着但拒绝了本会话。此前 `status()` 只返回
+ *  ready/stopped，鉴权失败的 Core 会被判成 "ready"，于是「重启本地 Core」按钮不显示，
+ *  用户只看到一串原始 HTTP 码和一个必然继续失败的「重试加载」。 */
+export type CoreHealthEvent = { kind: "timeout" | "recover" | "unauthorized"; path: string };
 const healthListeners = new Set<(event: CoreHealthEvent) => void>();
 export function onCoreHealthEvent(listener: (event: CoreHealthEvent) => void): () => void {
   healthListeners.add(listener);
@@ -79,7 +84,16 @@ export function detailOf(data: unknown): string | null {
 export function classifyCoreError(status: number, detail?: string | null): CoreErrorInfo {
   if (status === 0 || status === 502) return { kind: "network", message: detail || "无法连接本地 Core（进程未启动或端口不可达）" };
   if (status === 408 || status === 504) return { kind: "timeout", message: detail || "Core 请求超时，请稍后重试" };
-  if (status === 401 || status === 403) return { kind: "forbidden", message: detail || "请求被拒绝（会话令牌或权限不足）" };
+  if (status === 401 || status === 403) {
+    // T5：Core 对未授权一律回固定字面量 `invalid local session`（`api/deps.py`），
+    // 直接透传等于把一句英文常量甩给用户，且不含任何可操作指引。这里**不**透传该字面量，
+    // 换成能指路的说法；非该常量时仍保留后端 detail（可能是更具体的原因）。
+    const raw = (detail ?? "").trim();
+    const message = !raw || raw === "invalid local session"
+      ? "会话令牌无效或已过期（HTTP 401/403）。点击状态栏的「重启 Core」可重新协商令牌。"
+      : raw;
+    return { kind: "forbidden", message };
+  }
   if (status === 409) return { kind: "conflict", message: detail || "状态冲突：操作与本地当前状态不一致" };
   return { kind: "server", message: detail || `Core 返回错误（HTTP ${status}）` };
 }
@@ -91,6 +105,15 @@ export interface CoreClient {
   readonly hosted: boolean;
   /** Host 存在时读取真实 Core 状态；无通道时恒为 "stopped"。 */
   status(): Promise<CoreConnection>;
+  /**
+   * T4：读取后台巡查（agent-worker）状态。
+   *
+   * 宿主 `host:get-core-status` 的响应里**本来就带** `worker` 字段
+   * （`apps/desktop-host/src/main.ts` 的 `readWorkerStatus()` 读状态文件），但
+   * `status()` 此前只映射 `coreStatus.status`、把其余整个丢掉，于是「最近成功 /
+   * 最近失败 / 下次运行」永远拿不到。无 Host 通道时恒为 null。
+   */
+  workerStatus(): Promise<WorkerStatus | null>;
   request<T = unknown>(req: CoreRequest): Promise<{ status: number; data: T }>;
 }
 
@@ -106,6 +129,8 @@ export function createCoreClient(): CoreClient {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
       try {
+        // A01（架构路线图 2026-09-25）：这里只判断连通性与就绪，故继续用轻量 /health；
+        // 业务概览（data_as_of / channels / plugins / slots）在 GET /overview。
         const response = await fetch(`${coreBase}/health`, { signal: controller.signal });
         return response.ok ? "ready" : "stopped";
       } catch {
@@ -123,6 +148,16 @@ export function createCoreClient(): CoreClient {
       }
     }
     return "stopped";
+  }
+
+  async function workerStatus(): Promise<WorkerStatus | null> {
+    if (!bridge) return null;
+    try {
+      const coreStatus = await withTimeout(bridge.getCoreStatus(), STATUS_TIMEOUT_MS);
+      return coreStatus.worker ?? null;
+    } catch {
+      return null;
+    }
   }
 
   async function request<T = unknown>(req: CoreRequest): Promise<{ status: number; data: T }> {
@@ -167,7 +202,11 @@ export function createCoreClient(): CoreClient {
             data = { detail: text };
           }
         }
-        reportHealth({ kind: "recover", path: req.path });
+        reportHealth(
+          response.status === 401 || response.status === 403
+            ? { kind: "unauthorized", path: req.path }
+            : { kind: "recover", path: req.path },
+        );
         return { status: response.status, data: data as T };
       } catch (error) {
         if (req.signal?.aborted && !timedOut) {
@@ -200,7 +239,11 @@ export function createCoreClient(): CoreClient {
       const { signal: _signal, ...ipcRequest } = req;
       try {
         const result = await bridge.coreRequest<T>({ ...ipcRequest, reqId, timeoutMs });
-        reportHealth({ kind: "recover", path: req.path });
+        reportHealth(
+          result.status === 401 || result.status === 403
+            ? { kind: "unauthorized", path: req.path }
+            : { kind: "recover", path: req.path },
+        );
         return result;
       } catch (error) {
         if (req.signal?.aborted) {
@@ -214,5 +257,5 @@ export function createCoreClient(): CoreClient {
     return { status: 503, data: { detail: "未连接内核（演示模式已移除）。" } as unknown as T };
   }
 
-  return { isDemo: false, hosted, status, request };
+  return { isDemo: false, hosted, status, workerStatus, request };
 }

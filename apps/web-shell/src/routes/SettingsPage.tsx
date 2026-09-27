@@ -1367,10 +1367,18 @@ function formatBytes(bytes: number): string {
   return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
-/** F01（桌面端升级路线图 2026-09-18）：模型用量——按方案聚合窗口内的调用与 token（GET /model-usage）。 */
+/** F01（桌面端升级路线图 2026-09-18）：模型用量——按方案聚合窗口内的调用与 token（GET /model-usage）。
+ *
+ *  Q2（用户视角路线图 2026-09-26）：Core 侧改为 `GROUP BY profile_id, model, purpose`
+ *  并返回 `purpose`。这是 Jev 花费可归因的前提——Jev 记 `profile_id=NULL`，
+ *  原先所有场景全并进同一个 `(NULL, model)` 桶；且它的 `total_tokens` 恒为 null，
+ *  原先 `ORDER BY total_tokens DESC` 让它永远沉底。
+ */
 interface ModelUsageSummary {
   profile_id: string | null;
   model: string;
+  /** Q2：场景标签。Jev 为 `jev:<场景>`，chat 链路为中文场景名（方向/研报/协同…），空串表示未标。 */
+  purpose: string;
   calls: number;
   ok_calls: number;
   timeouts: number;
@@ -1383,6 +1391,25 @@ interface ModelUsageSummary {
   avg_latency_ms: number;
   max_latency_ms: number;
 }
+
+/** 场景标签 → 用途说明。键为 Core 实际写入的 purpose 字符串，未列出的原样显示（不猜、不隐藏）。 */
+const MODEL_PURPOSE_LABEL: Record<string, string> = {
+  "jev:claim-support": "语义支撑（研报/协同引用校验）",
+  "jev:scan-review": "扫描复核",
+  "jev:tactics-review": "战法复核",
+  "jev:followup-triage": "追问分诊",
+  "jev:action-routing": "行动建议路由",
+  "jev:notify-triage": "通知分诊",
+  "jev:unspecified": "语义支撑（未标注场景）",
+  "方向": "方向研判",
+  "研报": "个股研报",
+  "协同": "协同流水线",
+  "追问": "追问补充",
+  "研读": "研读",
+  "宏观": "宏观分析",
+  "综合对比": "多模型对比",
+  "连通性测试": "连通性测试",
+};
 
 function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) => Promise<{ status: number; data: unknown }> }) {
   const [window, setWindow] = useState<"7d" | "30d">("7d");
@@ -1419,7 +1446,7 @@ function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) =
   return (
     <div className="dl-block">
       <h4>模型用量</h4>
-      <p>按方案统计本机发起的模型调用（研报/方向/协同/追问/宏观等）；token 三项来自模型返回的 usage，缺失记「—」不按字数反推。</p>
+      <p>按方案与用途统计本机发起的模型调用（研报/方向/协同/追问/宏观/Jev 语义层等）；token 三项来自模型返回的 usage，缺失记「—」不按字数反推。Jev 不走模型方案（无 profile），按用途单独成行。</p>
       <div className="filter-row">
         <button className={`tag-button ${window === "7d" ? "active" : ""}`} onClick={() => { setWindow("7d"); void load("7d"); }}>最近 7 天</button>
         <button className={`tag-button ${window === "30d" ? "active" : ""}`} onClick={() => { setWindow("30d"); void load("30d"); }}>最近 30 天</button>
@@ -1432,12 +1459,14 @@ function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) =
         ) : (
           <table className="kv-table">
             <thead>
-              <tr><th>模型</th><th>调用</th><th>成功/失败/超时</th><th>tokens（入/出/总）</th><th>平均耗时</th></tr>
+              <tr><th>模型</th><th>用途</th><th>调用</th><th>成功/失败/超时</th><th>tokens（入/出/总）</th><th>平均耗时</th></tr>
             </thead>
             <tbody>
               {summaries.map((row) => (
-                <tr key={`${row.profile_id ?? "none"}-${row.model}`}>
+                // Q2：purpose 进入分组键后，profile+model 不再唯一，必须带上它做 key
+                <tr key={`${row.profile_id ?? "none"}-${row.model}-${row.purpose}`}>
                   <td>{row.model}</td>
+                  <td>{MODEL_PURPOSE_LABEL[row.purpose] ?? row.purpose}</td>
                   <td>{row.calls}{row.retried_calls > 0 ? `（含重试 ${row.retried_calls}）` : ""}</td>
                   <td>{row.ok_calls}/{row.errors}/{row.timeouts}</td>
                   <td>

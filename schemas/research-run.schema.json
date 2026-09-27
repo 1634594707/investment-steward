@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "RunStatus": {
+      "enum": [
+        "created",
+        "planning",
+        "collecting_evidence",
+        "analyzing",
+        "waiting_confirmation",
+        "composing",
+        "completed",
+        "failed",
+        "cancelled",
+        "stale"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "研究链路运行记录：问题 → 证据收集 → 有据回答，状态机与 agent-worker 的 AgentRun 对齐。",
+  "properties": {
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunStatus",
+      "default": "created"
+    },
+    "user_question": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "User Question",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "supporting_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Supporting Refs",
+      "type": "array"
+    },
+    "contradicting_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Contradicting Refs",
+      "type": "array"
+    },
+    "response_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Response Id"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    }
+  },
+  "required": [
+    "run_id",
+    "user_id",
+    "user_question"
+  ],
+  "title": "ResearchRun",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/research-run/1.0"
+}

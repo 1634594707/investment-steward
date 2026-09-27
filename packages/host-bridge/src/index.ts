@@ -13,6 +13,40 @@ export interface CoreStatus {
   version: string;
   pid?: number;
   last_error?: string | null;
+  /**
+   * A05（架构改进路线图 2026-09-25）：agent-worker 的运行状态。
+   * 结构见 `agent-worker.status.json`（业务日历 + 每项巡查的最近成功 / 最近失败 / 下次运行）；
+   * 文件尚未生成或已损坏时为 null——后台巡查状态缺失不应影响 Core 连接判定。
+   */
+  worker?: WorkerStatus | null;
+}
+
+export interface WorkerTaskRuntime {
+  task: string;
+  period: "daily" | "hourly";
+  due_at?: string | null;
+  next_run_at?: string | null;
+  last_started_at?: string | null;
+  last_finished_at?: string | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  last_ok?: boolean | null;
+  last_error?: string;
+  consecutive_failures?: number;
+  retry_at?: string | null;
+  runs_ok?: number;
+  runs_failed?: number;
+}
+
+export interface WorkerStatus {
+  status: string;
+  version: string;
+  ts: string;
+  tool_calls?: number;
+  ledger_records?: number;
+  business_calendar?: { utc_offset_minutes: number; daily_due_hour: number };
+  tasks?: Record<string, WorkerTaskRuntime>;
+  [key: string]: unknown;
 }
 
 export interface HostBridge {

@@ -143,13 +143,23 @@ def _parse_kline_rows(data: dict[str, object]) -> list[dict[str, object]]:
     return ordered
 
 
+def _kline_span_days(limit: int, period: str) -> int:
+    """按请求根数换算日历窗口（QL09）。
+
+    旧实现把日线窗口写死 540 天（≈370 交易日）:请求 750/1250 根时会**静默只拿到 ~370 根**,
+    调用方以为拿到了五年数据。这里按每根覆盖的日历天数放大窗口（日线 ~1.5 天/根,
+    周线 ~7.5、月线 ~31），并保留原有下限。
+    """
+    per_bar = {"day": 1.6, "week": 7.5, "month": 31.0}.get(period, 1.6)
+    floor = {"day": 540, "week": 5400, "month": 5400}.get(period, 540)
+    return max(floor, int(limit * per_bar) + 30)
+
+
 def _fetch_em_kline(symbol: str, limit: int, period: str = "day") -> list[dict[str, object]]:
     """拉取 A 股 / ETF K 线（东方财富前复权，klt 周期码），返回升序的 OHLCV 行列表。不触碰冷却缓存。"""
     secid = _symbol_to_secid(symbol)
     end = datetime.now(UTC)
-    # 周线/月线一根覆盖更长时间，起止窗口放大避免周/月 K 数量不足。
-    span_days = 540 if period == "day" else 5400
-    beg = end - timedelta(days=span_days)
+    beg = end - timedelta(days=_kline_span_days(limit, period))
     params = {
         "secid": secid,
         "fields1": "f1,f2,f3,f4,f5,f6",

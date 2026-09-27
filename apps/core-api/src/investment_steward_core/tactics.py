@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 BULLISH = "bullish"
 BEARISH = "bearish"
@@ -624,12 +627,28 @@ def snapshot(bars: list[dict[str, Any]], *, recent: int = 120, tactic_ids: set[s
     closes = ctx["series"]["close"]
     active_ids: set[str] | None = set(tactic_ids) if tactic_ids else None
     signals: list[dict[str, Any]] = []
+    # 第四轮审计：异常探测器**如实留痕**。此前是裸 `except: continue` 且既不记日志、
+    # 也不把失败暴露给调用方，于是某个形态一旦抛错就从命中清单里凭空消失，
+    # `tactics_score.score_for_bars` 只读 `signals`，于是质量分**无声地低一截**——
+    # 页面呈现与「确实没有该形态」完全一样。`/tactics/scan-market` 上这条路径要对
+    # 全市场每只票跑一遍全部探测器，任何一只票的 K 线字段异常，该票就少一个维度，
+    # 而排名与 rank_score 照常输出。
+    degraded: list[dict[str, str]] = []
     for tactic in TACTICS:
         if active_ids is not None and tactic["id"] not in active_ids:
             continue
         try:
             found = tactic["detect"](ctx)
-        except Exception:  # 单个战法异常不拖垮整体；如实丢弃而不是编造。
+        except Exception as error:  # 单个战法异常不拖垮整体，但必须留痕
+            logger.warning(
+                "战法探测器异常，本次未参与评分 tactic_id=%s error=%s",
+                tactic["id"], error, exc_info=True,
+            )
+            degraded.append({
+                "tactic_id": tactic["id"],
+                "tactic_name": tactic["name"],
+                "error": f"{type(error).__name__}: {error}"[:200],
+            })
             continue
         for signal in found:
             index = int(signal["index"])
@@ -656,7 +675,7 @@ def snapshot(bars: list[dict[str, Any]], *, recent: int = 120, tactic_ids: set[s
             })
     signals.sort(key=lambda item: str(item["date"]))
     cutoff = signals[-recent:] if len(signals) > recent else signals
-    latest = lambda series: series[-1] if series and series[-1] is not None else None  # noqa: E731
+    latest = lambda series: series[-1] if series and series[-1] is not None else None
     return {
         "bars_count": n,
         "sufficient": n >= MIN_BARS,
@@ -673,5 +692,8 @@ def snapshot(bars: list[dict[str, Any]], *, recent: int = 120, tactic_ids: set[s
             {key: value for key, value in signal.items() if key != "index"}
             for signal in cutoff
         ],
+        # 第四轮审计：非空表示有形态因数据异常未参与本次评分（不是「没有该形态」）。
+        # 调用方与前端据此显示「N 个形态因数据异常未参与评分」，不让质量分无声偏低。
+        "degraded_tactics": degraded,
     }
 

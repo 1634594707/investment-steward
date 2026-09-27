@@ -23,7 +23,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -314,9 +314,7 @@ def test_stock_report_exposes_claim_findings_and_evidence_quality(client, tmp_pa
     fake, calls = _two_call_model(report, None)
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
 
     findings = {item["claim_id"]: item for item in body["claims"]}
@@ -349,9 +347,7 @@ def test_counter_check_success_is_attached_alongside_rule_findings(client, tmp_p
     fake, _ = _two_call_model(_report_json(), counter)
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
     check = body["counter_check"]
     assert check["ok"] is True and check["requested"] is True
@@ -373,9 +369,7 @@ def test_counter_check_failure_never_blocks_the_report(client, tmp_path, monkeyp
     fake, calls = _two_call_model(_report_json(), json.dumps({"summary": "看起来还行"}))
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
     assert len(calls) == 2
     assert body["counter_check"]["ok"] is False
@@ -392,11 +386,7 @@ def test_counter_check_can_be_disabled_to_save_one_call(client, tmp_path, monkey
     fake, calls = _two_call_model(_report_json(), None)
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": "600001", "with_counter_check": False},
-        headers=headers,
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
     assert body["ok"] is True, body
     assert len(calls) == 1                     # 只调用一次模型
     assert body["counter_check"]["ok"] is False
@@ -441,9 +431,7 @@ def test_review_queue_buckets_overdue_scheduled_and_event_anchored(client, tmp_p
     )
     fake, _ = _two_call_model(report, None)
     monkeypatch.setattr(mc, "_post_json", fake)
-    assert test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()["ok"] is True
+    assert run_stock_report(test_client, headers, **{"symbol": "600001"})["ok"] is True
 
     body = test_client.get("/ai-research/review-queue", headers=headers).json()
     assert body["ok"] is True and body["today"] == today.isoformat()

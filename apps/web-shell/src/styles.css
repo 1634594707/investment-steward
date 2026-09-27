@@ -646,6 +646,11 @@ button { background: none; border: 0; cursor: pointer; }
 .statusbar .sb-dot.off { background: var(--faint); box-shadow: none; }
 .statusbar .sb-strong { color: var(--muted); }
 .statusbar .sb-right { margin-left: auto; display: flex; gap: calc(var(--space-4) * var(--density-scale)); }
+/* T4：后台巡查状态。ok 用 --muted（不抢视觉焦点），warn/error 才上语义色——
+   状态栏里只有真出问题才该有颜色，否则天天绿色等于没有信号。 */
+.statusbar .sb-worker { color: var(--muted); cursor: default; }
+.statusbar .sb-worker-warn { color: var(--amber); }
+.statusbar .sb-worker-error { color: var(--coral); }
 
 /* ---------- 应用级工作区壳层 v3：TitleBar(窗口) → ActivityBar(工作区) → Sidebar(工作区内导航) ---------- */
 :root { --shell-activity-w: 52px; --shell-rail-w: 228px; --shell-titlebar-h: 40px; }

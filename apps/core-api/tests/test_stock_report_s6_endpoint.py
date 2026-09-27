@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+
+from conftest import run_stock_report
 import json
 import re
 from types import SimpleNamespace
@@ -269,11 +271,7 @@ def _model_reply(monkeypatch, calls: list[set[str]]) -> None:
 
 
 def _report_body(test_client, headers, symbol: str) -> dict:
-    return test_client.post(
-        "/evidence/stock-research-report",
-        json={"symbol": symbol, "with_counter_check": False, "with_auto_repair": False},
-        headers=headers,
-    ).json()
+    return run_stock_report(test_client, headers, **{"symbol": symbol, "with_counter_check": False, "with_auto_repair": False})
 
 
 def test_listed_stock_gets_s6_and_unlisted_does_not(tmp_path, monkeypatch):

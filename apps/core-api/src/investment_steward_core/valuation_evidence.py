@@ -143,6 +143,10 @@ class ValuationSnapshot:
     identity: str = ""
     # C06：非空表示当前值来自「带日期缓存」降级（注明时点的有限比较），调用方须如实渲染。
     degraded_note: str = ""
+    # 第四轮审计：同业样本是否**取全了**。False 表示触顶 `_PEER_MAX_ROWS`，此时
+    # `peer_median` / `peer_rank` 是**抽样**口径，界面与证据文案必须如实说明，
+    # 不能让读者以为 N 只就是全行业。
+    peer_sample_complete: bool = True
 
 
 def _is_number(value: Any) -> bool:
@@ -358,30 +362,63 @@ def fetch_valuation_history(symbol: str, years: int = 5) -> list[dict[str, Any]]
     return out[:want]
 
 
+# 同业样本完整性：分页能取到的行数上限（_PAGE_SIZE × 该值，与 _MAX_PAGES 同量级）。
+# 绝大多数行业成分股远少于此；触顶说明是**抽样**，`peer_sample_complete` 会置 False。
+_PEER_MAX_ROWS = _PAGE_SIZE * 2
+
+
 def fetch_peer_valuations(
-    board_code: str, trade_date: str, *, exclude_symbol: str | None = None, limit: int = 30
+    board_code: str, trade_date: str, *, exclude_symbol: str | None = None, limit: int = 0
 ) -> list[PeerValuation]:
-    """取同行业二级当日全部个股估值（按 PE(TTM) 升序），用于横向比较。"""
+    """取同行业二级当日**全量**个股估值，用于横向比较。
+
+    第四轮审计修正（这处此前让报告里的「同业中位数」系统性偏低）：
+    改造前是 `page_size=100` 的**单页**查询，且按 `PE_TTM` **升序**排，再 `limit` 截断。
+    两者叠加的实际效果是「只拿到这个行业里 PE 最低的 30 只（且只覆盖前 100 只）」，
+    但 docstring 与界面文案都写的是「同业（N 只，当日）」——读者无从知道 N 是偏低的
+    30 而不是全行业，于是：
+      - 「中位数」被系统性压到全行业中位数**之下**；
+      - 「本股升序位次」的分母是这 30 只最便宜的股，真实位次被高估；
+      - 亏损股多的板块（地产、设备）前 30 只 PE 全为负 → `positives` 为空 →
+        `peer_median["pe_ttm"]` 干脆不写入、界面显示「无数据」，却**没有一句说明
+        这是抽样口径造成的**。
+
+    现在：①按 `TRADE_DATE` 降序**分页取全量**（不再按 PE 排序截断，排序根本不是目的）；
+    ②`limit=0`（默认）表示不截断；③触顶 `_PEER_MAX_ROWS` 时如实返回已取到的，
+    并由调用方据 `len(peers)` 判定 `peer_sample_complete=False`。
+    """
     if not board_code or not trade_date:
         return []
     flt = _build_filter(board_code=board_code, trade_date=trade_date)
-    rows = _query(_PEER_COLUMNS, flt, page_size=100, sort_column="PE_TTM", desc=False)
+    cap = _PEER_MAX_ROWS if not limit or limit <= 0 else limit
     out: list[PeerValuation] = []
-    for row in rows:
-        code = _text(row.get("SECURITY_CODE"))
-        if exclude_symbol and code == exclude_symbol:
-            continue
-        out.append(
-            PeerValuation(
-                symbol=code,
-                name=_text(row.get("SECURITY_NAME_ABBR")),
-                pe_ttm=_num(row.get("PE_TTM")),
-                pb_mrq=_num(row.get("PB_MRQ")),
-                ps_ttm=_num(row.get("PS_TTM")),
-            )
+    page = 1
+    while len(out) < cap and page <= 2:
+        rows = _query(
+            _PEER_COLUMNS, flt, page_size=_PAGE_SIZE, page_number=page,
+            # 排序只用于分页稳定性，**不**用于筛选：按交易日降序，与「取全量」意图一致
+            sort_column="TRADE_DATE", desc=True,
         )
-        if len(out) >= limit:
+        if not rows:
             break
+        for row in rows:
+            code = _text(row.get("SECURITY_CODE"))
+            if exclude_symbol and code == exclude_symbol:
+                continue
+            out.append(
+                PeerValuation(
+                    symbol=code,
+                    name=_text(row.get("SECURITY_NAME_ABBR")),
+                    pe_ttm=_num(row.get("PE_TTM")),
+                    pb_mrq=_num(row.get("PB_MRQ")),
+                    ps_ttm=_num(row.get("PS_TTM")),
+                )
+            )
+            if len(out) >= cap:
+                break
+        if len(rows) < _PAGE_SIZE:
+            break
+        page += 1
     return out
 
 
@@ -756,8 +793,7 @@ def describe_sector_ranking_entry(entry: SectorRankingEntry, *, total_boards: in
     if entry.label:
         rationale = entry.rationale
         prefix = f"{entry.label}："
-        if rationale.startswith(prefix):
-            rationale = rationale[len(prefix):]
+        rationale = rationale.removeprefix(prefix)
         parts.append(f"【{entry.label}】{rationale}" if rationale else f"【{entry.label}】")
     parts.append(f"{coverage}板块估值判定第 {entry.rank} 名：板块「{agg.board_name or agg.board_code}」")
     if entry.sort_percentile is not None:
@@ -1063,12 +1099,17 @@ def _identity(snapshot: dict[str, Any]) -> str:
 
 
 def fetch_valuation(
-    symbol: str, *, history_years: int = 5, peer_limit: int = 20
+    symbol: str, *, history_years: int = 5, peer_limit: int = 0
 ) -> ValuationSnapshot:
     """取单只 A 股的估值全貌（当前 + 历史分位 + 同业相对）。
 
     当前值取不到 → 抛 `ValuationError`（调用方如实降级）；
     历史序列或同业取数失败 → 不抛出，降级为分位/同业缺失并在 note 中说明（部分可用优于全丢）。
+
+    第四轮审计：`peer_limit` 默认由 20 改为 **0 = 不截断**。原默认值 20 叠加
+    `fetch_peer_valuations` 内部的 PE 升序，等于「同业中位数」只由全行业里
+    最便宜的 20 只决定——系统性偏低，而文案写的是「同业（N 只，当日）」。
+    触顶 `_PEER_MAX_ROWS` 时 `peer_sample_complete=False`，文案如实标注抽样。
     """
     code = _normalize_symbol(symbol)
 
@@ -1125,6 +1166,7 @@ def fetch_valuation(
     peer_rank_basis: dict[str, int] = {}
     peer_count = 0
     peer_loss_count = 0
+    peer_sample_complete = True
     if board_code and trade_date:
         try:
             peer_list = fetch_peer_valuations(
@@ -1136,6 +1178,13 @@ def fetch_valuation(
         if peer_list:
             peers = tuple(peer_list)
             peer_count = len(peer_list)
+            # 触顶即抽样：如实标记，渲染侧据此改口径
+            if peer_count >= _PEER_MAX_ROWS:
+                peer_sample_complete = False
+                notes.append(
+                    f"同业成分股超过 {_PEER_MAX_ROWS} 只，本次为**前 {_PEER_MAX_ROWS} 只抽样**"
+                    "（按交易日降序取，非按估值排序），中位数与位次均为抽样口径。"
+                )
             peer_loss_count = sum(1 for p in peer_list if p.pe_ttm is not None and p.pe_ttm <= 0)
             for metric, current in (("pe_ttm", pe_ttm), ("pb_mrq", pb_mrq), ("ps_ttm", ps_ttm)):
                 positives = [
@@ -1191,6 +1240,7 @@ def fetch_valuation(
         peer_loss_count=peer_loss_count,
         identity=_identity(snapshot),
         degraded_note=degraded_note,
+        peer_sample_complete=peer_sample_complete,
     )
 
 
@@ -1249,8 +1299,10 @@ def describe_valuation(snapshot: ValuationSnapshot) -> str:
             for key, label in (("pe_ttm", "PE(TTM)"), ("pb_mrq", "PB"), ("ps_ttm", "PS"))
             if key in rank
         )
+        # 第四轮审计：样本不完整时必须改口径措辞——「同业 500 只」会让读者以为那就是全行业。
+        sample_note = "" if snapshot.peer_sample_complete else f"，**抽样前 {snapshot.peer_count} 只，非全行业**"
         lines.append(
-            f"- 同业（{snapshot.board_name}，{snapshot.peer_count} 只，当日）："
+            f"- 同业（{snapshot.board_name}，{snapshot.peer_count} 只，当日{sample_note}）："
             f"中位数 PE(TTM) {_median_text('pe_ttm')} / PB {_median_text('pb_mrq')} / "
             f"PS {_median_text('ps_ttm')}"
             + (f"；本股升序位次：{rank_text}" if rank_text else "")

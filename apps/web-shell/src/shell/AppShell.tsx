@@ -12,6 +12,9 @@ import { usePlugins } from "../hooks/usePlugins";
 import { requestLibraryReload } from "../state/libraryRefresh";
 import { createCoreClient, classifyCoreError, detailOf, onCoreHealthEvent, type CoreClient, type CoreConnection } from "../state/coreClient";
 import { subscribeTaskCenter, taskCenterSnapshot, type TaskCenterEntry } from "../state/taskCenter";
+import { summarizeWorker } from "../state/workerSummary";
+import { useCorePoll } from "../state/useCoreQuery";
+import type { WorkerStatus } from "@investment-steward/host-bridge";
 import { DEFAULT_VIEW, NAV_ALL, SETTINGS_WORKSPACE, WORKSPACES, workspaceDefaultView, workspaceOfView, type AppView, type WorkspaceDef } from "./nav";
 import { loadDefaultView, saveDefaultView, saveProfile } from "./profile";
 import { Sidebar } from "./Sidebar";
@@ -31,7 +34,7 @@ import { SHORTCUTS_EVENT, viewForDigit, isTypingTarget, type NavReachability } f
 import { applyUiPrefs, saveUiPrefs, useUiPrefs } from "./uiprefs";
 import { applyWidthTier } from "../state/widthTier";
 import { Skeleton, SkeletonLines } from "../components/Skeleton";
-import { useNotifications } from "../hooks/useNotifications";
+import { useNotifications, type NotificationPendingPage } from "../hooks/useNotifications";
 import { useCandles, type CandlePeriod } from "../hooks/useCandles";
 import { isDocumentVisible } from "../state/useCoreQuery";
 // M4-E01/E02：标的查找（代码 ⇄ 名称）。
@@ -116,10 +119,11 @@ export function AppShell() {
     upsertCredential, testCredential, deleteCredential, applyPersonalSettings, savePersonalSettings,
   } = useSystem(client);
   // B1：通知领域数据下沉 hooks/useNotifications（60s 刷新 + 已读/评估，窗口隐藏暂停）。
+  // T3：传入通知偏好——托盘态下弹系统通知要遵守免打扰时段（口径与 Core 侧钉钉投递一致）。
   const {
-    notifications, setNotifications, triage: notificationTriage,
+    notifications, setNotifications, mutedState: notificationMuted, triage: notificationTriage,
     loadNotificationTriage, markNotificationRead, evaluateNotifications,
-  } = useNotifications(client);
+  } = useNotifications(client, personalSettings?.notify ?? null);
   // M2-03：AI 前置就绪 = 存在「使用中」的模型方案。未就绪时 AI 入口禁用并引导到设置页，
   // 避免用户点击后才收到 model_unavailable 报错。
   const aiReady = modelProfiles.some((profile) => profile.status === "使用中");
@@ -180,9 +184,21 @@ export function AppShell() {
   // 「重启本地 Core」不再只在 connection === "stopped" 时可见，而是常驻命令面板 + 状态栏可点提示。
   const [coreHung, setCoreHung] = useState(false);
   const coreTimeoutCountRef = useRef(0);
+  // T5：Core 活着但拒绝本会话（401/403）。`status()` 只会返回 ready/stopped，
+  // 光看连接态识别不出来。
+  const [coreAuthFailed, setCoreAuthFailed] = useState(false);
   // D02（桌面端升级路线图 2026-09-18）：进行中任务中心——StatusBar 展示可展开条目与停止按钮。
   const [taskEntries, setTaskEntries] = useState<TaskCenterEntry[]>([]);
   useEffect(() => subscribeTaskCenter(() => setTaskEntries(taskCenterSnapshot())), []);
+  // T4：后台巡查状态。宿主 `host:get-core-status` 本就带 worker 字段，此前被 coreClient 丢弃。
+  // 这里独立轮询（不塞进 /overview——那是 Core 的业务概览，worker 状态在宿主侧）。
+  const [worker, setWorker] = useState<WorkerStatus | null>(null);
+  useCorePoll(
+    async () => {
+      setWorker(await client.workerStatus());
+    },
+    { intervalMs: 30000, immediate: true, enabled: client.hosted },
+  );
   useEffect(() => {
     const off = onCoreHealthEvent((event) => {
       if (event.kind === "timeout") {
@@ -192,6 +208,9 @@ export function AppShell() {
         coreTimeoutCountRef.current = 0;
         setCoreHung(false);
       }
+      // T5：Core 活着但拒绝本会话（401/403）也是一种「需要用户动手」的状态。
+      if (event.kind === "unauthorized") setCoreAuthFailed(true);
+      else if (event.kind === "recover") setCoreAuthFailed(false);
     });
     return off;
   }, []);
@@ -343,12 +362,18 @@ export function AppShell() {
   const deferredQueuedRef = useRef(false);
   const phase1ErrorsRef = useRef<string[]>([]);
 
+  // T5（用户视角路线图 2026-09-26）：本函数此前是启动路径**唯一**的错误格式化器，
+  // 直出原始 HTTP 码与 detail——`classifyCoreError`（本文件第 13 行 import 的那个）
+  // 明明能把 401/403 翻成「会话令牌或权限不足」，却从未被调用（死 import）。
+  // 结果 8 个端点各弹一条「个人设置加载失败（HTTP 403：invalid local session）」，
+  // 用户看不出「重启一下 Core 就能恢复」。现在改走统一分类，文案可操作。
   function toLoadError(entry: [string, { status: number; data?: unknown }]): string {
     const response = entry[1];
     const detail = response.data && typeof response.data === "object" && "detail" in response.data
       ? String((response.data as { detail?: unknown }).detail ?? "")
-      : "";
-    return `${entry[0]}加载失败（HTTP ${response.status}${detail ? `：${detail}` : ""}）`;
+      : null;
+    const classified = classifyCoreError(response.status, detail);
+    return `${entry[0]}加载失败：${classified.message}`;
   }
 
   async function loadAll(initialLoad: boolean) {
@@ -357,16 +382,18 @@ export function AppShell() {
       setLoadErrors([]);
       return;
     }
-    const [coreStatus, policies, evidenceRes, catalog, holdingsRes, notificationsRes, personalSettingsRes, investorProfileRes, healthRes, slotsRes] = await Promise.all([
+    const [coreStatus, policies, evidenceRes, catalog, holdingsRes, notificationsRes, personalSettingsRes, investorProfileRes, overviewRes, slotsRes] = await Promise.all([
       client.status(),
       client.request<InvestmentPolicyVersion[]>({ method: "GET", path: "/investment-policies" }),
       client.request<Evidence[]>({ method: "GET", path: "/evidence" }),
       client.request<PluginCatalogEntry[]>({ method: "GET", path: "/plugins/catalog" }),
       client.request<Holding[]>({ method: "GET", path: "/holdings" }),
-      client.request<Notification[]>({ method: "GET", path: "/notifications/pending" }),
+      client.request<NotificationPendingPage>({ method: "GET", path: "/notifications/pending" }),
       client.request<PersonalSettings | null>({ method: "GET", path: "/personal/settings" }),
       client.request<InvestorProfile | null>({ method: "GET", path: "/investor/profile" }),
-      client.request<unknown>({ method: "GET", path: "/health" }),
+      // A01（架构路线图 2026-09-25）：业务概览走 GET /overview；/health 已收窄为轻量就绪探测，
+      // 不再返回 data_as_of / channels / plugins / slots。
+      client.request<unknown>({ method: "GET", path: "/overview" }),
       client.request<Array<{ slot: string; used: number; cap: number }>>({ method: "GET", path: "/slots" }),
     ]);
     setConnection(coreStatus);
@@ -379,7 +406,10 @@ export function AppShell() {
     if (evidenceRes.status < 400) setEvidence(evidenceRes.data);
     if (catalog.status < 400) setPlugins(catalog.data);
     if (holdingsRes.status < 400) setHoldings(holdingsRes.data);
-    if (notificationsRes.status < 400) setNotifications(notificationsRes.data);
+    if (notificationsRes.status < 400) {
+      // 第四轮审计（api-5）：响应已是包装对象，取 items；静音态交给通知铃自己呈现。
+      setNotifications(notificationsRes.data?.items ?? []);
+    }
     // E3 首次引导：真实 Core 返回 null（画像尚未建立）时才弹出；演示模式恒返回已建画像，不打扰预览。
     if (investorProfileRes.status < 400) {
       if (investorProfileRes.data) setInvestorProfile(investorProfileRes.data);
@@ -390,11 +420,11 @@ export function AppShell() {
       applyPersonalSettings(personalSettingsRes.data);
       if (initialLoad) setView(personalSettingsRes.data.default_view as AppView);
     }
-    if (healthRes.status < 400) {
-      const health = healthRes.data as { core_version?: string; schema_version?: string; data_as_of?: Record<string, string | null> };
-      setDataAsOf(health?.data_as_of ?? null);
-      setCoreVersion(health?.core_version ?? "—");
-      setSchemaVersion(health?.schema_version ?? "—");
+    if (overviewRes.status < 400) {
+      const overview = overviewRes.data as { core_version?: string; schema_version?: string; data_as_of?: Record<string, string | null> };
+      setDataAsOf(overview?.data_as_of ?? null);
+      setCoreVersion(overview?.core_version ?? "—");
+      setSchemaVersion(overview?.schema_version ?? "—");
     }
     // 插槽占用以 Core 仲裁为准（GET /slots）；失败时保持 null，StatusBar 回退本地估算。
     if (slotsRes.status < 400 && Array.isArray(slotsRes.data)) {
@@ -417,7 +447,7 @@ export function AppShell() {
       ["通知", notificationsRes],
       ["个人设置", personalSettingsRes],
       ["投资者画像", investorProfileRes],
-      ["健康信息", healthRes],
+      ["业务概览", overviewRes],
     ] as Array<[string, { status: number; data?: unknown }]>)
       .filter(([, res]) => res.status >= 400)
       .map(toLoadError);
@@ -691,7 +721,10 @@ export function AppShell() {
   // P3-D03：游资雷达的启用态（未启用时 /youzi/* 全 409，页面显示「启用」引导）。
   const youziPluginEnabled = plugins.some((entry) => entry.manifest.plugin_id === "official.youzi-radar" && entry.installation?.state === "enabled");
   // 桥接模式（Electron Host）下 Core 掉线才可就地重启；纯浏览器模式无此能力。
-  const canRestartCore = !!window.steward && (connection === "stopped" || coreHung);
+  // T5：`coreAuthFailed` 必须算进去——Core 进程活着但持续 401/403 时，`status()` 仍返回
+  // "ready"，此前这一支永远不成立，于是「重启本地 Core」按钮被藏起来，用户只剩一个
+  // 必然继续失败的「重试加载」。
+  const canRestartCore = !!window.steward && (connection === "stopped" || coreHung || coreAuthFailed);
 
   // F1-1 命令面板数据源：静态导航/动作 + 动态项（持仓 / 研究运行 / 插件）。
   const paletteCommands = useMemo<PaletteCommand[]>(() => {
@@ -803,7 +836,7 @@ export function AppShell() {
         plugins={plugins}
       />
       <main className="main" id="mainScroll" inert={narrow && railOverlayOpen}>
-        <TopBar entry={activeNav} isDemo={client.isDemo} onOpenPalette={() => setPaletteOpen(true)} onRefresh={handleRefresh} refreshing={refreshing} notifications={notifications} onMarkNotificationRead={markNotificationRead} onOpenToday={() => setView("today")} notificationTriage={notificationTriage} onLoadNotificationTriage={loadNotificationTriage} personalSettings={personalSettings} onOpenPersonalCenter={() => { setSettingsStabRequest("personal"); setView("settings"); }} />
+        <TopBar entry={activeNav} isDemo={client.isDemo} onOpenPalette={() => setPaletteOpen(true)} onRefresh={handleRefresh} refreshing={refreshing} notifications={notifications} onMarkNotificationRead={markNotificationRead} onOpenToday={() => setView("today")} notificationMuted={notificationMuted} notificationTriage={notificationTriage} onLoadNotificationTriage={loadNotificationTriage} personalSettings={personalSettings} onOpenPersonalCenter={() => { setSettingsStabRequest("personal"); setView("settings"); }} />
         <div className="page-stack-wrap">
           {booting ? (
             <div className="booting-pane" role="status" aria-live="polite">
@@ -878,7 +911,7 @@ export function AppShell() {
           )}
         </div>
       </main>
-      <StatusBar connection={connection} plugins={plugins} dataAsOf={dataAsOf ?? undefined} asOf={latestAsOf} isDemo={client.isDemo} coreVersion={coreVersion} schemaVersion={schemaVersion} slotUsage={slotUsage ?? undefined} coreHung={coreHung} onRestartCore={() => void handleRestartCore()} tasks={taskEntries} />
+      <StatusBar connection={connection} plugins={plugins} dataAsOf={dataAsOf ?? undefined} asOf={latestAsOf} isDemo={client.isDemo} coreVersion={coreVersion} schemaVersion={schemaVersion} slotUsage={slotUsage ?? undefined} coreHung={coreHung} coreAuthFailed={coreAuthFailed} onRestartCore={() => void handleRestartCore()} tasks={taskEntries} worker={summarizeWorker(worker)} />
       <EvidenceDrawer items={evidence} evidenceId={openEvidenceId} onClose={() => setOpenEvidenceId(null)} />
       {pendingAction && (
         <ConfirmDialog

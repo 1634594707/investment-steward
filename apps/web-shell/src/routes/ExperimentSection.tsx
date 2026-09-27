@@ -127,7 +127,7 @@ export function ExperimentSection({ coreRequest }: { coreRequest?: (req: CoreReq
         {latest && (
           <div className="qe-result">
             <div className="qe-metrics">
-              <span>策略 <b className={latest.excess_vs_baseline >= 0 ? "qe-up" : "qe-down"}>{pct(latest.equity)}</b></span>
+              <span>策略（净收益） <b className={latest.excess_vs_baseline >= 0 ? "qe-up" : "qe-down"}>{pct(latest.equity)}</b></span>
               <span>基线 <b>{pct(latest.baseline_buy_hold)}</b></span>
               <span>超额 <b className={latest.excess_vs_baseline >= 0 ? "qe-up" : "qe-down"}>{(latest.excess_vs_baseline * 100).toFixed(2)}%</b></span>
               <span>胜率 <b>{latest.win_rate == null ? "—" : `${(latest.win_rate * 100).toFixed(1)}%`}</b></span>
@@ -137,6 +137,9 @@ export function ExperimentSection({ coreRequest }: { coreRequest?: (req: CoreReq
             <div className="qe-meta">
               <span>样本 {latest.bars} 根(训练 {latest.split.train_bars} / 样本外 {latest.split.out_of_sample_bars})</span>
               <span>口径 {latest.spec_version}(手续费 {latest.costs.commission_bps}bps + 滑点 {latest.costs.slippage_bps}bps)</span>
+              {/* 第四轮审计：明确这是**净收益**，与「参数集回放」页的毛收益不是同一口径。
+                  两处净值都直接显示在界面上，差异全部来自成本与约束，必须互相点明。 */}
+              <span className="qe-caliber-hint">净收益口径；「参数集回放」页为毛收益，两者净值不可直接比较</span>
               <span>快照 {latest.data_snapshot.snapshot_hash.slice(0, 12)}…({latest.data_snapshot.bar_count} 根)</span>
               <span>结果哈希 {latest.result_hash.slice(0, 12)}…</span>
             </div>

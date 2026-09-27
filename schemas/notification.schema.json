@@ -1,0 +1,274 @@
+{
+  "$defs": {
+    "ActionMode": {
+      "enum": [
+        "observe",
+        "research",
+        "review_plan",
+        "no_action"
+      ],
+      "title": "ActionMode",
+      "type": "string"
+    },
+    "NotificationTriage": {
+      "additionalProperties": false,
+      "description": "JV08：通知分诊结论（Jev 两题：相关性 choice + 优先级 score）。\n\n**为什么要独立建模而不是塞进 `last_delivery_error`**：压制（不弹站内、不外发）与\n投递失败是两件完全不同的事——前者是「判定为低相关，主动不打扰」，后者是「想发但没发出去」。\n混在一个字段里，用户（和运维）就没法区分「这条被有意压下了」与「这条发送失败了」。\n\n`suppressed` 只影响**呈现与投递**，不影响落库：被压制的通知照常持久化，\n可在通知中心「已分诊未通知」翻到（软校验铁律：不静默吞）。",
+      "properties": {
+        "impact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Impact"
+        },
+        "impact_label": {
+          "default": "",
+          "title": "Impact Label",
+          "type": "string"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority"
+        },
+        "priority_label": {
+          "default": "",
+          "title": "Priority Label",
+          "type": "string"
+        },
+        "priority_percent": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority Percent"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "suppressed": {
+          "default": false,
+          "title": "Suppressed",
+          "type": "boolean"
+        },
+        "triage_state": {
+          "default": "unannotated",
+          "title": "Triage State",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Note",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "schema_version": {
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "NotificationTriage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "通知：来自已确认观察/失效条件与新证据的交集，无匹配则不产出（不推送泛化噪音）。\n\n每条通知必须绑定触发来源条件、关联证据、建议行动模式与数据时间。",
+  "properties": {
+    "notification_id": {
+      "format": "uuid",
+      "title": "Notification Id",
+      "type": "string"
+    },
+    "user_id": {
+      "format": "uuid",
+      "title": "User Id",
+      "type": "string"
+    },
+    "thesis_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Thesis Id"
+    },
+    "instrument": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instrument"
+    },
+    "triggered_by": {
+      "title": "Triggered By",
+      "type": "string"
+    },
+    "condition_kind": {
+      "title": "Condition Kind",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "action_mode": {
+      "$ref": "#/$defs/ActionMode"
+    },
+    "evidence_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "data_time": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Data Time"
+    },
+    "read": {
+      "default": false,
+      "title": "Read",
+      "type": "boolean"
+    },
+    "delivery_status": {
+      "default": "pending",
+      "pattern": "^(pending|delivered|failed)$",
+      "title": "Delivery Status",
+      "type": "string"
+    },
+    "delivery_attempts": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Delivery Attempts",
+      "type": "integer"
+    },
+    "next_retry_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Retry At"
+    },
+    "last_delivery_error": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Delivery Error"
+    },
+    "triage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NotificationTriage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "notification_id",
+    "user_id",
+    "triggered_by",
+    "condition_kind",
+    "title",
+    "summary",
+    "action_mode"
+  ],
+  "title": "Notification",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/notification/1.0"
+}

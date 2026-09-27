@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from conftest import client as client_fixture  # noqa: F401
+from conftest import client as client_fixture, run_stock_report  # noqa: F401
 
 
 def _file_client(tmp_path, monkeypatch):
@@ -127,9 +127,7 @@ def test_stock_report_persisted(tmp_path, monkeypatch):
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_payload}}]})
 
-    generated = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "000060"}, headers=headers
-    ).json()
+    generated = run_stock_report(test_client, headers, **{"symbol": "000060"})
     assert generated["ok"] is True and generated.get("report_id"), generated
 
     listed = test_client.get("/ai-research/reports", params={"kind": "stock"}, headers=headers).json()

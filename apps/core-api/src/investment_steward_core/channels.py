@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 from investment_steward_core.domain import UpdateChannel
 
@@ -58,6 +58,19 @@ def channel_registry() -> list[dict[str, str]]:
     ]
 
 
+class EvidenceFingerprintRow(NamedTuple):
+    """CONTENT 通道指纹的最小输入行（`evidence_id` + `content_hash`）。
+
+    S9：`/overview` 只需这两个标量，不该为此把整条 evidence payload 读出来、
+    逐条 JSON 解析并 Pydantic 校验（那是 O(全部证据条数) × 常数很大的开销）。
+    用 NamedTuple 而非 tuple，保持与既有 Evidence 对象一致的 `getattr` 取值方式，
+    指纹算法与结果因此**逐字节不变**。
+    """
+
+    evidence_id: str
+    content_hash: str
+
+
 def _content_fingerprint(evidence_rows: list[Any]) -> str:
     """CONTENT 通道指纹：由全部证据的 id + content_hash 聚合，条目或内容任一变化即变。"""
     digest = hashlib.sha256()
@@ -78,6 +91,9 @@ def snapshot_channels(
 
     `db` 需具备 `list_plugin_installations()`；证据行由调用方传入已完成持久化的列表，
     避免守卫本身引入写入路径。
+
+    S9：证据行只需 `evidence_id` + `content_hash`（`Evidence` 对象或
+    `EvidenceFingerprintRow` 均可）——调用方**不必**为此加载完整 payload。
     """
     plugin_versions = tuple(
         sorted(

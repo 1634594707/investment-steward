@@ -4,6 +4,7 @@ import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSerie
 import { formatDate } from "../state/format";
 import type { CandlePeriod } from "../shell/AppShell";
 import { useUiPrefs } from "../shell/uiprefs";
+import { readChartThemeColors, readMarketColors, withAlpha } from "./chartTheme";
 
 const PERIOD_LABEL: Record<CandlePeriod, string> = { day: "日K", week: "周K", month: "月K" };
 const PERIOD_KICKER: Record<CandlePeriod, string> = { day: "MARKET VIEW / 1D", week: "MARKET VIEW / 1W", month: "MARKET VIEW / 1MO" };
@@ -87,34 +88,7 @@ interface BarPoint {
   volume: number;
 }
 
-/** F4-2：涨跌语义色从 CSS 令牌（--mkt-up / --mkt-down）读取，随设置页「红涨绿跌 / mint-amber」即时切换。 */
-function readMarketColors(): { up: string; down: string } {
-  const style = getComputedStyle(document.body);
-  return {
-    up: style.getPropertyValue("--mkt-up").trim() || "#e2726a",
-    down: style.getPropertyValue("--mkt-down").trim() || "#5fb389",
-  };
-}
-
-/** T01（2026-09-20）：K 线坐标轴文字/网格从令牌读取，随 body[data-theme] 切换（浅色主题下避免暗色文字不可读）。 */
-function readChartThemeColors(): { text: string; grid: string; scaleBorder: string } {
-  const style = getComputedStyle(document.body);
-  const muted = style.getPropertyValue("--muted").trim() || "#9baaa3";
-  return {
-    text: muted,
-    grid: withAlpha(muted.startsWith("#") ? muted : "#9baaa3", 0.18),
-    scaleBorder: withAlpha(muted.startsWith("#") ? muted : "#9baaa3", 0.4),
-  };
-}
-
-function withAlpha(hex: string, alpha: number): string {
-  const value = hex.replace("#", "");
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  if ([r, g, b].some((n) => Number.isNaN(n))) return hex;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+/** F4-2 / T01：图表配色已抽到 `cards/chartTheme.ts` 供 K 线与研报价格图共用（T7）。 */
 
 function movingAverage(bars: BarPoint[], window: number) {
   const out: { time: string; value: number }[] = [];

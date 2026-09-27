@@ -9,6 +9,87 @@
       ],
       "title": "ActionMode",
       "type": "string"
+    },
+    "JevRouteDecision": {
+      "additionalProperties": false,
+      "description": "JV07：行动模式预判路由的结论（**只描述「跑了哪条链路」，不描述结论本身**）。\n\n**硬约束**：它**永不改写**同一条 `AgentResponse.action_mode`。预判说的是「这次提问该不该\n花一次完整研究调用」，`action_mode` 是作答方（模型经 `response_gate` / 本地确定性引擎）\n按证据账本给出的结论——两者不一致是**正常且可能**的，如实并陈，不互相覆盖。",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "mode_label": {
+          "default": "未取得预判",
+          "title": "Mode Label",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "probabilities": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Probabilities",
+          "type": "object"
+        },
+        "bypassed_model": {
+          "default": false,
+          "title": "Bypassed Model",
+          "type": "boolean"
+        },
+        "route_state": {
+          "default": "unannotated",
+          "title": "Route State",
+          "type": "string"
+        },
+        "question_id": {
+          "default": "",
+          "title": "Question Id",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "JevRouteDecision",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -212,6 +293,17 @@
       },
       "title": "Audit Refs",
       "type": "array"
+    },
+    "jev_route": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JevRouteDecision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

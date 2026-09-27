@@ -28,6 +28,14 @@ from investment_steward_core import jev_client
 # 复核提示词版本：改动提示词或输出 schema 必须递增（与 report 提示词同一约定）。
 REVIEW_PROMPT_VERSION = "1.0"
 
+# 提示词里「本次请求上限 K 线根数」的默认写法。
+# 第四轮审计：原先两处提示词都把「回看 250 根上限」**写死**成字面量，而调用方
+# `bars_limit` 的合法区间是 60-500（`api/app.py` 的 `TacticsReviewRequest`）。取 500 根时
+# 同一句里「共 500 根」与「250 根上限」自相矛盾，取 60 根时更荒谬（60 < 250 却宣称上限 250）。
+# 这段文本会**出网**到模型（含 Jev 的 state），属实的错误证据，故改为由调用方传入。
+# 默认值 250 与 `TacticsReviewRequest.bars_limit` 的默认值保持一致（不猜，以端点定义为准）。
+DEFAULT_BARS_LIMIT = 250
+
 _REVIEW_SYSTEM = (
     "你是量化交易系统的「形态质量复核员」。系统里的规则引擎已经用确定性公式给出了战法质量分"
     "（形态权重 × 新鲜度 + 同族合并 + 跨族共振 − 多空对冲 + 量能/位置确认），"
@@ -118,6 +126,7 @@ def review_messages(
     bars: list[dict[str, Any]],
     sector: dict[str, Any] | None = None,
     question: str = "",
+    bars_limit: int = DEFAULT_BARS_LIMIT,
 ) -> tuple[str, str]:
     """构造复核消息（system, user）。证据包 = 规则分全分项 + 命中明细 + 指标 + 近期 K 线。"""
     sector_text = ""
@@ -141,7 +150,7 @@ def review_messages(
         f"【指标现值】{'；'.join(f'{k}={v}' for k, v in list(indicators.items())[:20])}\n"
         f"{sector_text}\n"
         f"【近期 K 线（日）】\n{_bars_summary(bars)}\n"
-        f"【共 {len(bars)} 根日 K 线（回看 250 根上限）】\n"
+        f"【共 {len(bars)} 根日 K 线（本次请求上限 {bars_limit} 根）】\n"
         f"{('【用户关注点】' + question + chr(10)) if question else ''}"
         "请按要求只输出 JSON：复核这些信号的质量与可疑点，说明规则分是高估还是低估。"
     )
@@ -252,6 +261,7 @@ def jev_state(
     bars: list[dict[str, Any]],
     sector: dict[str, Any] | None = None,
     question: str = "",
+    bars_limit: int = DEFAULT_BARS_LIMIT,
 ) -> str:
     """Jev 复核的 state（**数据部分**；指令部分在 `jev_questions` 的 `instructions` 里）。
 
@@ -286,7 +296,7 @@ def jev_state(
         f"【指标现值】{'；'.join(f'{k}={v}' for k, v in list(indicators.items())[:20])}\n"
         f"{sector_text}\n"
         f"【近期 K 线（日）】\n{_bars_summary(bars)}\n"
-        f"【共 {len(bars)} 根日 K 线（回看 250 根上限）】"
+        f"【共 {len(bars)} 根日 K 线（本次请求上限 {bars_limit} 根）】"
         f"{('【用户关注点】' + question) if question else ''}"
     )
 

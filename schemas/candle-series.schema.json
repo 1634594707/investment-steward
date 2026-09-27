@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "OHLCVBar": {
+      "additionalProperties": false,
+      "properties": {
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "open": {
+          "minimum": 0,
+          "title": "Open",
+          "type": "number"
+        },
+        "high": {
+          "minimum": 0,
+          "title": "High",
+          "type": "number"
+        },
+        "low": {
+          "minimum": 0,
+          "title": "Low",
+          "type": "number"
+        },
+        "close": {
+          "minimum": 0,
+          "title": "Close",
+          "type": "number"
+        },
+        "volume": {
+          "minimum": 0,
+          "title": "Volume",
+          "type": "number"
+        }
+      },
+      "required": [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "title": "OHLCVBar",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "instrument": {
+      "title": "Instrument",
+      "type": "string"
+    },
+    "timeframe": {
+      "default": "1d",
+      "title": "Timeframe",
+      "type": "string"
+    },
+    "bars": {
+      "items": {
+        "$ref": "#/$defs/OHLCVBar"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Bars",
+      "type": "array"
+    },
+    "source_plugin_id": {
+      "title": "Source Plugin Id",
+      "type": "string"
+    },
+    "source_plugin_release": {
+      "title": "Source Plugin Release",
+      "type": "string"
+    },
+    "source_name": {
+      "title": "Source Name",
+      "type": "string"
+    },
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "is_demo": {
+      "default": false,
+      "title": "Is Demo",
+      "type": "boolean"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "instrument",
+    "bars",
+    "source_plugin_id",
+    "source_plugin_release",
+    "source_name",
+    "as_of"
+  ],
+  "title": "CandleSeries",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/candle-series/1.0"
+}

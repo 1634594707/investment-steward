@@ -497,8 +497,8 @@ def test_evaluate_suppresses_low_relevance_but_never_deletes_it(client, monkeypa
     assert signal_item["triage"]["triage_state"] == notifications.JEV_TRIAGE_STATE_NOTIFIED
 
     # 软校验铁律：它**没有消失**——库里仍在，只是不进默认列表
-    assert len(http.get("/notifications/pending", headers=headers).json()) == 1
-    assert http.get("/notifications/pending", headers=headers).json()[0]["instrument"] == "600519"
+    assert len(http.get("/notifications/pending", headers=headers).json()["items"]) == 1
+    assert http.get("/notifications/pending", headers=headers).json()["items"][0]["instrument"] == "600519"
 
     report = http.get("/notifications/triage", headers=headers).json()
     assert report["enabled"] is True
@@ -587,7 +587,7 @@ def test_evaluate_marks_unannotated_and_releases_on_shard_failure(client, monkey
     assert evaluated[0]["triage"]["suppressed"] is False
     assert evaluated[0]["triage"]["impact"] is None
     # 失败 ≠ 压制：它照常进站内列表
-    assert len(http.get("/notifications/pending", headers=headers).json()) == 1
+    assert len(http.get("/notifications/pending", headers=headers).json()["items"]) == 1
     report = http.get("/notifications/triage", headers=headers).json()
     assert report["unannotated"] == 1 and report["suppressed"] == 0
     assert report["suppressed_items"] == []
@@ -613,7 +613,7 @@ def test_zero_change_when_jev_disabled(client, monkeypatch):
     evaluated = http.post("/notifications/evaluate", headers=headers).json()
     assert evaluated[0]["triage"] is None, "没分诊就是没分诊，不能伪造一个空结论"
     # 没分诊 → 不压制 → 站内照常可见（与接入前逐字节一致）
-    assert len(http.get("/notifications/pending", headers=headers).json()) == 1
+    assert len(http.get("/notifications/pending", headers=headers).json()["items"]) == 1
 
     report = http.get("/notifications/triage", headers=headers).json()
     assert report["enabled"] is False

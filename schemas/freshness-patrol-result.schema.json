@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "description": "证据新鲜度巡检结果：只审计标记已过期（valid_until 已到）证据，不改动账本内容。",
+  "properties": {
+    "checked": {
+      "minimum": 0,
+      "title": "Checked",
+      "type": "integer"
+    },
+    "stale": {
+      "minimum": 0,
+      "title": "Stale",
+      "type": "integer"
+    },
+    "stale_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Stale Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "checked",
+    "stale"
+  ],
+  "title": "FreshnessPatrolResult",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/freshness-patrol-result/1.0"
+}

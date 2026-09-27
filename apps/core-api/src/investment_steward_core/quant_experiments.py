@@ -26,7 +26,7 @@ import platform
 import sys
 from datetime import UTC, datetime
 from typing import Any
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import UUID
 
 from investment_steward_core.storage import artifact_store
 from investment_steward_core.storage.database import Database
@@ -224,6 +224,24 @@ def run_backtest(values: list[float], closes: list[float], *, commission_bps: fl
     result["splits"] = {"ratio": OOS_RATIO,
                         "train": _segment_stats(curve, 0, split),
                         "out_of_sample": _segment_stats(curve, split, len(curve))}
+    # 第四轮审计：口径随结果一起下发——`quant_pool.replay` 给的是**毛收益**，
+    # 同一份策略制品在两处净值必然不同（差额全来自成本与交易约束），而改造前
+    # 两个响应都不说这件事。这里标本网的净值（常量就在本文件，单点定义、不复制）。
+    # 放在 `run_backtest` 而不是 `run_experiment`，是为了让 `reproduce_experiment`
+    # 重跑时走同一条路径自动带上它——否则复现哈希会与登记哈希不符。
+    result["caliber"] = {
+        "kind": "net",
+        "costs_applied": True,
+        "detail": "净收益：已计手续费与滑点，并施加仓位/换手/涨跌停/停牌约束。",
+        "compare_with": "quant_pool.replay（毛收益，同一策略制品，两者净值不可直接比较）",
+        "net_spec_version": BACKTEST_SPEC_VERSION,
+        "net_costs": {
+            "commission_bps": COMMISSION_BPS,
+            "slippage_bps": SLIPPAGE_BPS,
+            "max_position": MAX_POSITION,
+            "max_turnover_per_bar": MAX_TURNOVER_PER_BAR,
+        },
+    }
     return result
 
 
@@ -287,11 +305,23 @@ def run_experiment(
         }
 
     values = score_fn(bars)
-    closes = [float(bar["close"]) for bar in bars]
-    split = int(len(closes) * 0.7)
+    closes = [float(b["close"]) for b in bars]
     result = run_backtest(values, closes, rebalance_every=rebalance_every,
                           price_limit_pct=resolved_limit, volumes=volumes)
-    result["split"] = {"train_bars": split, "out_of_sample_bars": len(closes) - 1 - split}
+    # 第四轮审计：此前这里按 `len(closes) * 0.7`（**字面量**，不是 OOS_RATIO）另算一份
+    # `split`，而 `run_backtest` 内部的 `splits` 是按 `len(curve) * OOS_RATIO` 算的，
+    # 且 curve 长度是 `len(closes) - 1`。两套基准不同 → 同一次实验里
+    # 「训练 N 根」与 splits 里的根数差 1，两者自相矛盾；且 `0.7` 是写死的，
+    # 一旦有人调 `OOS_RATIO`（本文件要求「改动任何一项都必须递增 BACKTEST_SPEC_VERSION」），
+    # 偏差会无声扩大。
+    # 现在单一来源：直接引用 `run_backtest` 产出的 `splits`，不再另算。
+    _splits = result.get("splits") or {}
+    result["split"] = {
+        "train_bars": (_splits.get("train") or {}).get("bars"),
+        "out_of_sample_bars": (_splits.get("out_of_sample") or {}).get("bars"),
+        "ratio": OOS_RATIO,
+        "source": "run_backtest.splits（单一来源，不再另算）",
+    }
     result_hash = hashlib.sha256(_canonical(result).encode("utf-8")).hexdigest()
     record = {
         "experiment_id": experiment_id,

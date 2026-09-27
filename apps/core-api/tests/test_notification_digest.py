@@ -76,7 +76,7 @@ def test_daily_before_window_holds_without_digest(client, monkeypatch):
     assert "汇总" in (evaluated[0]["last_delivery_error"] or "")
     assert evaluated[0]["next_retry_at"] is None, "汇总持有不计退避"
     # digest 只约束外部投递：站内呈现不受影响
-    assert len(test_client.get("/notifications/pending", headers=headers).json()) == 1
+    assert len(test_client.get("/notifications/pending", headers=headers).json()["items"]) == 1
 
 
 def test_daily_at_window_aggregates_and_flushes(client, monkeypatch):
@@ -102,7 +102,7 @@ def test_daily_at_window_aggregates_and_flushes(client, monkeypatch):
     assert "汇总" in (individuals[0]["last_delivery_error"] or "")
 
     # digest 是外部投递载体，不在站内 pending 重复打扰
-    pending = test_client.get("/notifications/pending", headers=headers).json()
+    pending = test_client.get("/notifications/pending", headers=headers).json()["items"]
     assert all(not _is_digest(item) for item in pending)
 
 

@@ -433,9 +433,7 @@ def signal_state(
         close = _as_float(bar.get("close"))
         if close is None:
             continue
-        if direction == DIRECTION_BULLISH and close >= reference:
-            holds += 1
-        elif direction == DIRECTION_BEARISH and close <= reference:
+        if direction == DIRECTION_BULLISH and close >= reference or direction == DIRECTION_BEARISH and close <= reference:
             holds += 1
 
     last = following[-1]
@@ -843,6 +841,10 @@ def score_for_bars(
     result["signal_window_from"] = from_date
     result["signal_window_bars"] = max(1, min(int(recent_bars), len(bars) or 1))
     result["window_signals"] = windowed
+    # 第四轮审计：把「哪些形态因数据异常没参与」透传到打分结果。否则质量分会
+    # 无声地低一截，而页面呈现与「确实没有该形态」完全一样，无从分辨。
+    degraded = snap.get("degraded_tactics")
+    result["degraded_tactics"] = list(degraded) if isinstance(degraded, list) else []
     return result
 
 

@@ -24,7 +24,7 @@ import re
 
 import pytest
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -120,9 +120,7 @@ def test_evidence_text_carries_no_machine_precision_floats(client, tmp_path, mon
 
     monkeypatch.setattr(mc, "_post_json", fake_post)
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
 
     prompt = json.dumps(captured["payload"], ensure_ascii=False)

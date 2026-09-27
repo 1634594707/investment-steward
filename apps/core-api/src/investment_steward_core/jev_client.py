@@ -39,6 +39,7 @@ well」。本模块内置的 `JEV_NOUL_YES` / `JEV_NOUL_NO` **已于 2026-09-21 
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -249,11 +250,48 @@ def resolve_models_url(base_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def env_kill_switch_engaged() -> bool:
+    """`STEWARD_JEV_ENABLED` 是否被**显式**设成了非「1」的值（Q3 的急停判定）。
+
+    口径照抄 `config.py:80` 的解析规则 `os.environ.get("STEWARD_JEV_ENABLED", "0") == "1"`
+    ——只有字符串恰为 `"1"` 才算开启，其余任何取值都算关闭。因此**未设置**返回 False
+    （不能把「没设」和「显式关掉」混为一谈），显式设成 0/false/空串返回 True。
+    """
+    raw = os.environ.get("STEWARD_JEV_ENABLED")
+    return raw is not None and raw != "1"
+
+
 def effective_settings(core: Any) -> JevSettings:
     """生效配置：设置页保存值（`jev_config` 表）> `STEWARD_JEV_*` 环境变量 > 内置默认。
 
     JV02 拍板的优先级；设置页保存过就以保存值为准（含显式关闭）。
+
+    Q3（用户视角路线图 2026-09-26）在该优先级上**加一条例外**：
+    显式 `STEWARD_JEV_ENABLED=0` 是运维方的**急停**，优先级**高于**已保存的设置行。
+
+    为什么必须如此：JV02 的原排序把「保存行 > 环境变量」当成一刀切，但这两者不是
+    同一类东西——保存行是 UI 里一次性的状态，环境变量是「这台机器现在不许出网」的
+    当场指令。结果是二者可以同时表达相反的意图，而**数据照样送往境外第三方**：
+    用户在设置页启用过 Jev（留下 enabled=True 的行），随后把 `STEWARD_JEV_ENABLED`
+    设为 0 试图断网，保存行却把它盖住，「我关了它」与「数据仍在出境」并存——
+    这是同意与隐私口径上的失效，不只是配置顺序的别扭。
+
+    规则定为：**任何显式的关闭都胜过任何开启**。
+    - 显式关（env 急停）→ 一律关闭，哪怕保存行是开启的；
+    - 显式开（env=1）**不**反过来覆盖保存行里的关闭——设置页的显式退出仍然算数。
+    其余字段（base_url / model / credential_ref / timeout）仍完全走 JV02 原排序，
+    本次只改 `enabled` 这一项，避免动到其它已拍板的语义。
     """
+    if env_kill_switch_engaged():
+        settings = core.settings
+        return JevSettings(
+            user_id=core.local_user_id,
+            enabled=False,
+            base_url=settings.jev_base_url,
+            model=settings.jev_model,
+            credential_ref=settings.jev_credential_ref,
+            timeout_secs=settings.jev_timeout_secs,
+        )
     saved = core.database.get_jev_settings(core.local_user_id)
     if saved is not None:
         return saved
@@ -399,6 +437,10 @@ def build_shard_reviewer(
                         questions,
                         purpose=purpose,
                         access_enabled=True,
+                        # Q2：把「第几次尝试」如实记进 model_calls.retried——重试是已计费的
+                        # 二次调用，用量面板必须能看见，否则「失败+重试成功」与「一次成功」
+                        # 在账上长得一模一样。
+                        attempt=attempt,
                     )
                 except JevUnavailable as exc:
                     if attempt < attempts_allowed and exc.retryable:
@@ -900,12 +942,19 @@ def _record(
     output_tokens: int | None,
     latency_ms: int,
     outcome: str,
+    retried: bool = False,
 ) -> None:
     """落一条 `model_calls` 记录（经 model_client 的公共钩子，与 chat 链路同表同注入点）。
 
     `total_tokens` 恒记 None：Jev 不提供该字段，而表里 `total_tokens` 的既有语义是
     「服务端口径的合计」。虽然 input+output 是精确算术，但本地加总会让跨协议统计
     `SUM(total_tokens)` 失真——宁可留 null（F01 既有口径：缺失记 null 不猜）。
+
+    Q2（用户视角路线图 2026-09-26）：`retried` 由常量 `False` 改为**如实**传入。
+    改造前 Jev 的所有分片重试（`build_shard_reviewer` 的 attempt 循环）每次都独立
+    落一条记录且都写 `retried=False`，于是「一次失败 + 一次重试成功」在用量面板上
+    看起来与「一次成功」毫无区别——重试是**已计费**的调用，面板却看不见。
+    `call_jev` 自己不知道自己是第几次尝试（重试循环在调用方），所以由调用方传 `attempt`。
     """
     emit_model_call_record(
         {
@@ -917,7 +966,7 @@ def _record(
             "completion_tokens": output_tokens,
             "total_tokens": None,
             "latency_ms": latency_ms,
-            "retried": False,
+            "retried": retried,
             "outcome": outcome,
         }
     )
@@ -932,6 +981,7 @@ def call_jev(
     purpose: str | None = None,
     timeout: float | None = None,
     access_enabled: bool = True,
+    attempt: int = 1,
 ) -> JevReply:
     """发起一次 decisions 调用：多道题并行评估，返回逐题类型化答案。
 
@@ -939,10 +989,13 @@ def call_jev(
     - `purpose` 约定为 `"jev:<场景>"`（如 `jev:tactics-review`、`jev:claim-support`），用于 `model_calls` 归集；
     - `access_enabled` 必须由调用方传入 `core.settings.model_access_enabled`（全局出网总闸）；
     - 超时优先级：显式传入 > `config.timeout_secs` > 内置默认；
+    - `attempt` 是**本次是第几次尝试**（1 = 首次）。仅用于把重试如实记进 `model_calls`，
+      不改变任何调用行为；调用方按「本次是首次」默认即可。
     - **不做自动重试**：输入 token 计费，静默重试等于静默双倍计费。429/529 的退避与分片策略
       由批量调用方（JV05/JV08）决定并显式实现。
     """
     _ensure_available(config, access_enabled=access_enabled)
+    is_retry = attempt > 1
 
     if not questions:
         raise JevUnavailable("Jev 本次没有题目（questions 为空），调用方应跳过该层")
@@ -968,6 +1021,7 @@ def call_jev(
             output_tokens=None,
             latency_ms=latency_ms,
             outcome="error",
+            retried=is_retry,
         )
         raise JevUnavailable(
             f"Jev 凭据「{config.credential_ref or '（未填写）'}」在本机凭据库中不存在。"
@@ -999,6 +1053,7 @@ def call_jev(
             output_tokens=output_tokens,
             latency_ms=int((time.monotonic() - started) * 1000),
             outcome="error",
+            retried=is_retry,
         )
         raise
     except Exception as exc:
@@ -1044,6 +1099,7 @@ def call_jev(
         output_tokens=output_tokens,
         latency_ms=latency_ms,
         outcome="ok",
+        retried=is_retry,
     )
     return JevReply(
         model=reported_model,

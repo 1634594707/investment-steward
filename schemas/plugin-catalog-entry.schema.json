@@ -1,0 +1,268 @@
+{
+  "$defs": {
+    "PluginInstallation": {
+      "additionalProperties": false,
+      "properties": {
+        "plugin_id": {
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "release_version": {
+          "title": "Release Version",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/PluginInstallationState"
+        },
+        "granted_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Granted Capabilities",
+          "type": "array"
+        },
+        "artifact_sha256": {
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "source": {
+          "default": "official-static-registry",
+          "title": "Source",
+          "type": "string"
+        },
+        "installed_at": {
+          "format": "date-time",
+          "title": "Installed At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin_id",
+        "release_version",
+        "state",
+        "artifact_sha256"
+      ],
+      "title": "PluginInstallation",
+      "type": "object"
+    },
+    "PluginInstallationState": {
+      "enum": [
+        "available",
+        "installed",
+        "enabled",
+        "disabled",
+        "revoked"
+      ],
+      "title": "PluginInstallationState",
+      "type": "string"
+    },
+    "PluginManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "publisher": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Publisher",
+          "type": "string"
+        },
+        "plugin_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.-]+$",
+          "title": "Plugin Id",
+          "type": "string"
+        },
+        "release_version": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "title": "Release Version",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "plugin_type": {
+          "pattern": "^[a-z][a-z0-9_.-]+$",
+          "title": "Plugin Type",
+          "type": "string"
+        },
+        "license": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "sdk_min": {
+          "default": "1.0",
+          "title": "Sdk Min",
+          "type": "string"
+        },
+        "sdk_max": {
+          "default": "1.x",
+          "title": "Sdk Max",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "ui_slots": {
+          "items": {
+            "$ref": "#/$defs/PluginUiSlot"
+          },
+          "title": "Ui Slots",
+          "type": "array"
+        },
+        "mount": {
+          "default": "in_page",
+          "pattern": "^(in_page|own_page)$",
+          "title": "Mount",
+          "type": "string"
+        },
+        "schema_versions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Schema Versions",
+          "type": "object"
+        },
+        "entrypoint": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "artifact_sha256": {
+          "maxLength": 128,
+          "minLength": 16,
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Signature",
+          "type": "string"
+        },
+        "network_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Network Allowlist",
+          "type": "array"
+        },
+        "side_effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Side Effects",
+          "type": "array"
+        },
+        "requires_confirmation": {
+          "default": false,
+          "title": "Requires Confirmation",
+          "type": "boolean"
+        },
+        "supports_markets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supports Markets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "publisher",
+        "plugin_id",
+        "release_version",
+        "display_name",
+        "description",
+        "plugin_type",
+        "license",
+        "entrypoint",
+        "artifact_sha256",
+        "signature"
+      ],
+      "title": "PluginManifest",
+      "type": "object"
+    },
+    "PluginUiSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "slot": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Slot",
+          "type": "string"
+        },
+        "level": {
+          "pattern": "^L[0-3]$",
+          "title": "Level",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "level"
+      ],
+      "title": "PluginUiSlot",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "manifest": {
+      "$ref": "#/$defs/PluginManifest"
+    },
+    "installation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PluginInstallation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resolved_outputs": {
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Resolved Outputs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "manifest"
+  ],
+  "title": "PluginCatalogEntry",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/plugin-catalog-entry/1.0"
+}

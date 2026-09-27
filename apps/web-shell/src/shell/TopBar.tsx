@@ -15,6 +15,8 @@ interface Props {
   refreshing: boolean;
   /** 待处理通知（GET /notifications/pending，未读）：通知铃面板数据源。 */
   notifications: Notification[];
+  /** 第四轮审计（api-5）：免打扰/关闭站内提醒时的静音态，透传给通知铃如实呈现。 */
+  notificationMuted?: { muted: boolean; reason: string; hiddenCount: number };
   onMarkNotificationRead: (notificationId: string) => Promise<boolean>;
   /** JV08：分诊报告（「已分诊未通知」）；`null` = 还没拉过。 */
   notificationTriage?: NotificationTriageReport | null;
@@ -29,7 +31,7 @@ interface Props {
 }
 
 /** R1-4 单行顶栏（48px）：左=页头（16px 标题+提示），右=搜索(Ctrl+K)/刷新/通知/头像。 */
-export function TopBar({ entry, isDemo, onOpenPalette, onRefresh, refreshing, notifications, onMarkNotificationRead, onOpenToday, notificationTriage, onLoadNotificationTriage, personalSettings, onOpenPersonalCenter }: Props) {
+export function TopBar({ entry, isDemo, onOpenPalette, onRefresh, refreshing, notifications, notificationMuted, onMarkNotificationRead, onOpenToday, notificationTriage, onLoadNotificationTriage, personalSettings, onOpenPersonalCenter }: Props) {
   // 本机镜像兜底：Core 未返回设置（首次使用/演示模式）时头像仍有名字与底色。
   const localProfile = useProfile();
   const name = personalSettings?.display_name ?? localProfile.name;
@@ -57,7 +59,7 @@ export function TopBar({ entry, isDemo, onOpenPalette, onRefresh, refreshing, no
         >
           <IconRefresh className={refreshing ? "spin" : ""} />
         </button>
-        <NotificationBell notifications={notifications} onMarkNotificationRead={onMarkNotificationRead} onOpenToday={onOpenToday} triage={notificationTriage} onLoadTriage={onLoadNotificationTriage} />
+        <NotificationBell notifications={notifications} muted={notificationMuted} onMarkNotificationRead={onMarkNotificationRead} onOpenToday={onOpenToday} triage={notificationTriage} onLoadTriage={onLoadNotificationTriage} />
         <button
           className="avatar avatar-top"
           style={avatar ? undefined : { background: color, color: "#0b1018" }}

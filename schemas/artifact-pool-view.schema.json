@@ -1,0 +1,367 @@
+{
+  "$defs": {
+    "ArtifactCard": {
+      "description": "对齐设计稿 ARTIFACTS 字段，供前端分享池/详情/派生渲染（当前恒为空集）。",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "default": "parameter_set",
+          "title": "Type",
+          "type": "string"
+        },
+        "author": {
+          "default": "",
+          "title": "Author",
+          "type": "string"
+        },
+        "ver": {
+          "default": "",
+          "title": "Ver",
+          "type": "string"
+        },
+        "hash": {
+          "default": "",
+          "title": "Hash",
+          "type": "string"
+        },
+        "style": {
+          "default": "mean_reversion",
+          "title": "Style",
+          "type": "string"
+        },
+        "instruments": {
+          "default": "broad_etf",
+          "title": "Instruments",
+          "type": "string"
+        },
+        "sample_months": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Months"
+        },
+        "desc": {
+          "default": "",
+          "title": "Desc",
+          "type": "string"
+        },
+        "updated": {
+          "default": "",
+          "title": "Updated",
+          "type": "string"
+        },
+        "license": {
+          "default": "",
+          "title": "License",
+          "type": "string"
+        },
+        "forks": {
+          "default": 0,
+          "title": "Forks",
+          "type": "integer"
+        },
+        "mine": {
+          "default": false,
+          "title": "Mine",
+          "type": "boolean"
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "caliber_score": {
+          "default": "0/5",
+          "title": "Caliber Score",
+          "type": "string"
+        },
+        "sample_out": {
+          "default": "",
+          "title": "Sample Out",
+          "type": "string"
+        },
+        "repro": {
+          "default": "未复现",
+          "title": "Repro",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/ArtifactMetric"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "live": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "consistency": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactConsistency"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "derived_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Derived From"
+        },
+        "lineage": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Lineage",
+          "type": "array"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/RunNote"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "params": {
+          "items": {
+            "$ref": "#/$defs/ArtifactParam"
+          },
+          "title": "Params",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ArtifactCard",
+      "type": "object"
+    },
+    "ArtifactConsistency": {
+      "description": "作者声称 vs 本地复现。",
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        },
+        "local": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local"
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diff"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "title": "ArtifactConsistency",
+      "type": "object"
+    },
+    "ArtifactMetric": {
+      "description": "制品指标：每个数字都挂口径。",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "caliber": {
+          "title": "Caliber",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "caliber"
+      ],
+      "title": "ArtifactMetric",
+      "type": "object"
+    },
+    "ArtifactParam": {
+      "properties": {
+        "k": {
+          "title": "K",
+          "type": "string"
+        },
+        "v": {
+          "title": "V",
+          "type": "string"
+        },
+        "range": {
+          "title": "Range",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "k",
+        "v",
+        "range"
+      ],
+      "title": "ArtifactParam",
+      "type": "object"
+    },
+    "RunNote": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "who": {
+          "default": "本地",
+          "title": "Who",
+          "type": "string"
+        },
+        "env": {
+          "default": "",
+          "title": "Env",
+          "type": "string"
+        },
+        "result": {
+          "default": "",
+          "title": "Result",
+          "type": "string"
+        },
+        "status": {
+          "default": "",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "RunNote",
+      "type": "object"
+    }
+  },
+  "description": "分享池视图响应：available=False 表示阶段未开放，不编造制品。",
+  "properties": {
+    "available": {
+      "title": "Available",
+      "type": "boolean"
+    },
+    "stage": {
+      "title": "Stage",
+      "type": "string"
+    },
+    "stage_label": {
+      "title": "Stage Label",
+      "type": "string"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactCard"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "degraded_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Degraded Reason"
+    },
+    "notice": {
+      "default": "",
+      "title": "Notice",
+      "type": "string"
+    }
+  },
+  "required": [
+    "available",
+    "stage",
+    "stage_label"
+  ],
+  "title": "ArtifactPoolView",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/artifact-pool-view/1.0"
+}

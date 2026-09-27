@@ -19,7 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -213,9 +213,7 @@ def test_valuation_and_derived_reach_model_prompt(client, tmp_path, monkeypatch)
         return {"choices": [{"message": {"content": report_json if len(payloads) == 1 else counter_json}}]}
 
     monkeypatch.setattr(mc, "_post_json", _fake)
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
     assert set(body["source_keys"]) == {"S2", "S3", "S4", "S5"}
     assert "S5" in body["available_citations"]
@@ -257,9 +255,7 @@ def test_valuation_failure_degrades_without_touching_citations(client, tmp_path,
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
 
-    body = test_client.post(
-        "/evidence/stock-research-report", json={"symbol": "600001"}, headers=headers
-    ).json()
+    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
     assert body["ok"] is True, body
     assert "valuation" in body["source_errors"]        # 失败如实记录
     assert "S5" not in body["available_citations"]     # 失败来源不可被引用

@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "ActionMode": {
+      "enum": [
+        "observe",
+        "research",
+        "review_plan",
+        "no_action"
+      ],
+      "title": "ActionMode",
+      "type": "string"
+    },
+    "CardSeverity": {
+      "description": "插槽卡的关注度等级（对齐 packages/ui-card-schemas CardSeverity）。",
+      "enum": [
+        "info",
+        "attention",
+        "warning"
+      ],
+      "title": "CardSeverity",
+      "type": "string"
+    },
+    "UiCardRenderer": {
+      "description": "渲染原语（对齐 packages/ui-card-schemas UiCardRenderer）：按插槽级别仲裁分发。",
+      "enum": [
+        "card",
+        "summary_row",
+        "inline",
+        "silent"
+      ],
+      "title": "UiCardRenderer",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "插槽卡（对齐 packages/ui-card-schemas/src/index.ts UICard 1:1）。\n\n内核按插槽仲裁后的呈现单元；`slot=None` 表示不占主视图、仅入证据账本（L0 静默）。",
+  "properties": {
+    "card_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Card Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/CardSeverity",
+      "default": "info"
+    },
+    "evidence_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "source_plugin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Plugin"
+    },
+    "slot": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Slot"
+    },
+    "renderer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UiCardRenderer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "valid_until": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid Until"
+    },
+    "action_mode": {
+      "$ref": "#/$defs/ActionMode",
+      "default": "no_action"
+    },
+    "supported_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Supported Actions",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "card_id",
+    "title",
+    "summary"
+  ],
+  "title": "UICard",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/ui-card/1.0"
+}

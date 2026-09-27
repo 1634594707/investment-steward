@@ -19,7 +19,7 @@ import math
 from datetime import UTC, datetime
 from typing import Any
 
-from investment_steward_core import quant_factors, quant_models
+from investment_steward_core import quant_experiments, quant_factors, quant_models
 from investment_steward_core.storage import artifact_store
 from investment_steward_core.storage.artifact_store import KIND_MODEL_WEIGHTS, KIND_PARAMETER_SETS
 from investment_steward_core.storage.database import Database
@@ -108,13 +108,24 @@ def publish_parameter_set(
     formula_tokens: list[str],
     note: str = "",
 ) -> dict[str, Any]:
-    """发布参数集:公式先经全量求值验证(非法抛 ValueError),指标确定性计算,内容寻址入库。"""
+    """发布参数集:公式先经全量求值验证(非法抛 ValueError),指标确定性计算,内容寻址入库。
+
+    指标口径与挖掘主流程**逐位对齐**(同一数据快照下挖到的 IC 与发布后重算的 IC 必须相等):
+    同一套三段式切分(``quant_factors.three_way_split``)+ 同一套 IC 统计(``ic_statistics``)
+    + 同一套评估套件(``factor_evaluation``,口径版本挂进 metrics)。
+    """
     values = quant_factors.evaluate_tokens(formula_tokens, bars)
     closes = [float(bar["close"]) for bar in bars]
     forward = quant_factors.forward_returns(closes)
-    split = int(len(bars) * 0.7)
-    train_ic = quant_factors.rank_ic(values[:split], forward[:split])
-    valid_ic = quant_factors.rank_ic(values[split:], forward[split:])
+    split = quant_factors.three_way_split(len(bars))
+    train_end = int(split["train_end"])
+    valid_end = int(split["valid_end"])
+    train_stat = quant_factors.ic_statistics(values[:train_end], forward[:train_end], overlap=quant_factors.FORWARD_DAYS)
+    valid_stat = quant_factors.ic_statistics(
+        values[train_end:valid_end], forward[train_end:valid_end], overlap=quant_factors.FORWARD_DAYS
+    )
+    test_stat = quant_factors.ic_statistics(values[valid_end:], forward[valid_end:], overlap=quant_factors.FORWARD_DAYS)
+    suite = quant_factors._rounded_suite(quant_factors.factor_evaluation(values, closes))
     created_at = datetime.now(UTC).isoformat()
     artifact_id = _artifact_id(formula_tokens, symbol, created_at)
     entry = {
@@ -124,9 +135,22 @@ def publish_parameter_set(
         "formula_tokens": formula_tokens,
         "formula": " ".join(formula_tokens),
         "metrics": {
-            "train_ic": round(train_ic, 4),
-            "valid_ic": round(valid_ic, 4),
+            "train_ic": round(train_stat["ic"], 4),
+            "valid_ic": round(valid_stat["ic"], 4),
+            "test_ic": round(test_stat["ic"], 4),
+            "test_t_stat": round(test_stat["t_stat"], 4) if test_stat["t_stat"] is not None else None,
+            "test_p_value": round(test_stat["p_value"], 8),
             "samples": len(bars),
+            "split": split,
+            "segment_samples": {"train": train_stat["samples"], "valid": valid_stat["samples"],
+                                "test": test_stat["samples"]},
+            "ic_suite": suite,
+            "caliber": {
+                "mine_spec_version": quant_factors.MINE_SPEC_VERSION,
+                "ic_spec_version": quant_factors.IC_SPEC_VERSION,
+                "ic_suite_spec_version": quant_factors.IC_SUITE_SPEC_VERSION,
+                "forward_days": quant_factors.FORWARD_DAYS,
+            },
         },
         "type": "parameter_set",
         "stage": "A",
@@ -152,9 +176,14 @@ def publish_model(
     feature_order: list[str],
     metrics: dict[str, Any],
     training: dict[str, Any],
+    standardization: dict[str, Any] | None = None,
     note: str = "",
 ) -> dict[str, Any]:
-    """发布线性模型:权重已在训练时确定性求出,内容寻址入库(阶段 D 限定形态)。"""
+    """发布线性模型:权重已在训练时确定性求出,内容寻址入库(阶段 D 限定形态)。
+
+    standardization 为训练段冻结的 z-score 统计量（新模型）;缺失即为旧口径原始量纲,
+    旧制品按恒等变换解释执行,逐位不变。
+    """
     created_at = datetime.now(UTC).isoformat()
     artifact_id = _model_artifact_id(weights, symbol, created_at)
     entry = {
@@ -167,6 +196,7 @@ def publish_model(
         "parent_id": None,
         "weights": weights,
         "feature_order": feature_order,
+        "standardization": standardization,
         "metrics": metrics,
         "training": training,
         "note": note,
@@ -181,7 +211,11 @@ def publish_model(
 def _entry_score_series(entry: dict[str, Any], bars: list[dict[str, Any]]) -> list[float]:
     """按制品类型求打分序列:parameter_set 用公式 token,model_weights 用线性权重。"""
     if entry.get("type") == "model_weights":
-        return quant_models.score_series([float(w) for w in entry["weights"]], bars)
+        return quant_models.score_series(
+            [float(w) for w in entry["weights"]],
+            bars,
+            standardization=entry.get("standardization") or None,
+        )
     return quant_factors.evaluate_tokens([str(t) for t in entry["formula_tokens"]], bars)
 
 
@@ -273,4 +307,24 @@ def replay(db: Database, layout: StorageLayout, artifact_id: str, bars: list[dic
         "win_rate": round(wins / len(returns), 4) if returns else None,
         "bars": len(returns),
         "note": "确定性回放:tanh 仓位 × 次日收益,同输入同结果;仅作研究背景,不构成买卖建议",
+        # 第四轮审计：同一份策略制品，本回放页与「实验」页会给**两个不同的净值**——
+        # 本页是**毛收益**（零手续费、零滑点、无换手/涨跌停/停牌约束），
+        # 而 `quant_experiments.run_backtest` 是**净收益**（单边 2.5+5.0 bps、仓位与
+        # 换手上限、停牌冻结、涨跌停禁开仓）。差额全部来自成本与约束，
+        # 而改造前两个响应里**都没有一句**说这件事，用户按回放页的净值判断策略、
+        # 按实验页的净值下单，差额无从解释。口径与常量由 `quant_experiments` 单点定义，
+        # 这里只引用不复制（避免两处各写一份而漂移）。
+        "caliber": {
+            "kind": "gross",
+            "costs_applied": False,
+            "detail": "毛收益：未计手续费、滑点、换手/仓位约束、涨跌停与停牌处理。",
+            "compare_with": "quant_experiments.run_backtest（净收益，含成本与交易约束）",
+            "net_spec_version": quant_experiments.BACKTEST_SPEC_VERSION,
+            "net_costs": {
+                "commission_bps": quant_experiments.COMMISSION_BPS,
+                "slippage_bps": quant_experiments.SLIPPAGE_BPS,
+                "max_position": quant_experiments.MAX_POSITION,
+                "max_turnover_per_bar": quant_experiments.MAX_TURNOVER_PER_BAR,
+            },
+        },
     }

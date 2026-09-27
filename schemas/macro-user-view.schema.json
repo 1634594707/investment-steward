@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "description": "§3.7 第三层「用户分析」（D-15 最小集）：用户主权，仅本机存储。\n\n永不参与规则计算、不进证据账本客观区、不上传任何远端；与规则基线、AI 分析\n三层并排展示，分歧即信息（不仲裁谁对）。",
+  "properties": {
+    "region": {
+      "maxLength": 20,
+      "minLength": 1,
+      "title": "Region",
+      "type": "string"
+    },
+    "direction": {
+      "pattern": "^(扩张|放缓|承压|衰退风险)$",
+      "title": "Direction",
+      "type": "string"
+    },
+    "horizon": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Horizon",
+      "type": "string"
+    },
+    "confidence": {
+      "pattern": "^(高|中|低)$",
+      "title": "Confidence",
+      "type": "string"
+    },
+    "text": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Text",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "region",
+    "direction",
+    "horizon",
+    "confidence"
+  ],
+  "title": "MacroUserView",
+  "type": "object",
+  "$id": "https://investment-steward.local/schemas/macro-user-view/1.0"
+}

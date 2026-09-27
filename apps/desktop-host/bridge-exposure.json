@@ -1,0 +1,953 @@
+{
+  "version": 1,
+  "note": "桌面宿主桥暴露声明（A02，架构改进路线图 2026-09-25）。默认拒绝：只有列在 allow 里的 方法+路径模板才能经 Host Bridge 转发到 Core；exempt 是明确不通桥的例外，必须写明理由。本文件由 scripts/generate_bridge_manifest.mjs 校验并生成宿主清单；新增 Core 端点后必须在此登记，否则 check:bridge 会失败（而不是等到打包版返回 502）。",
+  "allow": [
+    {
+      "method": "GET",
+      "path": "/ai-research/reports"
+    },
+    {
+      "method": "DELETE",
+      "path": "/ai-research/reports/{report_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/reports/{report_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/reports/{report_id}/follow-ups"
+    },
+    {
+      "method": "POST",
+      "path": "/ai-research/reports/{report_id}/follow-ups"
+    },
+    {
+      "method": "GET",
+      "path": "/ai-research/review-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/audit"
+    },
+    {
+      "method": "GET",
+      "path": "/brief/today"
+    },
+    {
+      "method": "POST",
+      "path": "/brief/today/generate"
+    },
+    {
+      "method": "GET",
+      "path": "/capabilities"
+    },
+    {
+      "method": "GET",
+      "path": "/cards/slots/{slot}"
+    },
+    {
+      "method": "GET",
+      "path": "/channels"
+    },
+    {
+      "method": "GET",
+      "path": "/credentials"
+    },
+    {
+      "method": "DELETE",
+      "path": "/credentials/{key_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/credentials/{key_id}"
+    },
+    {
+      "method": "PUT",
+      "path": "/credentials/{key_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/credentials/{key_id}/test"
+    },
+    {
+      "method": "GET",
+      "path": "/data-source/failures"
+    },
+    {
+      "method": "GET",
+      "path": "/data-source/quality"
+    },
+    {
+      "method": "POST",
+      "path": "/data-source/retry"
+    },
+    {
+      "method": "GET",
+      "path": "/decisions"
+    },
+    {
+      "method": "POST",
+      "path": "/decisions"
+    },
+    {
+      "method": "GET",
+      "path": "/decisions/inaction-stats"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/announcements/{symbol:path}"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/collab-next"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/collab-run"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/collab-state"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/compare-synthesis"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/comtrade"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/decision-outcome"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/dedup"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/direction-research"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/financials/{symbol:path}"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/freshness/patrol"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/calendar"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/events"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/impacts"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/releases"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/research-evidence"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/research-evidence"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/trade"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/weights"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/weights"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/weights/ai-proposal"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/analysis"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/analysis"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/anomalies"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/my-view"
+    },
+    {
+      "method": "PUT",
+      "path": "/evidence/macro/{region}/my-view"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/pricing"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/macro/{region}/signals"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/signals"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/macro/{region}/signals/{signal_id}/interpret"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/news/{symbol:path}"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/stock-research-report"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/stock-research-report/{job_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/evidence/stock-research-report/{job_id}/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/evidence/{evidence_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/export/all"
+    },
+    {
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "method": "GET",
+      "path": "/holdings"
+    },
+    {
+      "method": "POST",
+      "path": "/holdings"
+    },
+    {
+      "method": "GET",
+      "path": "/holdings/by-instrument"
+    },
+    {
+      "method": "DELETE",
+      "path": "/holdings/{holding_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/import/apply"
+    },
+    {
+      "method": "POST",
+      "path": "/import/preview"
+    },
+    {
+      "method": "GET",
+      "path": "/instruments/lookup"
+    },
+    {
+      "method": "GET",
+      "path": "/instruments/resolve"
+    },
+    {
+      "method": "GET",
+      "path": "/investment-policies"
+    },
+    {
+      "method": "POST",
+      "path": "/investment-policies"
+    },
+    {
+      "method": "POST",
+      "path": "/investment-policies/{policy_id}/confirm"
+    },
+    {
+      "method": "GET",
+      "path": "/investor/profile"
+    },
+    {
+      "method": "PUT",
+      "path": "/investor/profile"
+    },
+    {
+      "method": "GET",
+      "path": "/jev/config"
+    },
+    {
+      "method": "PUT",
+      "path": "/jev/config"
+    },
+    {
+      "method": "POST",
+      "path": "/jev/models"
+    },
+    {
+      "method": "POST",
+      "path": "/jev/probe"
+    },
+    {
+      "method": "GET",
+      "path": "/judgments"
+    },
+    {
+      "method": "POST",
+      "path": "/judgments"
+    },
+    {
+      "method": "GET",
+      "path": "/judgments/hit-rate"
+    },
+    {
+      "method": "GET",
+      "path": "/judgments/{judgment_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/judgments/{judgment_id}/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/learning/activities"
+    },
+    {
+      "method": "POST",
+      "path": "/learning/activities"
+    },
+    {
+      "method": "DELETE",
+      "path": "/learning/activities/{activity_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/learning/activities/{activity_id}/propose-policy-change"
+    },
+    {
+      "method": "GET",
+      "path": "/learning/goals/current"
+    },
+    {
+      "method": "GET",
+      "path": "/learning/reflections/export"
+    },
+    {
+      "method": "GET",
+      "path": "/learning/unit/today"
+    },
+    {
+      "method": "POST",
+      "path": "/library/annotations/{annotation_id}/to-research"
+    },
+    {
+      "method": "GET",
+      "path": "/library/books"
+    },
+    {
+      "method": "POST",
+      "path": "/library/books"
+    },
+    {
+      "method": "GET",
+      "path": "/library/books/lookup/{isbn}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/library/books/{book_id}"
+    },
+    {
+      "method": "PUT",
+      "path": "/library/books/{book_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/library/insights"
+    },
+    {
+      "method": "POST",
+      "path": "/library/plan/generate"
+    },
+    {
+      "method": "GET",
+      "path": "/market/candles/{symbol}"
+    },
+    {
+      "method": "GET",
+      "path": "/market/catalog"
+    },
+    {
+      "method": "POST",
+      "path": "/market/install"
+    },
+    {
+      "method": "GET",
+      "path": "/model-profiles"
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles"
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/discover-models"
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/probe"
+    },
+    {
+      "method": "DELETE",
+      "path": "/model-profiles/{profile_id}"
+    },
+    {
+      "method": "PUT",
+      "path": "/model-profiles/{profile_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/{profile_id}/activate"
+    },
+    {
+      "method": "POST",
+      "path": "/model-profiles/{profile_id}/test"
+    },
+    {
+      "method": "GET",
+      "path": "/model-usage"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/channels"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/evaluate"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/graded"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/pending"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/triage"
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/{notification_id}/read"
+    },
+    {
+      "method": "GET",
+      "path": "/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/personal/settings"
+    },
+    {
+      "method": "PUT",
+      "path": "/personal/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/plans"
+    },
+    {
+      "method": "POST",
+      "path": "/plans/{plan_id}/transition"
+    },
+    {
+      "method": "GET",
+      "path": "/plugins/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/plugins/{plugin_id:path}/app"
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/disable"
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/install"
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/revoke"
+    },
+    {
+      "method": "POST",
+      "path": "/plugins/{plugin_id:path}/update"
+    },
+    {
+      "method": "GET",
+      "path": "/portfolio/risk"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/artifacts"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/experiments"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/leakage-check"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/reproduce"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/experiments/{experiment_id}/walk-forward"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/factors/compute/{symbol}"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/factors/mine/{symbol}"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/lineage/{artifact_id:path}"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/models/{symbol}"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/build"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/build/{job_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/build/{job_id}/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/load"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/mine"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/mine/{job_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/panel/mine/{job_id}/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/panel/snapshots"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/fork"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets/{artifact_id}/lineage"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/parameter-sets/{artifact_id}/replay"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/track-records"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/parameter-sets/{artifact_id}/track-records/verify"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/portfolio/backtest"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/runs"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/stages"
+    },
+    {
+      "method": "GET",
+      "path": "/quant/strategy-packs"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/strategy-packs"
+    },
+    {
+      "method": "POST",
+      "path": "/quant/strategy-packs/{pack_id}/run"
+    },
+    {
+      "method": "GET",
+      "path": "/research/questions/latest"
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs"
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/research/runs/{run_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs/{run_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/research/runs/{run_id}/response"
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs/{run_id}/run"
+    },
+    {
+      "method": "POST",
+      "path": "/research/runs/{run_id}/transition"
+    },
+    {
+      "method": "GET",
+      "path": "/research/snapshots"
+    },
+    {
+      "method": "POST",
+      "path": "/research/snapshots"
+    },
+    {
+      "method": "GET",
+      "path": "/research/snapshots/{snapshot_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/research/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/research/templates"
+    },
+    {
+      "method": "DELETE",
+      "path": "/research/templates/{template_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/review/weekly"
+    },
+    {
+      "method": "GET",
+      "path": "/runner/config"
+    },
+    {
+      "method": "GET",
+      "path": "/session"
+    },
+    {
+      "method": "GET",
+      "path": "/slots"
+    },
+    {
+      "method": "GET",
+      "path": "/storage/backups"
+    },
+    {
+      "method": "POST",
+      "path": "/storage/backups/{name}/restore"
+    },
+    {
+      "method": "GET",
+      "path": "/storage/layout"
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/migrate"
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/migrate/preview"
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/reset-default"
+    },
+    {
+      "method": "POST",
+      "path": "/storage/layout/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/storage/lifecycle"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/apply"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/config"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/config/reveal"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/inbox"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/pairing-code"
+    },
+    {
+      "method": "POST",
+      "path": "/sync/run"
+    },
+    {
+      "method": "GET",
+      "path": "/sync/status"
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/ai-review"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/ai-reviews"
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/ai-reviews/{review_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/catalog"
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/notes/{note_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan"
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan-market"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/scan-market/{job_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/scan-market/{job_id}/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/sectors"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/signals/{symbol}"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/watchlist"
+    },
+    {
+      "method": "DELETE",
+      "path": "/tactics/watchlist/{symbol}"
+    },
+    {
+      "method": "PUT",
+      "path": "/tactics/watchlist/{symbol}"
+    },
+    {
+      "method": "GET",
+      "path": "/tactics/watchlist/{symbol}/notes"
+    },
+    {
+      "method": "POST",
+      "path": "/tactics/watchlist/{symbol}/notes"
+    },
+    {
+      "method": "GET",
+      "path": "/thesis"
+    },
+    {
+      "method": "POST",
+      "path": "/thesis"
+    },
+    {
+      "method": "PUT",
+      "path": "/thesis/{thesis_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/timeline/decision/{decision_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/transfer/requests"
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests"
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/decide"
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/receive"
+    },
+    {
+      "method": "POST",
+      "path": "/transfer/requests/{request_id}/send"
+    },
+    {
+      "method": "GET",
+      "path": "/watch-items"
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items"
+    },
+    {
+      "method": "GET",
+      "path": "/watch-items/{watch_id}/checks"
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items/{watch_id}/checks"
+    },
+    {
+      "method": "POST",
+      "path": "/watch-items/{watch_id}/transition"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/cffex"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/cross-check"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/curriculum"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/profile/{operatedept_code}"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/replay/{security_code}"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/seats/{security_code}"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/tactics"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/tactics/{day}"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/today"
+    },
+    {
+      "method": "GET",
+      "path": "/youzi/watchlist"
+    }
+  ],
+  "exempt": [
+    {
+      "method": "GET",
+      "path": "/evidence/support-resistance/{symbol}",
+      "reason": "插件能力端点（official.* 的 support-resistance 能力），桌面端渲染层无调用方"
+    }
+  ]
+}

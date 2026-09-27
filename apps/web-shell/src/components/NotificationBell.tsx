@@ -4,6 +4,9 @@ import { formatDate } from "../state/format";
 
 interface Props {
   notifications: Notification[];
+  /** 第四轮审计（api-5）：静音态。免打扰/关闭站内提醒时，Core 返回空列表 + 静音标志；
+   *  没有它，「被静音」会被呈现成「暂无待处理通知」——把自己设的偏好说成「市场没事」。 */
+  muted?: { muted: boolean; reason: string; hiddenCount: number };
   onMarkNotificationRead: (notificationId: string) => Promise<boolean>;
   /** 查看全部：跳转今日页通知区。 */
   onOpenToday: () => void;
@@ -24,7 +27,7 @@ interface Props {
  * 否则「不再弹通知」就变成了「被静默吞掉」。默认折叠：它不该抢待处理通知的注意力，
  * 但一眼能看到有多少条被压下了。
  */
-export function NotificationBell({ notifications, onMarkNotificationRead, onOpenToday, triage, onLoadTriage }: Props) {
+export function NotificationBell({ notifications, muted, onMarkNotificationRead, onOpenToday, triage, onLoadTriage }: Props) {
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [markFailed, setMarkFailed] = useState(false);
@@ -59,9 +62,13 @@ export function NotificationBell({ notifications, onMarkNotificationRead, onOpen
     <div className="bell-wrap" ref={rootRef}>
       <button
         className="icon-button"
-        aria-label={`通知（${notifications.length} 条待处理）`}
+        aria-label={muted?.muted
+          ? `通知（${muted.hiddenCount} 条已静音）`
+          : `通知（${notifications.length} 条待处理）`}
         aria-expanded={open}
-        title={notifications.length ? `${notifications.length} 条待处理通知` : "暂无待处理通知"}
+        title={muted?.muted
+          ? `${muted.reason}：${muted.hiddenCount} 条待处理通知已静音，可在「个人中心 → 通知设置」调整`
+          : notifications.length ? `${notifications.length} 条待处理通知` : "暂无待处理通知"}
         onClick={() => setOpen((current) => !current)}
       >
         <span className="bell" />
@@ -82,7 +89,14 @@ export function NotificationBell({ notifications, onMarkNotificationRead, onOpen
             </button>
           </header>
           {markFailed && <p className="notice-error">标记已读失败，请稍后重试。</p>}
-          {notifications.length === 0 ? (
+          {muted?.muted ? (
+            // 第四轮审计（api-5）：静音时说「有 N 条被静音」而不是「暂无待处理通知」——
+            // 后者把用户自己设的偏好呈现成「市场没事」，且没有任何指引。
+            <p className="notice-empty">
+              {muted.reason}，{muted.hiddenCount > 0 ? `当前有 ${muted.hiddenCount} 条待处理通知已静音。` : "待处理通知已全部静音。"}
+              可在「个人中心 → 通知设置」调整。
+            </p>
+          ) : notifications.length === 0 ? (
             <p className="notice-empty">暂无待处理通知。条件引擎产生的提醒会在这里出现。</p>
           ) : (
             <ul className="notice-list">
