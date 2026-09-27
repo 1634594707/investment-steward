@@ -7,7 +7,11 @@
 
 [English](README.md) · **简体中文**
 
-  <video src="https://1634594707.github.io/investment-steward/assets/demo-zh.mp4" width="920" controls muted loop playsinline></video>
+  <a href="https://1634594707.github.io/investment-steward/assets/demo-zh.mp4">
+    <img src="docs/assets/demo-poster.jpg" width="920" alt="AI Investment Steward 产品演示">
+  </a>
+
+  ▶ 87 秒无声演示 · 全部为本地真实数据，非示意图
 
 </div>
 

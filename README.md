@@ -7,7 +7,11 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-https://1634594707.github.io/investment-steward/assets/demo-en.mp4
+  <a href="https://1634594707.github.io/investment-steward/assets/demo-en.mp4">
+    <img src="docs/assets/demo-poster.jpg" width="920" alt="AI Investment Steward product walkthrough">
+  </a>
+
+  ▶ 87-second silent walkthrough · real local data, no mock-ups
 
 </div>
 
