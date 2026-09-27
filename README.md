@@ -7,7 +7,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-  <video src="docs/assets/demo-en.mp4" width="920" controls muted loop playsinline></video>
+  <video src="https://1634594707.github.io/investment-steward/assets/demo-en.mp4" width="920" controls muted loop playsinline></video>
 
 </div>
 
