@@ -7,6 +7,8 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+  <video src="docs/assets/demo-en.mp4" width="920" controls muted loop playsinline></video>
+
 </div>
 
 AI Investment Steward runs on Windows desktop first (a browser serves as the development preview) and is built for individual investors with A-share / ETF experience who want to run their investments as a disciplined system. It answers four questions:

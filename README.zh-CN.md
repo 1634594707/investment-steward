@@ -7,6 +7,8 @@
 
 [English](README.md) · **简体中文**
 
+  <video src="docs/assets/demo-zh.mp4" width="920" controls muted loop playsinline></video>
+
 </div>
 
 AI Investment Steward 以 Windows 桌面端为主（浏览器可作开发预览），面向有 A 股 / ETF 经验、希望建立体系的个人投资者，回答四个问题：
