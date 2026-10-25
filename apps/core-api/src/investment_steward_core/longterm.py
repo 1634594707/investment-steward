@@ -267,6 +267,55 @@ def verify_judgment(
     return judgment, verification
 
 
+# ———————————————— G2 锚定型验证点的手工复核 ————————————————
+
+#: 手工复核的适用边界（随返回体下发，前端与文档共用同一份措辞）。
+WATCHPOINT_REVIEW_POLICY: dict[str, str] = {
+    "scope": "只适用于**锚定事件**型验证点（无确切日期，如「三季报披露后」）；带确切日期的验证点走 POST /judgments/{id}/verify",
+    "no_fake_date": "本入口**不写 verifiable_judgments、不伪造 due_at**——锚定事件没有日期，而判断的到期时间是必填字段",
+    "append_only": "只追加复核记录，原研报 payload 与验证点文本一字不改（与 judgment_verifications 同一惯例）",
+    "latest_wins": "同一条验证点可多次复核，队列展示**最近一次**的结论；历史记录全部保留",
+    "no_auto_claim": "「已复核」只表示用户人工看过并给出结论，不代表系统做了任何自动监控",
+}
+
+
+def review_watchpoint(
+    db: Database,
+    user_id: UUID,
+    *,
+    report_id: str,
+    index: int,
+    signal: str,
+    verify_by: str,
+    result: str,
+    outcome: str = "",
+) -> Any:
+    """记录一次锚定型验证点的**手工复核**（只追加）。返回新建的复核记录。
+
+    与 `materialize_watchpoint_judgment` 的分工（冻结口径，不要放宽）：
+    - 能解析出确切日期 → 落 `verifiable_judgments`，回填走 `POST /judgments/{id}/verify`；
+    - 锚定事件（无日期）→ 不落库、不猜日期；用户人工看过之后，走本函数记一笔复核结论。
+
+    这样「锚定事件永远无法回填」不再等于「永远无法结案」——但代价是必须人工给出结论，
+    系统不做任何自动判定，也不承诺会自动监控。
+    """
+    from investment_steward_core.domain.longterm import WatchpointManualReview
+
+    result_enum = VerificationResult(result)
+    review = WatchpointManualReview(
+        review_id=uuid4(),
+        user_id=user_id,
+        report_id=str(report_id),
+        watchpoint_index=int(index),
+        signal=(signal or "")[:4000],
+        verify_by=(verify_by or "")[:400],
+        result=result_enum,
+        outcome=(outcome or "")[:4000],
+    )
+    db.insert_watchpoint_review(review)
+    return review
+
+
 # ———————————————— G02 后验命中率（复盘与学习） ————————————————
 
 #: 命中率口径。**随返回体一起下发**，前端与文档共用同一份措辞，避免两处口径各写一遍后漂移。

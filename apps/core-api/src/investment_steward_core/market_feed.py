@@ -175,6 +175,8 @@ def _fetch_em_kline(symbol: str, limit: int, period: str = "day") -> list[dict[s
     rows = _parse_kline_rows(data)
     if not rows:
         raise FeedError(f"东方财富未返回 {symbol} 的行情")
+    for row in rows:
+        row.update(requested_adjust="qfq", source_series="data.klines", adjust=None)
     return rows[-limit:]
 
 
@@ -192,9 +194,11 @@ def _fetch_tx_kline(symbol: str, limit: int, period: str = "day") -> list[dict[s
     node = data.get("data")
     item = node.get(tx_symbol) if isinstance(node, dict) else None
     rows_raw = None
+    source_series = None
     if isinstance(item, dict):
         # 复权序列键为 qfqday/qfqweek/qfqmonth；个别品种只给未复权键 day/week/month。
-        rows_raw = item.get(f"qfq{period}") or item.get(period)
+        source_series = f"qfq{period}" if item.get(f"qfq{period}") else period
+        rows_raw = item.get(source_series)
     if not isinstance(rows_raw, list) or not rows_raw:
         raise FeedError(f"腾讯未返回 {symbol} 的行情")
 
@@ -230,7 +234,29 @@ def _fetch_tx_kline(symbol: str, limit: int, period: str = "day") -> list[dict[s
     ordered = sorted(by_ts.values(), key=lambda row: str(row["timestamp"]))
     if not ordered:
         raise FeedError(f"腾讯未返回 {symbol} 的有效行情")
+    for row in ordered:
+        row.update(requested_adjust="qfq", source_series=source_series,
+                   adjust="none" if source_series == period else "qfq")
     return ordered[-limit:]
+
+
+def kline_adjustment(bars: list[dict[str, object]] | None) -> str | None:
+    """Only a uniform, explicit response basis is usable for a historical snapshot."""
+    if not bars:
+        return None
+    adjust = bars[0].get("adjust")
+    if adjust not in ("qfq", "none") or any(bar.get("adjust") != adjust for bar in bars):
+        return None
+    return str(adjust)
+
+
+def kline_adjustment_label(bars: list[dict[str, object]] | None) -> str:
+    adjust = kline_adjustment(bars)
+    if adjust == "qfq":
+        return "前复权"
+    if adjust == "none":
+        return "未复权"
+    return "复权未确认"
 
 
 def fetch_cn_kline(symbol: str, limit: int = 120, period: str = "day") -> tuple[list[dict[str, object]], str]:

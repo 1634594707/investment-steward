@@ -8,13 +8,14 @@ import { Check } from "lucide-react";
 import { ModelProfile } from "@investment-steward/domain-contracts";
 import { type FollowUpSupplementInput } from "../../hooks/useResearch";
 import { ReportHandoff } from "../../state/handoff";
-import { ExportBar, BatchExportBar, buildStockReportMarkdown, buildDirectionReportMarkdown, buildCompareSynthesisMarkdown, buildHtmlDocument, markdownToHtml, reportFileBase } from "./export";
-import { keyFactHighlights, ReportResultTabs, ReportFirstScreen } from "./panels";
+import { ExportBar, BatchExportBar, buildStockReportMarkdown, buildStockReportHtml, buildDirectionReportMarkdown, buildCompareSynthesisMarkdown, buildHtmlDocument, markdownToHtml, reportFileBase } from "./export";
+import { ReportResultTabs, ReportFirstScreen, repairActionKey } from "./panels";
 import { retryCompareEntry } from "./compareJob";
+import { formatTimestamp } from "./format";
 import { FollowUpPanel, EMPTY_FOLLOWUP_DRAFT, type FollowUpDraft } from "./followup";
 import { DirectionResultTabs, THEME_INPUT_HINT, THEME_TOPIC_PLACEHOLDER } from "./direction";
 import { ReportSourceBar } from "./sourceBar";
-import { WorkbenchTab, StockReport, DirectionReport, AnalysisTurn, CollabRunView, CompareSynthesis, CompareEntry } from "./researchTypes";
+import { WorkbenchTab, StockReport, DirectionReport, AnalysisTurn, CollabRunView, CompareSynthesis, CompareEntry, type ReportRepairAction } from "./researchTypes";
 import { AppView } from "../../shell/nav";
 import { CollabResultBlock, Field, type CollabCheckResult, type CollabReportResult, type CollabRiskResult } from "./collab";
 
@@ -172,6 +173,7 @@ export function StockReportPanel({
   onRefreshReports,
   onCreateFollowUp,
   onLoadFollowUps,
+  onRepairReport,
 }: {
   candidates: { instrument: string; label: string }[];
   aiReady: boolean;
@@ -234,6 +236,16 @@ export function StockReportPanel({
   onCreateFollowUp: (reportId: string, question: string, supplements: FollowUpSupplementInput[], mode: string) => Promise<{ turn: AnalysisTurn; persisted: boolean } | null>;
   /** v32 研报追问：载入某报告的全部追问附录（append-only，时间正序）。 */
   onLoadFollowUps: (reportId: string) => Promise<AnalysisTurn[] | null>;
+  /** G1（2026-09-27 路线图）：对已落库报告执行一次**定向修复**（补写摘要/结论/小节）。
+   *
+   *  复用与自动修复完全相同的服务端路径。返回回写后的整份 payload + 修复留痕；
+   *  或**错误文案字符串**（请求失败）。`repair.repaired=false` = 本次修复未成功，
+   *  此时 `report` 仍是原稿——界面照实提示，不假装修好了。 */
+  onRepairReport: (
+    reportId: string,
+    strategy: string,
+    section?: string,
+  ) => Promise<{ report: StockReport; repair: { repaired: boolean; detail: string; strategy: string; label: string } } | string>;
 }) {
   const [symbol, setSymbol] = useState("");
   // 快选候选默认铺 12 只（此前 slice(0,12) 硬截断,16 只自选显示不全）；更多时折叠可展开。
@@ -271,6 +283,40 @@ export function StockReportPanel({
   const [newStudyExpanded, setNewStudyExpanded] = useState(false);
   // v33 D07：被单股研究暂存的批量队列（显式恢复，不自动合并）。
   const [stashedQueue, setStashedQueue] = useState<string[]>([]);
+  // —— G1（研报产出与交付链路路线图 2026-09-27）：质量告警的定向修复 ——
+  // 修复后服务端回写整份 payload（升 report_revision 并留 revision_history），
+  // 这里按 report_id 就地覆盖显示，不重跑生成、不刷新页面。
+  const [repairedOverrides, setRepairedOverrides] = useState<Record<string, StockReport>>({});
+  const [repairingKey, setRepairingKey] = useState<string | null>(null);
+  const [repairNotice, setRepairNotice] = useState<{ reportId: string; text: string; ok: boolean } | null>(null);
+
+  async function handleRepair(target: StockReport, action: ReportRepairAction): Promise<void> {
+    const reportId = target.report_id;
+    if (!reportId) return;
+    setRepairingKey(repairActionKey(action));
+    setRepairNotice(null);
+    try {
+      const result = await onRepairReport(reportId, action.strategy, action.section ?? "");
+      if (typeof result === "string") {
+        setRepairNotice({ reportId, text: `定向修复请求失败：${result}`, ok: false });
+        return;
+      }
+      // 成功与「修复未成功」都替换显示：后者服务端保留原稿，但可能已补上其它字段；
+      // 以服务端回写的 payload 为准，避免前端与落库不一致。
+      setRepairedOverrides((prev) => ({ ...prev, [reportId]: result.report }));
+      const label = result.repair.label || action.label;
+      setRepairNotice(
+        result.repair.repaired
+          ? { reportId, text: `已完成「${label}」：${result.repair.detail}`, ok: true }
+          : { reportId, text: `「${label}」未成功：${result.repair.detail}`, ok: false },
+      );
+      // 历史列表里的轻量投影（字数/质量状态/是否草稿）也随修复变化，一并刷新。
+      onRefreshReports();
+    } finally {
+      setRepairingKey(null);
+    }
+  }
+
   // v32 研报追问（2026-09-13 方案 §三）：当前查看报告的追问附录（append-only）与提交状态。
   const [followupTurns, setFollowupTurns] = useState<AnalysisTurn[]>([]);
   const [followupLoading, setFollowupLoading] = useState(false);
@@ -415,6 +461,7 @@ export function StockReportPanel({
       confidence: revise.confidence ?? "low",
       model: `${stageModelNames.join("/") || current.model}·协同流水线`,
       source_keys: current.source_keys,
+      source_catalog: current.source_catalog,
       source_errors: current.source_errors,
       generated_at: current.created_at,
       citation_dropped: reviseStage?.citation_dropped ?? [],
@@ -441,6 +488,9 @@ export function StockReportPanel({
       levels: revise.levels ?? {},
       watchpoints: revise.watchpoints ?? [],
       valuation: revise.valuation,
+      earnings_growth: revise.earnings_growth,
+      cash_flow_quality: revise.cash_flow_quality,
+      research_completeness: revise.research_completeness,
       /* v27/v28：与个股研报端点同一口径（证据分级 / claim 支撑链 / 结论卡数据源）。 */
       evidence_quality: reviseStage?.evidence_quality,
       claims: revise.claims ?? [],
@@ -694,7 +744,7 @@ export function StockReportPanel({
                 {directionReport.generation_trace?.profile_name && (
                   <span className="soft-tag gray" title="C04：本次请求冻结的方案快照">方案 {directionReport.generation_trace.profile_name}</span>
                 )}
-                <span className="report-meta">{new Date(directionReport.generated_at).toLocaleString()}</span>
+                <span className="report-meta">{formatTimestamp(directionReport.generated_at)}</span>
                 {/* v33 C05：换模型重做——先展开新建表单切换「本次模型」，重做会产生新记录（旧记录保留可对比）。 */}
                 <button
                   className="ghost-btn"
@@ -707,7 +757,7 @@ export function StockReportPanel({
                 markdown={buildDirectionReportMarkdown(directionReport)}
                 htmlDocument={buildHtmlDocument(
                   directionReport.title || `方向研判 · ${directionReport.topic}`,
-                  [directionReport.topic, `模型 ${directionReport.model}`, new Date(directionReport.generated_at).toLocaleString()],
+                  [directionReport.topic, `模型 ${directionReport.model}`, formatTimestamp(directionReport.generated_at)],
                   markdownToHtml(buildDirectionReportMarkdown(directionReport).replace(/^# .*$/m, "").trim()),
                 )}
               />
@@ -1032,7 +1082,7 @@ export function StockReportPanel({
               <h4>跨报告综合 · 共识与分歧</h4>
               <div className="wb-result-meta">
                 <span className="soft-tag blue">{synthesis.model}</span>
-                <span className="report-meta">{new Date(synthesis.generated_at).toLocaleString()}</span>
+                <span className="report-meta">{formatTimestamp(synthesis.generated_at)}</span>
               </div>
               <p><b>{synthesis.summary}</b></p>
               {synthesis.consensus.length > 0 && (
@@ -1049,7 +1099,7 @@ export function StockReportPanel({
                 markdown={buildCompareSynthesisMarkdown(synthesis)}
                 htmlDocument={buildHtmlDocument(
                   "跨报告综合 · 共识与分歧",
-                  [`模型 ${synthesis.model}`, new Date(synthesis.generated_at).toLocaleString()],
+                  [`模型 ${synthesis.model}`, formatTimestamp(synthesis.generated_at)],
                   markdownToHtml(buildCompareSynthesisMarkdown(synthesis).replace(/^# .*$/m, "").trim()),
                 )}
               />
@@ -1092,7 +1142,8 @@ export function StockReportPanel({
                   </div>
                 );
               }
-              const report = entry.report;
+              // G1：定向修复后把服务端回写的整份 payload 就地替换显示（不重跑生成、不刷新页面）。
+              const report = (entry.report.report_id && repairedOverrides[entry.report.report_id]) || entry.report;
               return (
             <div className="wb-result">
               <h4>{report.title}</h4>
@@ -1104,10 +1155,16 @@ export function StockReportPanel({
                 {typeof report.latency_ms === "number" && report.latency_ms > 0 && (
                   <span className="report-meta">模型生成 {Math.round(report.latency_ms / 1000)} 秒</span>
                 )}
-                <span className="report-meta">{new Date(report.generated_at).toLocaleString()}</span>
+                <span className="report-meta">{formatTimestamp(report.generated_at)}</span>
               </div>
               {/* v31 §4.1 首屏固定行：模式 · 字数 · 三态质量状态；不完整时红色横幅 + 缺失项 */}
               <ReportFirstScreen report={report} />
+              {/* G1：定向修复的结果如实回显（成功与失败都写清楚，不静默）。 */}
+              {repairNotice && repairNotice.reportId === report.report_id && (
+                <p className={repairNotice.ok ? "report-meta" : "report-meta amber"} role="status">
+                  {repairNotice.text}
+                </p>
+              )}
               {/* S3（用户视角路线图 2026-09-26）：Core 落库失败时仍会交付 200 + 完整报告，
                   但响应里没有 report_id。此处必须显式告警——否则用户读完关掉，
                   报告从未写库、无 id 可回取、也不会出现在历史列表里，而界面零提示。 */}
@@ -1143,17 +1200,15 @@ export function StockReportPanel({
                   <ExportBar
                     filenameBase={reportFileBase(report.symbol, instrumentLabel, report.model, report.generated_at.slice(0, 10))}
                     markdown={reportMarkdown}
-                    htmlDocument={buildHtmlDocument(
-                      report.title,
-                      [report.symbol, `模型 ${report.model}`, `置信 ${report.confidence}`, new Date(report.generated_at).toLocaleString()],
-                      markdownToHtml(reportMarkdown.replace(/^# .*$/m, "").trim(), keyFactHighlights(report)),
-                    )}
+                    htmlDocument={buildStockReportHtml(report, followupTurns)}
                   />
                 );
               })()}
               {/* v30 结果区页签：结构化判断 / 正文 / 证据附录；v32 增「追问复盘」页签 */}
               <ReportResultTabs
                 report={report}
+                onRepair={(action) => void handleRepair(report, action)}
+                repairingKey={repairingKey}
                 followup={report.report_id ? (
                   <FollowUpPanel
                     reportId={report.report_id}

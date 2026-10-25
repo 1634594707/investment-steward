@@ -153,6 +153,8 @@ def test_refill_advances_status_and_keeps_report_payload_byte_identical(tmp_path
     payload_before = test_client.get(f"/ai-research/reports/{report_id}", headers=headers).text
     assert before_queue["closure"] == {
         "materialized": 2, "filled": 0, "overdue_unfilled": 1, "not_materialized": 1,
+        # G2：锚定事件的人工复核计数（本用例没复核过 → 0；键恒在，不是「不统计」）。
+        "manually_reviewed": 0,
     }
 
     response = test_client.post(
@@ -170,6 +172,8 @@ def test_refill_advances_status_and_keeps_report_payload_byte_identical(tmp_path
     assert refilled["verification"]["outcome"] == "跌破 MA20 且量能萎缩"
     assert after_queue["closure"] == {
         "materialized": 2, "filled": 1, "overdue_unfilled": 0, "not_materialized": 1,
+        # G2：回填走的是 judgment 通道，人工复核计数不受影响（仍是 0）。
+        "manually_reviewed": 0,
     }
 
     # append-only：判断原文与研报 payload 都不因回填而变化。
@@ -189,4 +193,6 @@ def test_review_queue_reports_filled_and_overdue_counts_on_fresh_database(tmp_pa
     assert body["items"] == []
     assert body["closure"] == {
         "materialized": 0, "filled": 0, "overdue_unfilled": 0, "not_materialized": 0,
+        # G2：空库时人工复核计数也是 0（键恒在——缺键会让前端把「0」当成「未统计」）。
+        "manually_reviewed": 0,
     }

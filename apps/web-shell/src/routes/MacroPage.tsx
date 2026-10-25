@@ -5,6 +5,7 @@ import { useMacro, type MacroAnalysisResult, type MacroCalendarSnapshot, type Ma
 
 import { X, RotateCcw } from "lucide-react";
 import "./macro.css";
+import { macroScoreCoverage, macroFrequencyLabel } from "./macroPresentation";
 
 interface Props {
   onNavigate: (view: "research") => void;
@@ -623,7 +624,7 @@ function readingRow(indicator: string, label: string, status: string, latest: nu
   // 旧布局 meta 列 auto 被长备注撑爆，把标签挤成逐字竖排。
   // 单位去黑话（用户反馈）：%YoY → %（「同比」已在标签里），pp → 个百分点。
   const unitText = unit === "%YoY" ? "%" : unit === "pp" ? "个百分点" : unit;
-  const value = status === "ok" && latest !== null
+  const value = status === "ok" && latest != null
     ? `${typeof latest === "number" ? latest.toLocaleString("zh-CN") : latest}${unitText.startsWith("%") || !unitText ? unitText : ` ${unitText}`}`
     : "待接数据源";
   const sub = status === "ok" ? `${obsDate ?? ""}${note ? ` · ${note}` : ""}` : note || "未接入数据源，不输出数值（不编造）";
@@ -1051,9 +1052,10 @@ function realCountryCard(
   aiReady?: boolean,
 ) {
   const foot = snapshot.generated_at
-    ? `来源 ${snapshot.indicators[0]?.source || "FRED（公开接口）"} · 快照 ${new Date(snapshot.generated_at).toLocaleString("zh-CN", { hour12: false })}`
+    ? `来源 ${snapshot.indicators[0]?.source || "FRED（公开接口）"} · 快照生成时间 ${new Date(snapshot.generated_at).toLocaleString("zh-CN", { hour12: false })}（观测期见各指标）`
     : "来源 FRED（公开接口）";
   const p = snapshot.positioning;
+  const coverage = macroScoreCoverage(snapshot);
   const bandColor = p ? (p.band === "扩张" ? "mint" : p.band === "放缓" ? "amber" : "coral") : "blue";
   const severe = p
     ? p.dims.flatMap((d) => d.rules_fired).filter((rule) => {
@@ -1071,9 +1073,24 @@ function realCountryCard(
       <div className="mc-head">
         <span className="mc-flag">{flag}</span>
         <b>{name}</b>
-        {p && <span className={`soft-tag ${bandColor}`}>{p.band} {p.composite} 分（规则基线 · {p.weight_version}）</span>}
+        {p && <span className={`soft-tag ${bandColor}`}>规则区间：{p.band} · {p.composite} 分（{p.weight_version}）</span>}
       </div>
-      {snapshot.indicators.map((row) => readingRow(row.indicator, row.label, row.status, row.latest, row.obs_date, row.unit, row.note))}
+      {p && <div className="mc-score-coverage">
+        <p>参与维度：{coverage.active.join("、") || "无"}；缺失维度：{coverage.missing.join("、") || "无"}</p>
+        <p>缺失维度不参与加权，剩余维度权重重新归一；覆盖范围、数据期或权重不同的综合分不能直接排名。</p>
+        <ul>{coverage.periods.map((text) => <li key={text}>{text}</li>)}</ul>
+      </div>}
+      {!p && <p className="mc-score-coverage">未生成综合分：可用指标与当前权重不足以计算，请检查指标覆盖和权重设置。</p>}
+      {["annual", "quarterly", "monthly", "daily", "other"].map((frequency) => {
+        const rows = snapshot.indicators.filter((row) => frequency === "other"
+          ? !["annual", "quarterly", "monthly", "daily"].includes(row.frequency ?? "") : row.frequency === frequency);
+        if (!rows.length) return null;
+        return <section className="mc-frequency-group" key={frequency} aria-label={frequency === "other" ? "频率未标注或其他频率" : macroFrequencyLabel(frequency)}>
+          <h4>{frequency === "annual" ? "年度结构数据" : frequency === "other" ? "频率未标注或其他频率" : `${macroFrequencyLabel(frequency)}指标`}</h4>
+          {rows.map((row) => readingRow(row.indicator, row.label, row.status, row.latest, row.obs_date, row.unit,
+            `频率：${macroFrequencyLabel(row.frequency)}；观测期：${row.obs_date || "未标注"}；抓取时间：${row.as_of || "未标注"}${row.note ? `；${row.note}` : ""}`))}
+        </section>;
+      })}
       {p && (
         <div className="mc-foot muted">
           四维：{p.dims.map((d) => `${d.dim === "growth" ? "增长" : d.dim === "employment" ? "就业" : d.dim === "inflation" ? "通胀" : "货币"} ${d.score ?? "—"}`).join(" · ")}
@@ -1214,6 +1231,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
     interpretSpeakerSignal: onInterpretSignal, registerMacroResearch: onRegisterResearch, fetchMacroResearchList: onFetchResearchList,
   } = useMacro(client, active, aiReady);
   const globalSnapshot = snapshots["global"] ?? null;
+  const [selectedRegion, setSelectedRegion] = useState<string>(COUNTRIES[0].region);
   // 经济数据发布看板（CPI/非农/利率：前值/预期/实际），启用后拉取并随启用态变化重取。
   const [releases, setReleases] = useState<MacroReleaseBoard | null>(null);
   const fetchReleasesRef = useRef(onFetchReleases);
@@ -1307,13 +1325,21 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
         <div><span className="kicker">全球宏观</span><h2>宏观雷达</h2></div>
         <div><span>{loading ? "数据更新中" : isDemo ? "演示数据" : "公开数据与本机缓存"}</span><p>关注主题：贸易 · 金融 · 能源传导</p></div>
       </header>
-      <dl className="macro-cycle-band" aria-label="宏观周期与数据时间">
-        {COUNTRIES.map(({ region, name }) => <div key={region}><dt>{name}</dt><dd>{snapshots[region]?.positioning?.band ?? "周期待确认"}</dd><small>{snapshots[region]?.generated_at ? `更新 ${new Date(snapshots[region]!.generated_at).toLocaleDateString("zh-CN")}` : "暂无快照"}</small></div>)}
-      </dl>
+      <nav className="macro-cycle-band" aria-label="五国概览与详情选择">
+        {COUNTRIES.map(({ region, name }) => (
+          <button type="button" key={region} aria-pressed={selectedRegion === region}
+            aria-controls={`macro-country-${region}`} onClick={() => setSelectedRegion(region)}>
+            <b>{name}</b>
+            <span>规则区间：{snapshots[region]?.positioning?.band ?? "待确认"}</span>
+            <small>{snapshots[region]?.generated_at ? `快照生成 ${new Date(snapshots[region]!.generated_at).toLocaleDateString("zh-CN")}` : "暂无快照"}</small>
+          </button>
+        ))}
+      </nav>
+      <p className="muted">“扩张”“放缓”等为当前评分的规则区间，不代表相较上期改善或恶化。选择地区查看详情。</p>
 
       {!isDemo && !macroPluginEnabled && (
         <div className="connection-bar" role="status">
-          <span>宏观雷达插件未启用：快照 / 定价 / 日历端点都会被拒绝（HTTP 409），四国板显示不出真实数据。</span>
+          <span>宏观雷达插件未启用：快照 / 定价 / 日历端点都会被拒绝（HTTP 409），五国定位板显示不出真实数据。</span>
           <span className="conn-detail">启用后数据实拉一次即落本机 SQLite 缓存（macro_cache，带 as_of），不会反复外拉；断网时回退最近一次落库值。</span>
           <span className="conn-actions">
             {onEnablePlugin && (
@@ -1326,7 +1352,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
       )}
 
       <div className="metric-row mt-14">
-        <div className="metric mint"><span>已实拉国家</span><strong>{okCount}</strong><small>有 FRED 可取数据的地区</small></div>
+        <div className="metric mint"><span>已实拉国家</span><strong>{okCount}</strong><small>至少一项指标状态为 ok 的地区</small></div>
         <div className="metric amber"><span>待接数据源</span><strong>{5 - okCount}</strong><small>逐国接入官方公开接口</small></div>
         <div className="metric blue"><span>数据源</span><strong>按地区</strong><small>美国 FRED，其余地区显示实际 provider</small></div>
       </div>
@@ -1334,18 +1360,18 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
       {/* 核心可视化 · 世界地图 */}
       <MacroImpactMap isDemo={isDemo} macroPluginEnabled={macroPluginEnabled} onFetchEvents={onFetchEvents} onFetchTrade={onFetchTrade} onRegisterResearch={onRegisterResearch} onFetchResearchList={onFetchResearchList} />
 
-      {/* 四国定位板 */}
+      {/* 五国定位板：保留挂载，切换地区不丢失编辑内容。 */}
       <div className="head-row">
-        <h3>四国定位板</h3>
-        <span className="kicker sm">FRED 实拉 · PENDING 明示 · 规则基线层不打分</span>
+        <h3>五国定位板</h3>
+        <span className="kicker sm">规则评分 · 缺失数据明示 · 观测期见各指标</span>
       </div>
-      <div className="macro-grid mt-10">
+      <div className="macro-country-details mt-10">
         {COUNTRIES.map(({ flag, region, name }) => {
           const snapshot = snapshots[region];
-          if (snapshot) return realCountryCard(region, name, flag, snapshot, onSubmitAnomalies, setAnomalyMsg, analysisMap[region] ?? null, analysisBusyRegion === region, runAnalysis, setAnalysis, onFetchUserView, onSaveUserView, onFetchPricing, aiReady);
           const demo = DEMO_INDS[region]!;
           return (
-            <div className="macro-card" key={region}>
+            <div key={region} id={`macro-country-${region}`} role="region" aria-label={`${name}宏观详情`} hidden={selectedRegion !== region}>
+            {snapshot ? realCountryCard(region, name, flag, snapshot, onSubmitAnomalies, setAnomalyMsg, analysisMap[region] ?? null, analysisBusyRegion === region, runAnalysis, setAnalysis, onFetchUserView, onSaveUserView, onFetchPricing, aiReady) : <div className="macro-card">
               <div className="mc-head">
                 <span className="mc-flag">{flag}</span>
                 <b>{name}</b>
@@ -1359,6 +1385,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
                 </div>
               ))}
               <div className="mc-foot warn">{isDemo ? demo.foot : "无数据 · 未显示演示读数"}</div>
+            </div>}
             </div>
           );
         })}

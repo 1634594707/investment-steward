@@ -269,6 +269,8 @@ export const BIAS_LABEL: Record<DirectionBias, string> = {
 };
 
 export interface ScanRow {
+  /** 后端选出的主信号；旧数据缺失时不在前端重选。 */
+  primary_tactic_id?: string | null;
   symbol: string;
   name: string;
   ok: boolean;
@@ -1056,6 +1058,7 @@ function ScanRowsTable({
       <tbody>
         {rows.map((row, index) => {
           const tracked = trackedInstruments?.includes(row.symbol) ?? false;
+          const primary = row.primary_tactic_id ? row.hit_detail?.find((item) => item.tactic_id === row.primary_tactic_id) : undefined;
           return (
             <tr key={`${row.symbol}-${index}`} className={row.ok && row.hit_tactics.length ? "hit" : ""}>
               <td>
@@ -1094,11 +1097,23 @@ function ScanRowsTable({
                 {showSector && row.sector_name && <small className="sector-tag">{row.sector_name}</small>}
               </td>
               <td>
+                {row.ok && (
+                  <div className="scan-primary-signal">
+                    <b>主信号：{primary?.tactic_name || "未提供"}</b>
+                    <span>触发日：{primary?.date || "未提供"}</span>
+                    <span>状态：{row.primary_signal_state ? SIGNAL_STATE_LABEL[row.primary_signal_state.state] ?? row.primary_signal_state.state : "未提供"}</span>
+                    <span>失效条件：{primary?.invalidation_rule || "未提供"}</span>
+                    <span>多空冲突：{row.direction_bias === "conflict" ? `存在${row.score_parts ? `，对冲扣分 ${row.score_parts.conflict}` : ""}` : row.direction_bias ? "未报告冲突" : "未提供"}</span>
+                    {row.gating_reasons?.map((reason) => <span key={reason}>{reason}</span>)}
+                  </div>
+                )}
                 {!row.ok ? (
-                  <span className="probe-note err">{row.error}</span>
+                  <span className="probe-note err">{row.error || "取数失败（未提供原因）"}</span>
                 ) : row.hit_tactics.length === 0 ? (
                   <span className="soft-tag gray">窗口内无信号</span>
                 ) : (
+                  <details className="score-detail">
+                    <summary>全部命中（{row.hit_tactics.length}）</summary>
                   <span className="tactic-badges">
                     {row.hit_detail && row.hit_detail.length > 0
                       ? row.hit_detail.map((item) => (
@@ -1112,6 +1127,7 @@ function ScanRowsTable({
                             }
                           >
                             {item.tactic_name}
+                            <small>{item.family_merged ? "同族合并·不计分" : item.counted === true ? "计分" : item.counted === false ? "不计分" : "计分状态未提供"}</small>
                             {item.family_merged && <i className="merged-dot" aria-hidden="true" />}
                           </span>
                         ))
@@ -1119,6 +1135,7 @@ function ScanRowsTable({
                           <span key={id} className="tactic-badge">{tacticNameOf(catalog, id)}</span>
                         ))}
                   </span>
+                  </details>
                 )}
                 {row.ok && row.insufficient_tactics && row.insufficient_tactics.length > 0 && (
                   <small className="insufficient-note">
@@ -1137,9 +1154,6 @@ function ScanRowsTable({
                 )}
               </td>
               <td>
-                {onOpenStockReport && (
-                  <button className="ghost-btn" title="跳转研究工作台并预填该标的（带入当前扫描上下文）" onClick={() => onOpenStockReport(row.symbol, { sourceLabel: "战法雷达", question: "该标的当前战法信号状态如何？信号与技术状态能否支持短期确认？（技术信号不替代基本面与长期价值判断）" })}>AI 报告</button>
-                )}
                 <button className="ghost-btn" onClick={() => onLoadSignals(row.symbol)}>详情</button>
                 <button
                   className="ghost-btn"
@@ -1149,6 +1163,13 @@ function ScanRowsTable({
                 >
                   +观察
                 </button>
+                {(onOpenStockReport || onAddToWatchlist || onRunAiReview) && (
+                  <details className="score-detail row-more-actions">
+                    <summary>更多操作</summary>
+                    <div>
+                {onOpenStockReport && (
+                  <button className="ghost-btn" title="跳转研究工作台并预填该标的（带入当前扫描上下文）" onClick={() => onOpenStockReport(row.symbol, { sourceLabel: "战法雷达", question: "该标的当前战法信号状态如何？信号与技术状态能否支持短期确认？（技术信号不替代基本面与长期价值判断）" })}>AI 报告</button>
+                )}
                 {onAddToWatchlist && (
                   <button
                     className="ghost-btn"
@@ -1168,6 +1189,9 @@ function ScanRowsTable({
                   >
                     {aiReviewBusy === row.symbol ? "复核中…" : "AI 复核"}
                   </button>
+                )}
+                    </div>
+                  </details>
                 )}
               </td>
             </tr>
@@ -1270,7 +1294,9 @@ export function ScanResultTable({
         {result.gate_version && <> · 榜单门槛 {result.gate_version}</>}
       </p>
       {jevReview && <JevReviewSummary review={jevReview} />}
-      <p className="sort-basis">
+      <details className="score-detail rank-explanation">
+        <summary>排名口径与公式（图形分 × 数据质量因子）</summary>
+        <p className="sort-basis">
         排名口径：<b>综合分 rank_score</b> = 图形质量分 × 数据质量因子（图形分 = 形态权重 × 新鲜度（同族只计最高一条）
         ＋ 同向跨类共振 − 多空对冲 ＋ 量能确认 ＋ 位置 ＋ 板块共振，0–100 饱和曲线不贴顶，纯规则可复算）；
         数据齐全时因子为 1，与图形分同序。K 线字段缺失 / 日期异常的行<b>硬性不可排名</b>，样本不足或主信号已失效的不进默认榜单（仍随结果返回，原因见行内标注）。
@@ -1278,7 +1304,8 @@ export function ScanResultTable({
         点每行「分项」看逐条命中如何累加成总分（含触发价、失效条件与 v28 信号状态）。
         趋势分仅是 mode=all 的候选粗筛参考，不参与最终排名。
         <b>历史后验</b>（同市场状态下的历史超额）属第二期，本期不出数，因此不显示 0 分冒充。
-      </p>
+        </p>
+      </details>
       <div className="sort-switch" role="group" aria-label="展示排序">
         <span className="filter-hint">展示排序：</span>
         {(Object.keys(SCAN_SORT_LABEL) as ScanSortKey[]).map((key) => (

@@ -79,6 +79,11 @@
 }
 .score-detail > summary::-webkit-details-marker { display: none; }
 .score-detail[open] > summary { color: inherit; }
+.rank-explanation { margin-bottom: calc(var(--space-2) * var(--density-scale)); }
+.row-more-actions > div { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--space-1) * var(--density-scale)); padding-top: calc(var(--space-2) * var(--density-scale)); }
+.scan-primary-signal { display: flex; flex-direction: column; gap: calc(var(--space-1) * var(--density-scale)); min-width: 210px; max-width: 360px; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.scan-primary-signal > b { color: var(--ink); }
+.scan-primary-signal > span { color: var(--muted); }
 
 .score-detail-table {
   width: 100%; margin-top: calc(var(--space-2) * var(--density-scale)); border-collapse: collapse; font-size: var(--text-2);

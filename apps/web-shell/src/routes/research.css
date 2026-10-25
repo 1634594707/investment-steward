@@ -12,11 +12,12 @@
 .research-workspace { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(300px, 1.4fr) minmax(240px, 1fr); align-items: start; gap: calc(var(--space-6) * var(--density-scale)); margin-top: calc(var(--space-6) * var(--density-scale)); }
 .research-question-rail, .research-answer-workspace, .research-evidence-board { min-width: 0; }
 .research-question-rail { border-right: 1px solid var(--line); padding-right: calc(var(--space-4) * var(--density-scale)); }
-.research-answer-workspace { border-block: 1px solid var(--line); background: var(--panel); }
+.research-answer-workspace { border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); overflow: hidden; }
 .research-evidence-board { border-left: 1px solid var(--line); padding-left: calc(var(--space-4) * var(--density-scale)); }
 .research-search { display: grid; gap: calc(var(--space-1) * var(--density-scale)); margin-bottom: calc(var(--space-3) * var(--density-scale)); color: var(--muted); font-size: var(--text-2); }
 .research-search input, .research-search select { width: 100%; min-width: 0; min-height: 32px; color: var(--ink); background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-1); padding: calc(var(--space-2) * var(--density-scale)); font: inherit; }
-.research-page .question-item { border-left: 2px solid transparent; padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); }
+.research-page .question-item { border-left: 2px solid transparent; border-radius: 0 var(--radius-1) var(--radius-1) 0; padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); transition: background-color 0.15s ease; }
+.research-page .question-item:hover { background: var(--white-a03); }
 .research-page .question-item.selected { border-left-color: var(--mint); background: var(--mint-a07); }
 .research-page .question-select { overflow-wrap: anywhere; }
 .research-page .question-del { display: grid; place-items: center; }

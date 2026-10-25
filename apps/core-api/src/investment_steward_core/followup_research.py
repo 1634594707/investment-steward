@@ -555,6 +555,9 @@ def watchpoint_tracking_view(
     本函数**不查库、不猜**：没给 id 就当没落成跟踪。
 
     判定顺序（确定性）：
+    0. **锚定事件的人工复核**（G2，2026-09-27 路线图）：没有 `judgment_id`（结构上落不了库）
+       但行里带 `manual_review` → 按复核结论给 `verified` / `unverifiable`，并在说明里写清
+       「人工复核、系统不做自动判定」。这一档只看人工记录，绝不因为「有人点过」就显示成已跟踪；
     1. 有回填结果：`confirmed/denied` → `verified`；`no_data` 或其他 → `unverifiable`；
     2. id 在 `materialized_ids` 里 → 有 `due_on` 且已到期 → `pending_verify`，未到 → `tracked`；
     3. 没有 `due_on`（事件锚定）→ `suggest_observe`，说明「等事件触发后再落成跟踪」；
@@ -570,6 +573,8 @@ def watchpoint_tracking_view(
     for index, row in enumerate(rows):
         judgment_id = str(row.get("judgment_id") or "").strip()
         due_on = str(row.get("due_on") or "").strip()[:10]
+        manual = row.get("manual_review") if isinstance(row.get("manual_review"), dict) else {}
+        manual_result = str(manual.get("result") or "").strip().lower()
         result_row = recorded.get(judgment_id) if judgment_id else None
         result = str((result_row or {}).get("result") or "").strip().lower()
         evidence_text = str(
@@ -578,7 +583,15 @@ def watchpoint_tracking_view(
             or ""
         ).strip()
         note = ""
-        if result in _VERIFIED_RESULTS:
+        if not judgment_id and manual_result:
+            # G2：锚定事件的人工复核。措辞必须点明「人工」——否则读起来像系统自动判定过。
+            state = "verified" if manual_result in _VERIFIED_RESULTS else "unverifiable"
+            note = (
+                f"锚定事件由**人工复核**为「{VERIFICATION_RESULT_LABELS.get(manual_result, manual_result)}」"
+                f"（复核于 {str(manual.get('reviewed_at') or '')[:10] or '时间未记录'}；"
+                "系统不做自动判定、也不承诺自动监控）。"
+            )
+        elif result in _VERIFIED_RESULTS:
             state = "verified"
             note = f"已回填「{VERIFICATION_RESULT_LABELS[result]}」，判断变化见复盘记录。"
         elif result:
@@ -593,7 +606,7 @@ def watchpoint_tracking_view(
                 note = f"已加入待复盘队列{f'（到期 {due_on}）' if due_on else ''}。"
         elif not due_on:
             state = "suggest_observe"
-            note = "验证时点锚定事件、无确切日期，未落成跟踪记录：等事件发生后再加入待复盘。"
+            note = "验证时点锚定事件、无确切日期，未落成跟踪记录：等事件发生后再加入待复盘；若已人工复核，可在队列里标记。"
         else:
             state = "suggest_observe"
             note = f"有到期日（{due_on}）但未在跟踪清单中：本轮未物化成功，不能显示为「已加入」。"
@@ -608,6 +621,8 @@ def watchpoint_tracking_view(
             "verification_result": result,
             "verification_result_label": VERIFICATION_RESULT_LABELS.get(result, ""),
             "verification_evidence": evidence_text[:500],
+            # G2：人工复核回执（没有就是 None——「没复核过」与「复核为无数据」是两件事）。
+            "manual_review": dict(manual) if manual else None,
             "note": note,
         })
 
@@ -737,6 +752,8 @@ _SOURCE_LABELS: dict[str, str] = {
     "S1": "行情与技术面（K 线/指标/战法）",
     "S2": "近期新闻",
     "S3": "近期公告（标题口径）",
+    # D1（研报产出与交付链路路线图 2026-09-27）：公告正文全文，只在真的取到时才出现。
+    "S3A": "公告正文全文（披露原文）",
     "S4": "财务摘要与派生指标",
     "S5": "估值与历史分位",
     "S6": "龙虎榜席位",
@@ -747,7 +764,7 @@ def build_source_catalog(report: Any) -> list[dict[str, Any]]:
     """把研报 payload 里的来源登记成可回查目录（Q09）。
 
     只搬运 payload 里**确实存在**的信息：提供方来自 `source_meta`，数据日期来自 `source_asof`，
-    链接只有 payload 里带（`source_links` 或证据行 `source_uri`）才写，取不到就如实标
+    链接只有 payload 里显式关联到来源编号（`source_links`）才写，取不到就如实标
     「未提供可访问链接」——**不猜 URL、不拼 URL**。`used_by` 由 claims 的引用关系反推，
     这样「2/3」这类统计能顺着编号回到判断与来源。
     """
@@ -756,15 +773,8 @@ def build_source_catalog(report: Any) -> list[dict[str, Any]]:
     asof = data.get("source_asof") if isinstance(data.get("source_asof"), dict) else {}
     meta = data.get("source_meta") if isinstance(data.get("source_meta"), dict) else {}
     links = data.get("source_links") if isinstance(data.get("source_links"), dict) else {}
+    documents = data.get("source_documents") if isinstance(data.get("source_documents"), dict) else {}
     cited = {str(item).strip() for item in (data.get("citations") or []) if str(item).strip()}
-    evidence_rows = [row for row in (data.get("evidence") or []) if isinstance(row, dict)]
-    url_by_type: dict[str, str] = {}
-    for row in evidence_rows:
-        uri = str(row.get("source_uri") or row.get("url") or "").strip()
-        kind = str(row.get("evidence_type") or "").strip()
-        if uri and kind and kind not in url_by_type:
-            url_by_type[kind] = uri
-    kind_for_source = {"S2": "analysis", "S3": "announcement"}
 
     findings = data.get("claim_findings") if isinstance(data.get("claim_findings"), dict) else {}
     claims = findings.get("claims") if isinstance(findings.get("claims"), list) else (data.get("claims") or [])
@@ -794,12 +804,17 @@ def build_source_catalog(report: Any) -> list[dict[str, Any]]:
         raw_block = sources.get(source_id)
         first_line = str(raw_block or "").strip().splitlines()[0] if str(raw_block or "").strip() else ""
         name = first_line.split("：")[0][:120] if first_line else _SOURCE_LABELS.get(source_id, "")
-        url = str(links.get(source_id) or url_by_type.get(kind_for_source.get(source_id, ""), "")).strip()
+        url = str(links.get(source_id) or "").strip()
         entry = {
             "source_id": source_id,
             "name": name or _SOURCE_LABELS.get(source_id, ""),
             "url": url[:500],
-            "url_note": "" if url else "来源未提供可访问链接（原始数据在本地证据包内，未对外再分发）",
+            "documents": documents.get(source_id) if isinstance(documents.get(source_id), list) else [],
+            "url_note": "" if url else (
+                "来源未提供可访问链接；本报告保留该编号的来源文本，不代表已取得原文全文"
+                if str(raw_block or "").strip() else
+                "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录"
+            ),
             "data_date": str(asof.get(source_id) or "")[:10],
             "retrieved_at": str((meta.get(source_id) or {}).get("retrieved_at") if isinstance(meta.get(source_id), dict) else "")[:32],
             "provider": str((meta.get(source_id) or {}).get("provider") if isinstance(meta.get(source_id), dict) else "")[:120],
@@ -819,6 +834,9 @@ def _source_scope_note(source_id: str, entry: dict[str, Any]) -> str:
         "S1": "行情为数据商接口二次分发；指标与战法按收盘口径，不含盘中实时。",
         "S2": "新闻为媒体摘要，只能作线索与情绪，不能当作公司事实。",
         "S3": "公告仅标题口径，正文数字须回链交易所原文核对。",
+        # D1：拿到全文≠拿到一级渠道——等级说的是「内容是一手原文」，渠道仍是二次分发，
+        # 所以这条限制必须写清「转载」，否则读者会把 A 级误读成「直连交易所」。
+        "S3A": "公告正文为数据商转载的交易所披露原文（非摘要）；数字可逐字核对，但渠道非交易所直连。",
         "S4": "财务为数据商 F10 摘要（二次分发）：可核对绝对值与同比，不构成审计级证据。",
         "S5": "估值同口径不含股息率；分位窗口受历史长度限制，同业仅取盈利可比样本。",
         "S6": "龙虎榜席位为交易所公布样本营业部口径，不等于全市场资金归属。",

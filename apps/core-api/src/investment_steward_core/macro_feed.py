@@ -633,6 +633,7 @@ def get_region_snapshot(
                     unit=definition.get("unit", ""), as_of=manual.get("as_of"),
                     source="手动补录（官方公开值）", dataset_version=manual.get("dataset_version"),
                     note=f"{definition['note']}；{manual.get('note', '')}",
+                    frequency=manual.get("frequency"),
                 ))
                 continue
             readings.append(_pending(definition["indicator"], definition["label"], definition["dim"], definition["note"]))

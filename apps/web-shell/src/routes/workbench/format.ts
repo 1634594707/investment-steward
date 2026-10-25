@@ -6,6 +6,10 @@
  * 屏显与导出各自复制一份三元表达式正是上一轮口径漂移的根因。
  */
 import type {
+  CashFlowQualityBlock,
+  StockReport,
+  EarningsGrowthRow,
+  ComparableReview,
   ClaimFindings,
   DirectionPoolCandidate,
   ReportScenario,
@@ -16,6 +20,115 @@ import type {
   FollowupRetrievalStatus,
   ValuationEvidenceView,
 } from "./researchTypes";
+import type { ReportHighlightTone } from "./reportHighlightTones";
+
+export const RESEARCH_COMPLETENESS_READING_NOTE = "完成度按已核验的研究项统计；未核验或证据不足的项目不算完成。字数仅供参考。";
+
+/** R04/H05：概览与导出共用的阅读边界，只展示既有记录，不补造判断。 */
+export function reportReadingSummary(report: StockReport): string[] {
+  const support = coreSupportState(report.claim_findings);
+  const completeness = report.research_completeness;
+  const valuation = valuationEvidenceDisplay(report.valuation);
+  const staleClaims = report.claim_findings?.stale_claims ?? [];
+  const action = report.decision_card?.next_action;
+  const lines = [
+    report.evidence_quality
+      ? `A 级来源：${report.evidence_quality.tiers.A?.length ?? 0} 条；等级不等于本报告全部判断均已核验。`
+      : "A 级来源：未记录分级结果。",
+    support.counts.total > 0
+      ? `核心判断支撑：${support.counts.supported}/${support.counts.total}（完整支撑的核心判断数／纳入校验的核心判断数）。`
+      : "核心判断支撑：未记录可统计的判断校验结果。",
+    completeness?.items?.length
+      ? `研究完成度：${completeness.done_count}/${completeness.items.length}（已完成研究项数／要求研究项数）；判断有支撑不等于研究已完成。`
+      : "研究完成度：未记录研究项检查结果，不能据此认定完整。",
+    `估值评估：${valuation.label}${valuation.state !== "fair_value_assessed" ? "；合理价值尚未评估，不据指标高低认定低估或偏贵。" : ""}`,
+    staleClaims.length > 0
+      ? `证据时效（生成时记录）：${staleClaims.length} 条判断所引数据超期（${staleClaims.join("、")}），使用前须重新取数核验。`
+      : report.claim_findings?.staleness_checked === true
+        ? "证据时效（生成时记录）：未记录超期命中；不代表全部来源日期齐全，也不代表数据当前仍有效。"
+        : "证据时效：未记录可用的时效检查结果，不能认定来源未过期。",
+  ];
+  if (action) {
+    lines.push(`下一验证动作：${action.signal || "未提供验证事项"}；验证方式：${action.verify_by || "未提供"}；${action.event_anchored ? "按事件触发，不预填日期" : `到期日：${action.due_on || "未提供"}`}。`);
+    if (action.expected_if_true) lines.push(`若验证成立：${action.expected_if_true}`);
+  } else {
+    lines.push("下一验证动作：未提供，需补充验证事项与依据。");
+  }
+  return lines;
+}
+
+/** 正文与摘要各自的逐句记录保持独立，旧记录没有规则编号时明确说明。 */
+export function valuationRepairDisplayLines(report: StockReport): string[] {
+  return [
+    { label: "正文", rows: report.valuation_language_repairs },
+    { label: "执行摘要", rows: report.summary_overreach?.valuation_language_repairs },
+  ].flatMap(({ label, rows }) => (rows ?? []).flatMap((row) => [
+    `${label}第 ${row.line} 行；规则：${row.rules?.join("、") || "旧记录未记录编号"}`,
+    `原句：${row.sentence}`,
+    ...row.notes.map((note) => `加注：${note}`),
+  ]));
+}
+
+export function earningsAnalysisDisplay(row: EarningsGrowthRow): string {
+  const label = row.analysis_state === "analyzed" ? "证据核验支持完成分析"
+    : row.analysis_state === "insufficient" ? "已检查，证据不足" : "未核验，不计为完成分析";
+  return `${label}${row.analysis_note ? `；${row.analysis_note}` : ""}${row.analysis_model ? `（核验模型：${row.analysis_model}）` : ""}`;
+}
+
+/** H05: translate only the two fixed notes authored by normalize_earnings_growth. */
+export function earningsNoteDisplay(note: string): string {
+  return note
+    .replaceAll("未给出可复算的贡献比例（服务端不代填数字）", "未给出可复算的贡献比例，不补填数值")
+    .replaceAll("贡献比例缺少计算依据（basis/formula），按未量化处理", "贡献比例缺少计算依据或公式，按未量化处理");
+}
+
+export function comparableReviewNote(review: ComparableReview): string {
+  const note = review.note || "";
+  // Only replace the exact recorded conflict when its structured counts exist.
+  if (!review.count_conflict || review.model_claimed_sample_count == null || review.sample_count == null) return note;
+  const labels: Record<string, string> = { pe_ttm: "PE（TTM）", pb_mrq: "PB（MRQ）", ps_ttm: "PS（TTM）" };
+  const basis = Object.entries(review.comparable_basis ?? {}).map(([key, count]) => `${labels[key] ?? key} ${count} 只`);
+  const conflict = `样本数量不一致：模型列出 ${review.model_claimed_sample_count} 只，同业快照采用 ${review.sample_count} 只。`
+    + (review.server_peer_count == null ? "" : `同业池共 ${review.server_peer_count} 只。`)
+    + (basis.length ? `各指标可比样本：${basis.join("、")}。` : "")
+    + "中位数按同业快照的样本口径解读。";
+  return note.includes(review.count_conflict) ? note.replace(review.count_conflict, conflict) : `${note} ${conflict}`.trim();
+}
+
+/** R01: keep period disclosures identical in the panel and both export formats. */
+export function cashFlowDisplayLines(cash: CashFlowQualityBlock): string[] {
+  if (cash.periods?.length) {
+    const { periods, ...topLevel } = cash;
+    const hasTopLevel = [cash.operating_cash_flow, cash.net_income, cash.capex, cash.free_cash_flow,
+      cash.free_cash_flow_reported, cash.depreciation_amortization, cash.working_capital,
+      cash.working_capital_change].some((value) => value != null);
+    return [
+      ...(hasTopLevel ? ["原始顶层口径", ...cashFlowDisplayLines(topLevel)] : []),
+      ...periods.flatMap((block, index) => [
+      `现金流分期 ${index + 1}`,
+      ...cashFlowDisplayLines(block),
+      `分期判定：${block.verdict || "未判定"}；${block.note || ""}`,
+      ...(block.downgrade_note ? [`分期降档说明：${block.downgrade_note}`] : []),
+      ]),
+    ];
+  }
+  const show = (value?: number | null) => value == null ? "未取到" : String(value);
+  const context = (key: keyof NonNullable<CashFlowQualityBlock["metric_metadata"]>, fallback = "") => {
+    const meta = cash.metric_metadata?.[key];
+    return `统计期：${meta?.period || fallback || "未标注"}；单位：${meta?.unit || "未标注"}；模型标注来源：${meta?.sources.length ? meta.sources.join("、") : "未标注"}`;
+  };
+  return [
+    `经营现金流 ${show(cash.operating_cash_flow)}（${context("operating_cash_flow", cash.operating_cash_flow_period)}）`,
+    `归母净利 ${show(cash.net_income)}（${context("net_income")}）｜覆盖倍数 ${show(cash.coverage_ratio)}`,
+    `资本开支 ${show(cash.capex)}（${context("capex", cash.capex_period)}）`,
+    `自由现金流 ${show(cash.free_cash_flow)}（${context("free_cash_flow")}；${cash.free_cash_flow_derived ? "同期间输入复算" : "复算状态未核验"}）`,
+    ...(cash.funding_balance_note ? [`资本开支后资金余缺：${cash.funding_balance_note}`] : []),
+    `折旧摊销 ${show(cash.depreciation_amortization)}（${context("depreciation_amortization")}）`,
+    `营运资本变动 ${show(cash.working_capital ?? cash.working_capital_change)}（${context("working_capital")}）`,
+    "金额须同期间、同单位才能相减或比较；缺失口径请回查原始来源。",
+    ...(cash.free_cash_flow_reported != null ? [`模型提供的自由现金流 ${cash.free_cash_flow_reported}（原值留痕，不代表核验通过）`] : []),
+  ];
+}
 
 /**
  * 价位展示精度：A 股报价到分（2 位小数）。
@@ -27,6 +140,102 @@ export function formatPrice(value: number | null | undefined): string {
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
   return String(Number(number.toFixed(2)));
+}
+
+/**
+ * R7（研报产出与交付链路路线图 2026-09-27）：时间展示**统一走本地时区、秒级精度**。
+ *
+ * 同一份导出件曾有两套时间格式：`generated_at` 走 `toLocaleString()`（本地时区、秒级），
+ * 而来源目录的 `retrieved_at` 是服务端 `datetime.now(UTC).isoformat()` 原样打印
+ * （`2026-09-27T08:55:56.785097+00:00`）——读者要心算 8 小时时差，微秒精度对用户无意义。
+ * 解析不出来的值**原样显示**（不编造、不补今天）。
+ */
+export function formatTimestamp(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  if (!text) return "未标注";
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+  const offset = -parsed.getTimezoneOffset();
+  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+  const minutes = String(Math.abs(offset) % 60).padStart(2, "0");
+  return `${parsed.toLocaleString()}（UTC${offset >= 0 ? "+" : "-"}${hours}:${minutes}）`;
+}
+
+/**
+ * 正文关键数字高亮：tone 来自信息状态（蓝=关键结论 / 琥珀=待核验 / 珊瑚红=无来源支撑），
+ * **不是**涨跌方向。定义收在这里（而非 panels.tsx）是为了让 `splitKeyFactSegments`
+ * 与屏显、导出三处共用同一份类型——R1 之前两侧各写一套切分实现，同一份报告高亮位置必然不一致。
+ */
+export interface ReportHighlight {
+  text: string;
+  /** 仅在该判断原文覆盖的范围内显示证据颜色；不按相同数字传播状态。 */
+  context?: string;
+  tone: ReportHighlightTone;
+  /** 悬停/读屏的文字标签（每种颜色必须同时有文字表达，§3.2）。 */
+  title?: string;
+}
+
+/** R1：段内高亮预算——每段最多 2 处（§八.5，屏显与导出共用同一常量）。 */
+export const HIGHLIGHT_BUDGET_PER_PARAGRAPH = 2;
+
+/** 一段纯文本按关键数字切分后的片段；命中片段带 highlight。 */
+export interface HighlightSegment {
+  text: string;
+  highlight?: ReportHighlight;
+}
+
+/**
+ * R1（研报产出与交付链路路线图 2026-09-27）：把一段**纯文本**按关键数字切成有序片段。
+ *
+ * 屏显 `panels.renderInline` 与导出 `export.markdownToHtml` **共用本函数**，因此两侧的
+ * `<mark>` 序列必然逐字相同。此前屏显走 `rest.indexOf(highlight.text)` 子串匹配、导出走
+ * `highlight.text === token` 全等匹配，同一份报告两边高亮位置不同源（路线图 §3 R1「两套实现不同源」）。
+ *
+ * 仅命中完整数字；带 context 的条目必须处于对应判断原文范围内。
+ * 同一起点取更长文本。`budget` 由调用方按段递减。
+ */
+export function splitKeyFactSegments(
+  plain: string,
+  highlights: ReportHighlight[],
+  budget: number = HIGHLIGHT_BUDGET_PER_PARAGRAPH,
+): HighlightSegment[] {
+  if (!plain) return [];
+  if (budget <= 0 || highlights.length === 0) return [{ text: plain }];
+  const sorted = [...highlights].sort((a, b) => b.text.length - a.text.length);
+  const out: HighlightSegment[] = [];
+  let rest = plain;
+  let left = budget;
+  while (rest && left > 0) {
+    let bestIndex = -1;
+    let best: ReportHighlight | null = null;
+    for (const highlight of sorted) {
+      if (!highlight.text) continue;
+      let found = rest.indexOf(highlight.text);
+      while (found >= 0) {
+        const absolute = plain.length - rest.length + found;
+        const contextStart = highlight.context ? plain.lastIndexOf(highlight.context, absolute) : 0;
+        const inContext = !highlight.context || (contextStart >= 0
+          && absolute + highlight.text.length <= contextStart + highlight.context.length);
+        const before = plain[absolute - 1] ?? "";
+        const after = plain[absolute + highlight.text.length] ?? "";
+        if (inContext && !/[A-Za-z0-9_.%+-]/.test(before) && !/[A-Za-z0-9_.%]/.test(after)) break;
+        found = rest.indexOf(highlight.text, found + 1);
+      }
+      if (found < 0) continue;
+      if (bestIndex < 0 || found < bestIndex
+        || (found === bestIndex && highlight.text.length > (best?.text.length ?? 0))) {
+        bestIndex = found;
+        best = highlight;
+      }
+    }
+    if (!best || bestIndex < 0) break;
+    if (bestIndex > 0) out.push({ text: rest.slice(0, bestIndex) });
+    out.push({ text: best.text, highlight: best });
+    left -= 1;
+    rest = rest.slice(bestIndex + best.text.length);
+  }
+  if (rest) out.push({ text: rest });
+  return out;
 }
 
 export const CLAIM_STATUS_LABEL: Record<string, string> = {
@@ -117,21 +326,26 @@ export function formatScenarioProbability(item: ReportScenario): string {
   return formatProbability(item.probability);
 }
 
-/** R04/J09（2026-09-18 路线图）：三档概率同值时的统一展示文案。 */
+/** R04/J09（2026-09-18 路线图）：情景倾向同值时的统一展示文案。 */
 export const SCENARIO_PROBABILITY_UNGIVEN = "—（未给概率）";
 
 /**
  * 一组情景的概率展示（R04：屏显与导出**共用同一同值判定**，两处口径必然一致）。
- * 三档（>1）概率取值全部相同 = 模型根本没做概率区分（样报 002468 三个「中」），
- * 照排会读起来像给了概率；`uniform=true` 时 `displayOf` 对每档一律返回「未给概率」。
+ *
+ * G3（研报产出与交付链路路线图 2026-09-27）：判定从「三档全同」放宽到「**存在重复档**」。
+ * 旧口径只覆盖「三档完全相同」，样报 002468 的乐观=中 / 中性=中 / 悲观=低 非全同，
+ * 于是两条「中」照原样印出，读起来仍像做了概率区分；模型没做区分时不该被读成有区分。
+ * 现在只要有两档取到同一个等级就按「未给概率」处理（`uniform=true` 时每档一律返回该文案）。
+ * 全为「—」（压根没给取值）时不触发——那时本身已显示「—」，不需要再补一句「未给概率」。
  */
 export function scenarioProbabilityDisplay(scenarios: ReportScenario[]): {
   uniform: boolean;
   displayOf: (item: ReportScenario) => string;
 } {
-  const distinct = new Set(scenarios.map((item) => formatScenarioProbability(item)));
-  const single = distinct.size === 1 ? [...distinct][0] : null;
-  const uniform = scenarios.length > 1 && single != null && single !== "—";
+  const displays = scenarios.map((item) => formatScenarioProbability(item));
+  const uniform = scenarios.length > 1
+    && displays.some((value) => value !== "—")
+    && new Set(displays).size < displays.length;
   return {
     uniform,
     displayOf: (item) => (uniform ? SCENARIO_PROBABILITY_UNGIVEN : formatScenarioProbability(item)),
@@ -308,6 +522,16 @@ export function valuationEvidenceDisplay(source?: ReportValuation | ValuationEvi
   };
 }
 
+/** Translate the exact metric prefix authored by derive_valuation_evidence_state. */
+export function valuationEvidenceReadingNote(view: ReturnType<typeof valuationEvidenceDisplay>): string {
+  // Same order as report_quality.VALUATION_METRIC_FIELDS; archived JSON can reorder keys.
+  const metrics = ["pe_ttm", "pe_percentile", "peer_position"].flatMap((key) => view.metrics.filter((item) => item.key === key));
+  const prefix = metrics.map((item) => `${item.key} ${item.value}`).join("｜");
+  if (!prefix || !view.note.startsWith(`${prefix} 已取得`)) return view.note;
+  const reading = metrics.map((item) => `${item.label} ${item.value}`).join("｜");
+  return reading + view.note.slice(prefix.length);
+}
+
 /** 价位角色 → 中文（追问引用的价位必须说明它是什么位，否则读者会把均线当目标价）。 */
 export const PRICE_ROLE_LABEL: Record<string, string> = {
   close: "收盘价",
@@ -435,6 +659,52 @@ export function watchpointReview(point?: ReportWatchpoint | null): { duplicateOf
 }
 
 /**
+ * G2（研报产出与交付链路路线图 2026-09-27）：验证点能否**自动回填**。
+ *
+ * 判定与服务端 `longterm.materialize_watchpoint_judgment` 逐字同源：只有能从验证时点解析出
+ * **确切日期**（`due_on`）的验证点，才会幂等落成可回填的判断；锚定事件（「三季报披露后」
+ * 「下次月度经营简报披露后」）没有日期，而判断的 `due_at` 是必填字段——服务端**不猜日期**、
+ * 不落库，界面因此也不给它回填入口。
+ *
+ * 为什么这条判定必须有唯一实现：角标、验证点表、导出件、复盘队列四处口径一旦各写一份，
+ * 就会出现「角标说 5 条待复盘、队列里只有 3 条能点」这种对不上账的界面。
+ */
+export function watchpointRefillable(point?: ReportWatchpoint | null): boolean {
+  return Boolean(String(point?.due_on ?? "").trim());
+}
+
+/** G2：验证点清单的「可回填 / 锚定事件」计数（角标与表格说明共用）。 */
+export function watchpointRefillSummary(points?: ReportWatchpoint[] | null): {
+  total: number;
+  refillable: number;
+  anchored: number;
+} {
+  const rows = points ?? [];
+  const refillable = rows.filter((item) => watchpointRefillable(item)).length;
+  return { total: rows.length, refillable, anchored: rows.length - refillable };
+}
+
+/**
+ * G2：验证点「可回填」列的唯一文案（屏显表格与导出件共用，避免两处各说一套）。
+ *
+ * 注意措辞只承诺**回填入口存在**，不承诺会自动监控、也不承诺已回填——
+ * 「已到期」不等于「已验证」（与复盘队列同一口径）。
+ */
+export function watchpointRefillLabel(point?: ReportWatchpoint | null): { text: string; tone: string; hint: string } {
+  return watchpointRefillable(point)
+    ? {
+      text: "可回填",
+      tone: "blue",
+      hint: "验证时点可解析出确切日期，已幂等落成可回填判断——结论由人工回填（成立/失效/无数据）",
+    }
+    : {
+      text: "锚定事件·不可自动回填",
+      tone: "gray",
+      hint: "验证时点锚定事件、无确切日期，而判断必须带到期时间——不猜日期，故不自动落库；可在复盘队列里手工标记已复核",
+    };
+}
+
+/**
  * JV06：验证点的**展示顺序与折叠分组**（屏显与导出同口径，只此一份）。
  *
  * 三条纪律：
@@ -516,4 +786,18 @@ export function retrievalStatusView(status?: FollowupRetrievalStatus | null): {
 export function sourceCatalogUrlText(entry: { url?: string; url_note?: string }): string {
   const url = (entry.url ?? "").trim();
   return url || `（未提供链接${entry.url_note ? `：${entry.url_note}` : ""}）`;
+}
+
+/**
+ * R2（研报产出与交付链路路线图 2026-09-27）：来源目录链接列的 **Markdown** 写法。
+ *
+ * 导出件（Markdown / HTML / Word / PNG）里链接要可点击，因此写成 `[URL](URL)`；
+ * `markdownToHtml` 已支持该语法并渲染成带 `rel="noopener noreferrer"` 的 `<a>`。
+ * 取不到链接时与屏显同一文案（`sourceCatalogUrlText`）——**绝不按来源名猜一个 URL**。
+ */
+export function sourceCatalogUrlMarkdown(entry: { url?: string; url_note?: string }): string {
+  const url = (entry.url ?? "").trim();
+  // Markdown 链接目标里的空格与括号会打断语法，取不到干净 URL 就退回纯文本（不猜、不拼）。
+  if (!url || /[\s()]/.test(url)) return sourceCatalogUrlText(entry);
+  return `[${url}](${url})`;
 }

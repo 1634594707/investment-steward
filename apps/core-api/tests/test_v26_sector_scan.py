@@ -77,6 +77,9 @@ def test_family_merge_counts_only_best_signal_per_family():
         _signal("ma20_support", day, "bullish"),           # 5.5
     ]
     result = tactics_score.score(signals, bars)
+    # 展示主信号必须来自后端选取结果，不能把同族合并项挂上主信号状态。
+    assert result["primary_tactic_id"] == "ma_golden_cross"
+    assert result["primary_signal_state"] == result["signal_states"]["ma_golden_cross"]
     assert result["family_merge"] is True
     assert result["score_parts"]["bullish"] == pytest.approx(7.0, abs=0.01)
     merged = [item for item in result["hit_detail"] if item["family_merged"]]

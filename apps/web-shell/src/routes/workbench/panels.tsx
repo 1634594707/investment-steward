@@ -4,10 +4,11 @@
  */
 import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart } from "lightweight-charts";
-import type { StockReport, QuarterlyPoint, PriceChartPack, ValuationChartPack, ReviewQueue, DirectionReport, ReportScenario, ReportLevel, ReportWatchpoint, ReportValuation, ClaimFinding, ReportConclusion, CategorizedWarning, ReportDecisionCard, QualityBlocker, SectionState, GenerationTrace, ReportCockpit, SourceCatalogEntry } from "./researchTypes";
-import { formatPrice, formatProbability, scenarioProbabilityDisplay, scenarioProbabilityWording, valuationEvidenceDisplay, deepMetricCell, sourceCatalogUrlText, coreSupportBreakdown, CLAIM_STATUS_LABEL, JEV_SKIP_LABEL, ROBUSTNESS_META, coreSupportState, watchpointDateView, watchpointTriageView, watchpointPriorityView } from "./format";
+import type { StockReport, QuarterlyPoint, PriceChartPack, ValuationChartPack, ReviewQueue, DirectionReport, ReportScenario, ReportLevel, ReportWatchpoint, ReportValuation, ClaimFinding, ReportConclusion, CategorizedWarning, ReportRepairAction, ReportDecisionCard, QualityBlocker, SectionState, GenerationTrace, ReportCockpit, SourceCatalogEntry } from "./researchTypes";
+import { cashFlowDisplayLines, formatPrice, formatProbability, formatTimestamp, scenarioProbabilityDisplay, scenarioProbabilityWording, valuationEvidenceDisplay, deepMetricCell, sourceCatalogUrlText, coreSupportBreakdown, CLAIM_STATUS_LABEL, JEV_SKIP_LABEL, ROBUSTNESS_META, coreSupportState, watchpointDateView, watchpointTriageView, watchpointPriorityView, watchpointRefillLabel, watchpointRefillSummary, splitKeyFactSegments, HIGHLIGHT_BUDGET_PER_PARAGRAPH, type ReportHighlight } from "./format";
 // T7：与 K 线卡共用同一套图表配色实现（此前 panels 另写一份并硬编码深色系，浅色主题不可读）。
 import { readChartThemeColors, readMarketColors } from "../../cards/chartTheme";
+import { earningsAnalysisDisplay, earningsNoteDisplay, comparableReviewNote, valuationEvidenceReadingNote, reportReadingSummary, valuationRepairDisplayLines, RESEARCH_COMPLETENESS_READING_NOTE } from "./format";
 import { useUiPrefs } from "../../shell/uiprefs";
 
 /* —— v31 质量恢复（2026-09-13 方案 §2.2/§4.1/§4.2）：三态质量状态 + 首屏状态行 + 正文目录锚点 —— */
@@ -172,6 +173,12 @@ export function ReportFirstScreen({ report }: { report: StockReport }) {
           return latest ? <span className="soft-tag gray" title="各来源数据的最新日期（详见证据页签）">数据截至 {latest}</span> : null;
         })()}
       </div>
+      <div className="wb-exec-summary">
+        <b>阅读前核对</b>
+        <ul className="answer-list">
+          {reportReadingSummary(report).map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      </div>
       <ReportCockpitRows cockpit={cockpit} />
       {/* D03：首屏给出判断边界——「局限与口径声明」「验证点」与结论同屏（命名与正文页签、导出标题一致）；
           原文缺哪一项就写缺哪一项，不从别处补写。 */}
@@ -276,16 +283,34 @@ export function ReportBodyToc({ report }: { report: StockReport }) {
 
 /* —— v31 P1 正文重点标注（§八.5）：按 claim 重要度与已核验数值定位，禁止关键词自动染色 —— */
 
-/** 正文高亮：tone 来自信息状态（蓝=关键结论 / 琥珀=待核验 / 珊瑚红=无来源支撑），不是涨跌方向。 */
-export interface ReportHighlight {
-  text: string;
-  tone: "blue" | "amber" | "coral";
-  /** 悬停/读屏的文字标签（每种颜色必须同时有文字表达，§3.2）。 */
-  title?: string;
-}
+/** 正文高亮类型与切分实现收在 format.ts（屏显与导出共用同一份，见 R1）；此处仅为向后兼容再导出。 */
+export type { ReportHighlight };
 
 /** 从一段文本里提取数字 token（带 % 与正负号；同比/环比口径由正文语境表达，不在高亮里猜测）。 */
 const NUMBER_TOKEN = /[+-]?\d+(?:\.\d+)?%?/g;
+
+/**
+ * R1（研报产出与交付链路路线图 2026-09-27）：候选取值**收窄到「精确数值」**。
+ *
+ * 只接受带小数位或百分号的字面量——年份（`2026`）、日期（`2026-09-24` 的 `09`/`24`）、
+ * 整数计数（`1250 条`）一律不进候选。样报 002468 的表格首行原文
+ * 「2026H1归母净利润10.35亿元，较2025H1的4.53亿元同比增长约128.5%」曾抽出
+ * `2026 / 10.35 / 2025 / 4.53 / 128.5` 五个候选，其中两个是年份，把名额吃光，
+ * 真正该突出的估值分位反而被埋没；生成时间行 `2026/9/27 16:56:39` 的 `2026` 也被染色。
+ */
+const PRECISE_NUMBER = /^(?:[+-]?\d+\.\d+%?|[+-]?\d+%)$/;
+/** 年份兜底（防「2026.0」这类写法漏过小数位规则）。 */
+const YEAR_LIKE = /^(?:19|20)\d{2}$/;
+
+/**
+ * R1：单条判断最多贡献的候选数。上一版只有一个「全篇 8 个」的总量上限
+ * （`panels.tsx` 旧注释误写成「总量封顶 8 个」，其实数的是**候选 token 数**），
+ * 于是一条数字密集的判断就能把名额吃光——样报第二条判断只抢到 `11.67` 一格即被截断。
+ * 现在改为「按判断配额 + 全篇上限」，让每条核心判断都拿得到名额。
+ */
+const MAX_HIGHLIGHTS_PER_CLAIM = 3;
+/** R1：全篇候选上限（配额制下不再被单条判断吃光，取一个仍能保持「黑白层次主导」的量级）。 */
+const MAX_HIGHLIGHTS_TOTAL = 12;
 
 /**
  * 关键数字高亮来源（§八.5：按 claim 重要度和已核验数值定位）：
@@ -293,20 +318,25 @@ const NUMBER_TOKEN = /[+-]?\d+(?:\.\d+)?%?/g;
  * - importance=high 且支撑 full 的判断里的数字 → 蓝；
  * - importance=high 且支撑 partial 的判断里的数字 → 琥珀（待核验）；
  * - importance=high 且支撑 none 的判断里的数字 → 珊瑚红（无来源支撑）。
- * 每段正文最多高亮 1～2 处（renderInline 内限制），总量封顶 8 个，正文黑白层次保持主导。
+ * 每段正文最多高亮 1～2 处（`renderInline` 内按 `HIGHLIGHT_BUDGET_PER_PARAGRAPH` 限制），
+ * 单条判断与全篇另有配额上限，正文黑白层次保持主导。
  */
 export function keyFactHighlights(report: StockReport | null): ReportHighlight[] {
   if (!report) return [];
   const out: ReportHighlight[] = [];
   const seen = new Set<string>();
   const pushFrom = (text: string, tone: ReportHighlight["tone"], title: string): void => {
+    let taken = 0;
     for (const match of text.match(NUMBER_TOKEN) ?? []) {
-      // 过滤噪声：单字符数字（如「3 条」的 3）不进高亮，避免满页染色。
-      if (match.replace(/[+%.-]/g, "").length < 2) continue;
-      if (seen.has(match)) continue;
-      seen.add(match);
-      out.push({ text: match, tone, title });
-      if (out.length >= 8) return;
+      if (taken >= MAX_HIGHLIGHTS_PER_CLAIM || out.length >= MAX_HIGHLIGHTS_TOTAL) break;
+      // R1：只收精确数值（带小数位或百分号），年份/日期/整数计数不进候选。
+      if (!PRECISE_NUMBER.test(match)) continue;
+      if (YEAR_LIKE.test(match.replace(/[+%]/g, ""))) continue;
+      const identity = JSON.stringify([text, match, tone]);
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      out.push({ text: match, context: text, tone, title });
+      taken += 1;
     }
   };
   const conclusion = report.conclusion?.statement ?? "";
@@ -317,7 +347,7 @@ export function keyFactHighlights(report: StockReport | null): ReportHighlight[]
     if (claim.support === "partial") pushFrom(claim.text, "amber", "核心判断（部分支持 · 待核验）中的关键数字");
     else if (claim.support === "none") pushFrom(claim.text, "coral", "核心判断（无来源支撑）中的关键数字");
     else if (claim.support === "full") pushFrom(claim.text, "blue", "核心判断（完整支持）中的关键数字");
-    if (out.length >= 8) break;
+    if (out.length >= MAX_HIGHLIGHTS_TOTAL) break;
   }
   return out;
 }
@@ -359,7 +389,7 @@ export function ResearchCompletenessCard({
       {completeness?.word_count_note && (
         <p className="report-meta" title="字数只作辅助提示，不参与完成度判定（Q19）">{completeness.word_count_note}</p>
       )}
-      {completeness?.note && <p className="report-meta">{completeness.note}</p>}
+      <p className="report-meta">{RESEARCH_COMPLETENESS_READING_NOTE}</p>
     </div>
   );
 }
@@ -393,13 +423,20 @@ export function DeepAnalysisBlocks({ report }: { report: StockReport }) {
                   <td>{row.effect || "—"}</td>
                   <td>
                     {row.contribution_pct === null || row.contribution_pct === undefined
-                      ? <span className="soft-tag warn" title="服务端不代填比例">未给出</span>
+                      ? <span className="soft-tag warn" title="缺少可复算的贡献比例，不补填数值">未给出</span>
                       : `${row.contribution_pct}%`}
                   </td>
                   <td>
                     {row.basis || "—"}
                     <span className="report-meta">（{row.source_note || "无来源"}）</span>
-                    {row.note && <p className="report-meta amber">{row.note}</p>}
+                    {row.note && <p className="report-meta amber">{earningsNoteDisplay(row.note)}</p>}
+                    {row.note && earningsNoteDisplay(row.note) !== row.note && (
+                      <details className="wb-quality-warn">
+                        <summary>贡献比例校验留痕</summary>
+                        <p className="report-meta">{row.note}</p>
+                      </details>
+                    )}
+                    <p className="report-meta">{earningsAnalysisDisplay(row)}</p>
                   </td>
                 </tr>
               ))}
@@ -410,12 +447,7 @@ export function DeepAnalysisBlocks({ report }: { report: StockReport }) {
       {cash && (
         <>
           <span className="wb-counter-label">现金流质量（覆盖倍数本身不等于盈利质量）</span>
-          <p className="report-meta">
-            经营现金流 {value(cash.operating_cash_flow)} · 归母净利 {value(cash.net_income)}
-            · 覆盖倍数 {value(cash.coverage_ratio)} · 折旧摊销 {value(cash.depreciation_amortization)}
-            · 营运资本变动 {value(cash.working_capital ?? cash.working_capital_change)}
-            · 资本开支 {value(cash.capex)} · 自由现金流 {value(cash.free_cash_flow)}
-          </p>
+          {cashFlowDisplayLines(cash).map((line, index) => <p className="report-meta" key={index}>{line}</p>)}
           <p className="report-meta">
             <span className={`soft-tag ${cash.strength === "insufficient" ? "warn" : "mint"}`} title={cash.note || undefined}>
               {cash.verdict || "未判定"}
@@ -439,13 +471,19 @@ export function DeepAnalysisBlocks({ report }: { report: StockReport }) {
             <p className="report-meta">
               <span
                 className={`soft-tag ${review.comparability === "ok" ? "mint" : "warn"}`}
-                title={review.note || undefined}
+                title={comparableReviewNote(review) || undefined}
               >
                 可比样本 {review.sample_count ?? 0}（{review.comparability_label || "未判定"}）
               </span>
-              {" "}{review.note}
+              {" "}{comparableReviewNote(review)}
               {" "}剔除规则：{review.exclusion_rule}
             </p>
+          )}
+          {review?.note && comparableReviewNote(review) !== review.note && (
+            <details className="wb-quality-warn">
+              <summary>可比样本计算留痕</summary>
+              <p className="report-meta">{review.note}</p>
+            </details>
           )}
           <p className="report-meta amber">
             {divergence.sensitivity_note}
@@ -458,7 +496,66 @@ export function DeepAnalysisBlocks({ report }: { report: StockReport }) {
   );
 }
 
-export function ReportQualityPanel({ report }: { report: StockReport }) {
+/** G1：修复动作的稳定键（同一份报告里同一策略 + 同一小节视为同一个动作）。 */
+export function repairActionKey(action: ReportRepairAction): string {
+  return `${action.strategy}:${action.section ?? ""}`;
+}
+
+/**
+ * G1：告警行内的定向修复动作按钮。
+ *
+ * 可修 → 可点（服务端按 `action.strategy` 走**同一套**定向修复路径）；
+ * 不可修 / 未落库 / 当前视图不提供入口 → **禁用并写明原因**。
+ * 一个「点了没反应」的按钮比没有按钮更糟：用户会以为功能坏了。
+ */
+function WarningRepairAction({
+  action,
+  onRepair,
+  repairing,
+  hasReportId,
+}: {
+  action: ReportRepairAction;
+  onRepair?: (action: ReportRepairAction) => void;
+  repairing: boolean;
+  hasReportId: boolean;
+}) {
+  const blockedReason = !action.enabled
+    ? action.reason || "该告警不支持自动修复。"
+    : !hasReportId
+      ? "本报告未落库（无 report_id），没有可回写的记录；请重新生成一份。"
+      : !onRepair
+        ? "当前视图不提供定向修复入口（协同装配稿请在标的页重新生成）。"
+        : "";
+  return (
+    <span className="wb-repair-action">
+      <button
+        type="button"
+        className="ghost-btn wb-repair-btn"
+        disabled={Boolean(blockedReason) || repairing}
+        title={blockedReason || `按同一套定向修复路径执行：${action.label}`}
+        onClick={() => onRepair?.(action)}
+      >
+        {repairing ? "修复中…" : action.label}
+      </button>
+      {blockedReason && <small className="wb-warn-meta">不可自动修复：{blockedReason}</small>}
+    </span>
+  );
+}
+
+export function ReportQualityPanel({
+  report,
+  onRepair,
+  repairingKey = null,
+}: {
+  report: StockReport;
+  /** G1：点动作按钮时回调（服务端按 `action.strategy` 执行一次定向修复）。
+   *
+   *  未提供时**不隐藏**按钮而是禁用并说明原因——「这份报告为什么修不了」本身就是信息
+   *  （例如未落库无 report_id、或协同装配稿），比凭空少一个按钮更可解释。 */
+  onRepair?: (action: ReportRepairAction) => void;
+  /** 正在修复的动作键（用于按钮的进行中态与防重复点击）。 */
+  repairingKey?: string | null;
+}) {
   const dropped = report.citation_dropped ?? [];
   const warnings = report.quality_warnings ?? [];
   const available = report.available_citations ?? [];
@@ -477,6 +574,12 @@ export function ReportQualityPanel({ report }: { report: StockReport }) {
     <div className="wb-quality">
       <DeepAnalysisBlocks report={report} />
       <ResearchCompletenessCard completeness={completeness} />
+      {completeness?.note && (
+        <details className="wb-quality-warn">
+          <summary>完成度计算留痕</summary>
+          <p className="report-meta">{completeness.note}</p>
+        </details>
+      )}
       <div className="wb-quality-head">
         {report.citations.length > 0
           ? <span className="soft-tag">引用来源 {report.citations.join("/")}</span>
@@ -554,6 +657,15 @@ export function ReportQualityPanel({ report }: { report: StockReport }) {
                           {item.impact && <>影响：{item.impact}</>}
                           {item.action && <> · 建议动作：{item.action}</>}
                         </small>
+                      )}
+                      {/* G1：可修复的告警就地给出动作按钮——「发现得准」之后必须「修得动」。 */}
+                      {item.repair && (
+                        <WarningRepairAction
+                          action={item.repair}
+                          onRepair={onRepair}
+                          repairing={repairingKey === repairActionKey(item.repair)}
+                          hasReportId={Boolean(report.report_id)}
+                        />
                       )}
                     </li>
                   ))}
@@ -640,12 +752,20 @@ export function SourceCatalogTable({ rows, title = "来源目录（编号 / 名�
                 <td>{row.source_id || "—"}</td>
                 <td>{row.name || "（未提供名称）"}</td>
                 <td>
-                  {row.url?.trim()
+                  {row.documents?.length ? row.documents.map((doc, index) => (
+                    <p key={index}>
+                      {index + 1}. {doc.title || "（未提供标题）"} · {doc.data_date || "日期未标注"}<br />
+                      {doc.url?.trim()
+                        ? <a className="wb-source-link" href={doc.url.trim()} target="_blank" rel="noreferrer">{doc.url.trim()}</a>
+                        : <span className="report-meta">（未提供链接）</span>}
+                    </p>
+                  )) : row.url?.trim()
                     ? <a className="wb-source-link" href={row.url.trim()} target="_blank" rel="noreferrer">{row.url.trim()}</a>
                     : <span className="report-meta">{sourceCatalogUrlText(row)}</span>}
                 </td>
                 <td>{row.data_date || "未标注"}</td>
-                <td>{row.retrieved_at || "未标注"}</td>
+                {/* R7：获取时间与「生成时间」同口径（本地时区、秒级），不再打印 UTC 微秒串。 */}
+                <td>{formatTimestamp(row.retrieved_at)}</td>
                 <td>{row.quality || "—"}</td>
                 <td>{row.cited === false ? "可得未引用" : "已引用"}</td>
                 <td>{(row.used_by ?? []).join("、") || "—"}</td>
@@ -738,7 +858,10 @@ export function EvidenceQualityPanel({ report }: { report: StockReport }) {
       <p className="wb-evidence-legend">
         等级口径：{(["A", "B", "C", "D"] as const).map((tier) => QUALITY_TIER_LABEL[tier]).join(" · ")};
         核心结论需 <b>{(quality?.core_support_qualities ?? ["B"]).join("/")}</b> 级及以上。
-        {!hasTierA && <span className="wb-evidence-gap"> 本次无任何来源达 A 级。</span>}
+        {/* D1：有 A 级就正向说出来（并点名是哪个来源），没有才提示缺口——两者互斥，不含糊。 */}
+        {hasTierA
+          ? <span className="wb-evidence-ok"> 本次含 A 级一手来源：{(quality?.tiers?.A ?? []).join("、")}。</span>
+          : <span className="wb-evidence-gap"> 本次无任何来源达 A 级。</span>}
       </p>
 
       {/* JV04：两套口径必须讲清分工，否则用户会把「引用真实」当成「引用支撑得住」。 */}
@@ -799,6 +922,7 @@ export function EvidenceQualityPanel({ report }: { report: StockReport }) {
         <table className="wb-evidence-table">
           <thead>
             <tr>
+              <th title="判断编号（C1、C2…）；正文与来源目录的「被哪些判断使用」按此回指">编号</th>
               <th>核心判断</th>
               <th title="经校验真实存在的引用编号；不属于本次证据包的编号已被剔除">引用</th>
               <th title="该判断需要证据覆盖的字段（取自覆盖词表）">需要字段</th>
@@ -811,6 +935,8 @@ export function EvidenceQualityPanel({ report }: { report: StockReport }) {
             {claims.map((claim) => (
               <Fragment key={claim.claim_id}>
                 <tr className={claim.status === "supported" ? "" : "is-weak"}>
+                  {/* R6：正文与来源目录都用 C1–C6 引用判断，表里必须有编号列才回指得到。 */}
+                  <td>{claim.claim_id || "—"}</td>
                   <td>
                     {claim.text || "—"}
                     {(claim.aspects?.length ?? 0) > 0 && (
@@ -915,7 +1041,7 @@ export function CounterCheckPanel({ report }: { report: StockReport }) {
         <span className={`soft-tag ${robustness.tone}`}>{robustness.text}</span>
         {check.prompt_version && <span className="soft-tag gray">提示词 {check.prompt_version}</span>}
       </div>
-      <p className="wb-counter-note">本段为一次独立的短调用，只负责指出软肋；正文未被改写，规则分与 AI 判断并列不互相覆盖。</p>
+      <p className="wb-counter-note">本段指出结论的风险与反证；正文未被改写，规则分与 AI 判断分别呈现。</p>
       <div className="wb-counter-grid">
         <div className="wb-counter-item">
           <span className="wb-counter-label">最强支持证据</span>
@@ -1051,7 +1177,7 @@ export function DecisionCardPanel({ report }: { report: StockReport }) {
                         {statusMeta.label}
                       </span>
                     )}
-                    <span className={`soft-tag ${evidence.tone}`} title={evidence.note || evidence.label}>
+                    <span className={`soft-tag ${evidence.tone}`} title={valuationEvidenceReadingNote(evidence) || evidence.label}>
                       {evidence.label}
                     </span>
                     {card.valuation_label_note && <span className="report-meta">（{card.valuation_label_note}）</span>}
@@ -1060,7 +1186,7 @@ export function DecisionCardPanel({ report }: { report: StockReport }) {
                   <p className="report-meta">模型未输出结构化估值判断，估值结论只在正文里，无法机读展示。</p>
                 )}
                 {labelMasked && evidence.note && (
-                  <p className="report-meta amber" role="note">{evidence.note}</p>
+                  <p className="report-meta amber" role="note">{valuationEvidenceReadingNote(evidence)}</p>
                 )}
                 {earnings && typeof earnings.value === "number" && (
                   <p className="report-meta" title="正常化盈利 = 剔除一次性/周期因素后的可持续口径，是估值结论的前提">
@@ -1177,6 +1303,8 @@ export function ReportResultTabs({
   followup,
   followupCount = 0,
   followupActive = false,
+  onRepair,
+  repairingKey = null,
 }: {
   report: StockReport;
   /** 追加在正文页签末尾的调用方专属内容（如局限声明）。 */
@@ -1189,6 +1317,10 @@ export function ReportResultTabs({
   followupCount?: number;
   /** 追问正在提交/载入时给页签挂动态态。 */
   followupActive?: boolean;
+  /** G1：证据页签里「质量校验痕迹」的动作按钮回调（未提供 → 按钮禁用并说明原因）。 */
+  onRepair?: (action: ReportRepairAction) => void;
+  /** 正在修复的动作键。 */
+  repairingKey?: string | null;
 }) {
   const [tab, setTab] = useState<ReportTabKey>("overview");
   const evidenceEmpty = report.quality_warnings == null
@@ -1196,16 +1328,33 @@ export function ReportResultTabs({
     && report.evidence_quality == null
     && report.claim_findings == null
     && report.counter_check == null
+    && valuationRepairDisplayLines(report).length === 0
     && !evidenceAppend;
   // 页签角标：待复核数量（情景与验证=待复盘验证点；证据=待核验判断；追问=附录数）。
   const supportCounts = report.claim_findings?.support_counts;
   const pendingClaims = (supportCounts?.partial ?? 0) + (supportCounts?.none ?? 0);
-  const pendingWatchpoints = (report.watchpoints ?? []).length;
+  // G2（2026-09-27 路线图）：角标此前只报总数 5，而其中锚定事件的验证点结构上永远无法回填——
+  // 用户点进去才发现 2 条没有入口。现在角标直接区分「可回填 / 总数」，判定与复盘队列同源。
+  const watchpointSummary = watchpointRefillSummary(report.watchpoints);
+  const pendingWatchpoints = watchpointSummary.total;
   const highlights = useMemo(() => keyFactHighlights(report), [report]);
   const badges: Partial<Record<ReportTabKey, number>> = {
     verify: pendingWatchpoints,
     evidence: pendingClaims,
     followup: followupCount,
+  };
+  /** G2：验证点页签角标的展示文案与说明（总数、可回填、锚定事件三者的唯一口径）。 */
+  const verifyBadge = (): { text: string; title: string } => {
+    const { total, refillable, anchored } = watchpointSummary;
+    if (anchored <= 0) {
+      return { text: String(total), title: `${total} 条验证点待复盘` };
+    }
+    return {
+      text: `${refillable}/${total}`,
+      title:
+        `${total} 条验证点：${refillable} 条可自动回填，${anchored} 条锚定事件`
+        + "（无确切日期，不猜日期 → 不落库，可在「研究复盘」队列里手工标记已复核）",
+    };
   };
   const tabs = (Object.keys(REPORT_TAB_META) as ReportTabKey[]).filter(
     (key) => key !== "followup" || followup !== undefined,
@@ -1215,6 +1364,7 @@ export function ReportResultTabs({
       <div className="wb-result-tabbar is-sticky" role="tablist" aria-label="研报阅读导航">
         {tabs.map((key) => {
           const badge = badges[key] ?? 0;
+          const verifyInfo = key === "verify" ? verifyBadge() : null;
           return (
             <button
               key={key}
@@ -1228,9 +1378,9 @@ export function ReportResultTabs({
               {badge > 0 && (
                 <span
                   className={`wb-tab-badge ${key === "verify" ? "blue" : key === "followup" ? "blue" : "warn"}`}
-                  title={key === "verify" ? `${badge} 条验证点待复盘` : key === "followup" ? `${badge} 条追问附录` : `${badge} 条判断待核验（部分支持/无来源）`}
+                  title={verifyInfo ? verifyInfo.title : key === "followup" ? `${badge} 条追问附录` : `${badge} 条判断待核验（部分支持/无来源）`}
                 >
-                  {badge}
+                  {verifyInfo ? verifyInfo.text : badge}
                 </span>
               )}
             </button>
@@ -1244,11 +1394,14 @@ export function ReportResultTabs({
           {report.executive_summary && (
             <div className="wb-exec-summary">
               {report.executive_summary}
-              {(report.summary_downgrade_notes?.length ?? 0) > 0 && (
-                <ul className="answer-list wb-summary-notes">
-                  {report.summary_downgrade_notes!.map((item, i) => <li key={i}>{item}</li>)}
-                </ul>
-              )}
+            </div>
+          )}
+          {(report.summary_downgrade_notes?.length ?? 0) > 0 && (
+            <div className="wb-exec-summary">
+              <b>结论使用限制</b>
+              <ul className="answer-list wb-summary-notes">
+                {report.summary_downgrade_notes!.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
             </div>
           )}
           <ValuationCard report={report} />
@@ -1256,6 +1409,7 @@ export function ReportResultTabs({
       )}
       {tab === "body" && (
         <div className="wb-result-tabpane wb-reading" role="tabpanel">
+          <p className="report-meta">以下保留报告原有措辞；应用核验及修订留痕另列。</p>
           <ReportBodyToc report={report} />
           <MarkdownishText content={report.report} highlights={highlights} />
           {bodyAppend}
@@ -1278,9 +1432,17 @@ export function ReportResultTabs({
       )}
       {tab === "evidence" && (
         <div className="wb-result-tabpane" role="tabpanel">
-          <ReportQualityPanel report={report} />
+          <ReportQualityPanel report={report} onRepair={onRepair} repairingKey={repairingKey} />
           <EvidenceQualityPanel report={report} />
           <CounterCheckPanel report={report} />
+          {valuationRepairDisplayLines(report).length > 0 && (
+            <div className="wb-quality">
+              <b>估值表述校验记录</b>
+              <ul className="answer-list">
+                {valuationRepairDisplayLines(report).map((line, index) => <li key={index}>{line}</li>)}
+              </ul>
+            </div>
+          )}
           {evidenceEmpty && evidenceAppend == null && (
             <p className="report-meta">本报告无质量闸门痕迹、证据分级或反方检查记录（旧版本生成）。</p>
           )}
@@ -1319,7 +1481,7 @@ export function readWbMarketColors(): { up: string; down: string } {
   return readMarketColors();
 }
 
-/** 价格量能图：前复权日线蜡烛 + 成交量副图 + MA5/20/60（MA 由服务端按全序列算好，与 candles 按下标对齐）。 */
+/** 价格量能图：日线蜡烛 + 成交量副图 + MA5/20/60（MA 由服务端按全序列算好，与 candles 按下标对齐）。 */
 export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   // T7：把偏好读进组件，effect 才能在「涨跌色 / 主题」变化时重建图表。
@@ -1401,7 +1563,7 @@ export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
   return (
     <div className="wb-pricechart">
       <p className="wb-chart-meta">
-        {chart.provider || "行情"} · {chart.adjust || "前复权"} · {valid.length} 根日线
+        {chart.provider || "行情"} · {chart.adjust || "复权未标注"} · {valid.length} 根日线
         {chart.candles?.length ? `（截至 ${chart.candles[chart.candles.length - 1]!.date}）` : ""}
         <span className="wb-ma-legend">
           {/* K01（2026-09-18 排版与研报呈现一致性路线图）：MA5/MA20/MA60 三条均线图例色是「区分
@@ -1633,7 +1795,8 @@ export function ScenarioFalsifiability({ report }: { report: StockReport }) {
     }
     return <span className="wb-range-none" title={item.range_status_note || "模型未给出区间，也未说明依据"}>无区间</span>;
   };
-  // R04：屏显沿用与导出**同一**同值判定（format.scenarioProbabilityDisplay），三档同值一律标「未给概率」。
+  // R04：屏显沿用与导出**同一**同值判定（format.scenarioProbabilityDisplay）。
+  // G3（2026-09-27 路线图）：判定已从「三档全同」放宽到「存在重复档」，一律标「未给概率」。
   const probability = scenarioProbabilityDisplay(scenarios);
   // Q08（2026-09-19 路线图）：列名不再写「概率」——probability_basis 恒为 none（无后验基准），
   // 读者会把它当上涨概率；未校准的取值只能叫「倾向（未统计校准）」。导出用同一函数。
@@ -1667,7 +1830,7 @@ export function ScenarioFalsifiability({ report }: { report: StockReport }) {
       </table>
       <p className="wb-scenario-note">
         概率口径：{probabilityWording.note}
-        {probability.uniform && " 三档概率同值，按「未给概率」处理——不作排序或建仓依据（与导出同口径）。"}
+        {probability.uniform && " 情景倾向存在重复档（模型未做区分），按「未给概率」处理——不作排序或建仓依据（与导出同口径）。"}
       </p>
     </div>
   );
@@ -1718,12 +1881,15 @@ const REFILL_RESULTS: Array<{ value: "verified" | "refuted" | "insufficient_data
 
 const REVIEW_PAGE_SIZES = [10, 20] as const;
 
-export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
+export function ReviewQueuePanel({ queue, onOpenReport, onRefill, onManualReview }: {
   queue: ReviewQueue | null;
   /** 跳回来源报告（A15：可定位到原报告；实现由调用方注入）。 */
   onOpenReport?: (reportId: string) => void;
   /** G01：回填判断结论（成立/失效/无数据）。返回错误文案，null=成功；实现由调用方注入（复用 verify 通道）。 */
   onRefill?: (judgmentId: string, result: "verified" | "refuted" | "insufficient_data", outcome: string) => Promise<string | null>;
+  /** G2（2026-09-27 路线图）：**手工标记**锚定事件型验证点已复核。返回错误文案，null=成功。
+   * 只追加复核记录（不伪造到期日、不写判断表），原研报 payload 一字不改。 */
+  onManualReview?: (reportId: string, index: number, result: "verified" | "refuted" | "insufficient_data", outcome: string) => Promise<string | null>;
 }) {
   const [bucket, setBucket] = useState<"all" | "overdue" | "scheduled" | "event_anchored">("all");
   const [query, setQuery] = useState("");
@@ -1733,6 +1899,12 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
   const [refillOutcome, setRefillOutcome] = useState("");
   const [refillBusy, setRefillBusy] = useState(false);
   const [refillError, setRefillError] = useState<string | null>(null);
+  // G2：手工复核表单状态，键为 `report_id#序号`——同样只允许一条在填。
+  const [manualFor, setManualFor] = useState<string | null>(null);
+  const [manualResult, setManualResult] = useState<"verified" | "refuted" | "insufficient_data">("verified");
+  const [manualOutcome, setManualOutcome] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState<(typeof REVIEW_PAGE_SIZES)[number]>(10);
   const [page, setPage] = useState(1);
   if (!queue) return null;
@@ -1750,6 +1922,20 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
     // 成功：收起表单（状态由服务端返回后随队列刷新带回来，不在前端猜测）。
     setRefillFor(null);
     setRefillOutcome("");
+  }
+
+  async function submitManualReview(reportId: string, index: number, key: string) {
+    if (!onManualReview || manualBusy) return;
+    setManualBusy(true);
+    setManualError(null);
+    const error = await onManualReview(reportId, index, manualResult, manualOutcome);
+    setManualBusy(false);
+    if (error) {
+      setManualError(error);
+      return;
+    }
+    setManualFor(null);
+    setManualOutcome("");
   }
 
   const buckets: Array<keyof typeof queue.counts> = ["overdue", "scheduled", "event_anchored"];
@@ -1786,6 +1972,16 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
         {queue.closure && queue.closure.overdue_unfilled > 0 && (
           <span className="soft-tag coral" title="已到期但尚未回填结论的判定数——「已到期」不自动等于「已验证」">
             到期未回填 {queue.closure.overdue_unfilled}
+          </span>
+        )}
+        {/* G2（2026-09-27 路线图）：锚定事件结构上落不了库，此前队列里既不能回填也没有人工出口。
+            这一格如实报「已人工复核几条 / 共几条锚定事件」，不把人工复核混进「已回填」计数。 */}
+        {queue.closure && queue.closure.not_materialized > 0 && (
+          <span
+            className={`soft-tag ${(queue.closure.manually_reviewed ?? 0) > 0 ? "blue" : "gray"}`}
+            title="锚定事件型验证点：无确切日期，不猜日期故不落成判断；可逐条「手工标记已复核」（只追加复核结论）"
+          >
+            锚定事件已复核 {queue.closure.manually_reviewed ?? 0}/{queue.closure.not_materialized}
           </span>
         )}
         <input
@@ -1838,6 +2034,16 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
               ? (REVIEW_STATUS_LABEL[item.status ?? "pending"] ?? REVIEW_STATUS_LABEL.pending!)
               : null;
             const refillOpen = judgmentId !== null && refillFor === judgmentId;
+            // G2：锚定事件（无 judgment_id）走手工复核通道；键用 `report_id#序号` 保证唯一。
+            const manualKey = `${item.report_id ?? ""}#${item.watchpoint_index ?? -1}`;
+            const manualReviewable = !judgmentId
+              && Boolean(item.report_id)
+              && typeof item.watchpoint_index === "number"
+              && Boolean(onManualReview);
+            const manualOpen = manualReviewable && manualFor === manualKey;
+            const manualMeta = item.manual_review
+              ? REVIEW_STATUS_LABEL[item.manual_review.result ?? ""] ?? null
+              : null;
             return (
               <li key={`${item.report_id ?? "r"}-${index}`}>
                 <div className="wb-review-line">
@@ -1877,6 +2083,17 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
                       {refillOpen ? "收起回填" : statusMeta?.text === "待回填" ? "回填结论" : "重新回填"}
                     </button>
                   )}
+                  {/* G2：锚定事件没有确切日期 → 结构上落不了判断，给它一条**人工**出口。
+                      措辞点明「人工」：系统不做自动判定，也不承诺自动监控。 */}
+                  {manualReviewable && (
+                    <button
+                      className="wb-review-open"
+                      title="锚定事件无确切日期，不猜日期故不自动落库；此处只追加一条人工复核结论，原报告与验证点文本不变。"
+                      onClick={() => { setManualFor(manualOpen ? null : manualKey); setManualError(null); }}
+                    >
+                      {manualOpen ? "收起复核" : item.manual_review ? "重新标记已复核" : "手工标记已复核"}
+                    </button>
+                  )}
                 </div>
                 {item.expected_if_true && <small>若成立则预期：{item.expected_if_true}</small>}
                 {item.verification && (
@@ -1889,6 +2106,52 @@ export function ReviewQueuePanel({ queue, onOpenReport, onRefill }: {
                 )}
                 {!judgmentId && item.materialization_note && (
                   <small className="wb-review-refill-note">{item.materialization_note}</small>
+                )}
+                {/* G2：人工复核结论（与「到期回填」分开写，避免读成系统自动判定过）。 */}
+                {item.manual_review && manualMeta && (
+                  <small>
+                    人工复核：
+                    {manualMeta.text}
+                    {item.manual_review.outcome ? ` · ${item.manual_review.outcome}` : ""}
+                    {item.manual_review.reviewed_at ? `（${item.manual_review.reviewed_at.slice(0, 10)}）` : ""}
+                    {(item.manual_review.history_count ?? 0) > 1 ? ` · 共复核 ${item.manual_review.history_count} 次` : ""}
+                  </small>
+                )}
+                {manualOpen && item.report_id && typeof item.watchpoint_index === "number" && (
+                  <div className="wb-review-refill">
+                    <div className="wb-review-refill-row">
+                      {REFILL_RESULTS.map((option) => (
+                        <button
+                          key={option.value}
+                          className={`tag-button ${manualResult === option.value ? "active" : ""}`}
+                          aria-pressed={manualResult === option.value}
+                          onClick={() => setManualResult(option.value)}
+                        >
+                          {option.text}
+                        </button>
+                      ))}
+                      <input
+                        className="wb-review-refill-outcome"
+                        placeholder="人工复核说明（可选，例：三季报已于 10-25 披露，增速符合预期）"
+                        aria-label="人工复核说明"
+                        value={manualOutcome}
+                        onChange={(event) => setManualOutcome(event.target.value)}
+                      />
+                      <button
+                        className="wb-review-open"
+                        disabled={manualBusy}
+                        onClick={() => void submitManualReview(item.report_id!, item.watchpoint_index!, manualKey)}
+                      >
+                        {manualBusy ? "提交中…" : "提交复核"}
+                      </button>
+                      <button className="wb-review-open" disabled={manualBusy} onClick={() => { setManualFor(null); setManualError(null); }}>取消</button>
+                    </div>
+                    {manualError && <small className="wb-review-refill-error">复核失败：{manualError}</small>}
+                    <small className="wb-review-refill-note">
+                      只追加一条人工复核记录：**不写判断表、不伪造到期日**（锚定事件没有确切日期，
+                      而判断的到期时间是必填字段），原研报 payload 与验证点文本一字不改。系统不做自动判定。
+                    </small>
+                  </div>
                 )}
                 {refillOpen && judgmentId && (
                   <div className="wb-review-refill">
@@ -1976,7 +2239,8 @@ export function StructuredJudgement({ report }: { report: StockReport }) {
         </table>
       )}
       {watchpoints.length > 0 && (
-        <WatchpointTable points={watchpoints} />
+        // G2：本报告的验证点走「带确切日期 → 幂等落成可回填判断」这条链路，故显式打开「可回填」列。
+        <WatchpointTable points={watchpoints} withRefill />
       )}
     </div>
   );
@@ -1994,11 +2258,20 @@ export function StructuredJudgement({ report }: { report: StockReport }) {
 export function WatchpointTable({
   points,
   withDateBasis = false,
+  withRefill = false,
   renderSignal,
   renderDateBasis,
 }: {
   points: ReportWatchpoint[];
   withDateBasis?: boolean;
+  /**
+   * G2（研报产出与交付链路路线图 2026-09-27）：是否展示「可回填」列。
+   *
+   * 默认 **false**——只有**本报告的验证点**才走「带确切日期即幂等落成可回填判断」那条链路
+   * （`GET /ai-research/review-queue`）；追问附录的 `new_watchpoints` 当前不落库，
+   * 给它们标「可回填」等于承诺一个不存在的入口。不确定的事不标，需要时显式打开。
+   */
+  withRefill?: boolean;
   renderSignal?: (item: ReportWatchpoint) => ReactNode;
   renderDateBasis?: (item: ReportWatchpoint) => ReactNode;
 }) {
@@ -2008,6 +2281,7 @@ export function WatchpointTable({
       <th>观察信号</th>
       <th>验证时点</th>
       {withDateBasis && <th title="日期从哪来：交易日历推算 / 已披露日程 / 输入材料">日期依据</th>}
+      {withRefill && <th title="能否落成可回填判断：只有能解析出确切日期的验证点才会被服务端幂等落库">可回填</th>}
       <th>若成立则预期</th>
       {triaged && <th title="值不值得现在花一次取数 + 研报额度去查（展示分为归一化值）">优先级</th>}
     </tr>
@@ -2015,6 +2289,7 @@ export function WatchpointTable({
   const rows = (items: ReportWatchpoint[]) =>
     items.map((item, i) => {
       const priority = watchpointPriorityView(item);
+      const refill = watchpointRefillLabel(item);
       return (
         <tr key={`wp-${i}`}>
           <td>{renderSignal ? renderSignal(item) : item.signal || "—"}</td>
@@ -2024,6 +2299,11 @@ export function WatchpointTable({
               {renderDateBasis
                 ? renderDateBasis(item)
                 : watchpointDateView(item).basis}
+            </td>
+          )}
+          {withRefill && (
+            <td>
+              <span className={`soft-tag ${refill.tone}`} title={refill.hint}>{refill.text}</span>
             </td>
           )}
           <td>{item.expected_if_true || "—"}</td>
@@ -2046,6 +2326,15 @@ export function WatchpointTable({
           已按优先级分诊排序（是否可证伪 / 是否已有证据覆盖 / 是否影响决策）；「暂缓」档已折叠，**未删除**。
         </span>
       )}
+      {withRefill && (() => {
+        const summary = watchpointRefillSummary(points);
+        return summary.anchored > 0 ? (
+          <span className="wb-counter-label">
+            共 {summary.total} 条验证点：{summary.refillable} 条可自动回填，
+            {summary.anchored} 条锚定事件（无确切日期，不猜日期 → 不落库，可在「研究复盘」队列里手工标记已复核）。
+          </span>
+        ) : null;
+      })()}
       <table className="wb-judgement-table">
         <thead>{head}</thead>
         <tbody>{rows(main)}</tbody>
@@ -2123,12 +2412,18 @@ export function ValuationCard({ report }: { report: StockReport }) {
           </span>
         )}
         {/* Q05：三态标签常驻——它回答的是「这条估值结论做到哪一步」，与贵贱判断不是一个轴。 */}
-        <span className={`soft-tag ${evidence.tone}`} title={evidence.note || evidence.label}>
+        <span className={`soft-tag ${evidence.tone}`} title={valuationEvidenceReadingNote(evidence) || evidence.label}>
           {evidence.label}
         </span>
       </div>
       {maskedVerdict && evidence.note && (
-        <p className="report-meta amber" role="note">{evidence.note}</p>
+        <p className="report-meta amber" role="note">{valuationEvidenceReadingNote(evidence)}</p>
+      )}
+      {valuationEvidenceReadingNote(evidence) !== evidence.note && (
+        <details className="wb-quality-warn">
+          <summary>估值指标说明留痕</summary>
+          <p className="report-meta">{evidence.note}</p>
+        </details>
       )}
       {/* 结论词被服务端归一时原因必须留下（与导出同一行）——换了措辞就不能把「为什么换」丢掉。 */}
       {maskedVerdict && valuation.verdict_note && (
@@ -2187,9 +2482,12 @@ export function ValuationCard({ report }: { report: StockReport }) {
         </p>
       )}
       {(valuation.valuation_limitations?.length ?? 0) > 0 && (
-        <ul className="answer-list wb-val-limits">
-          {valuation.valuation_limitations!.map((item, i) => <li key={i}>{item}</li>)}
-        </ul>
+        <div>
+          <p className="report-meta">模型提供的估值限制（原文）</p>
+          <ul className="answer-list wb-val-limits">
+            {valuation.valuation_limitations!.map((item, i) => <li key={i}>{item}</li>)}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -2198,7 +2496,9 @@ export function ValuationCard({ report }: { report: StockReport }) {
 /** 行内渲染：**加粗** 与 [S1] 引用标签；纯 React 元素，不走 innerHTML。
  *  v31 P1：`highlights` 按「已定位的关键数字」给正文数字加信息状态色（蓝/琥珀/珊瑚红），
  *  每个文本段最多命中 2 处（§八.5：每段最多突出 1～2 处，正文黑白层次保持主导）；
- *  颜色仅是辅助编码——同时有 title 文字标签 + aria-label，加粗保证灰度打印仍可识别。 */
+ *  颜色仅是辅助编码——同时有 title 文字标签 + aria-label，加粗保证灰度打印仍可识别。
+ *  R1：切分交给 format.splitKeyFactSegments——与导出 markdownToHtml **同一实现**，
+ *  两侧 <mark> 序列必然一致（此前屏显走子串、导出走全等，同一份报告高亮位置不同源）。 */
 export function renderInline(
   text: string,
   keyPrefix: string,
@@ -2206,43 +2506,25 @@ export function renderInline(
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
   let seq = 0;
-  /** 段内高亮预算：每段最多 2 处（§八.5）。 */
-  let hlBudget = 2;
-  // 高亮按词长降序匹配，避免「19.7」先于「19.78」吃掉匹配位置。
-  const sortedHighlights = [...highlights].sort((a, b) => b.text.length - a.text.length);
+  /** 段内高亮预算：每段最多 2 处（§八.5）——跨本段的 bold/引用片段共享同一份预算。 */
+  let hlBudget = HIGHLIGHT_BUDGET_PER_PARAGRAPH;
   /** 把一段纯文本按 highlights 切片（高亮之外保持原样）。 */
   const renderPlain = (plain: string, keyBase: string): ReactNode[] => {
-    if (hlBudget <= 0 || sortedHighlights.length === 0 || !plain) return [plain];
-    const out: ReactNode[] = [];
-    let rest = plain;
-    let cursor = 0;
-    while (rest && hlBudget > 0) {
-      let bestIndex = -1;
-      let best: ReportHighlight | null = null;
-      for (const highlight of sortedHighlights) {
-        const found = rest.indexOf(highlight.text);
-        if (found >= 0 && (bestIndex < 0 || found < bestIndex)) {
-          bestIndex = found;
-          best = highlight;
-        }
-      }
-      if (!best || bestIndex < 0) break;
-      if (bestIndex > 0) out.push(rest.slice(0, bestIndex));
-      out.push(
-        <mark
-          key={`${keyBase}-hl${cursor++}`}
-          className={`rpt-hl rpt-hl-${best.tone}`}
-          title={best.title}
-          aria-label={best.title}
-        >
-          {best.text}
-        </mark>,
-      );
-      hlBudget -= 1;
-      rest = rest.slice(bestIndex + best.text.length);
-    }
-    if (rest) out.push(rest);
-    return out;
+    if (hlBudget <= 0 || highlights.length === 0 || !plain) return [plain];
+    const segments = splitKeyFactSegments(plain, highlights, hlBudget);
+    hlBudget -= segments.filter((segment) => segment.highlight).length;
+    return segments.map((segment, index) => (segment.highlight ? (
+      <mark
+        key={`${keyBase}-hl${index}`}
+        className={`rpt-hl rpt-hl-${segment.highlight.tone}`}
+        title={segment.highlight.title}
+        aria-label={segment.highlight.title}
+      >
+        {segment.text}
+      </mark>
+    ) : (
+      <Fragment key={`${keyBase}-t${index}`}>{segment.text}</Fragment>
+    )));
   };
   // 先按 **bold** 切，再在每段内切 [S#] 引用
   const boldParts = text.split(/(\*\*[^*]+\*\*)/g);

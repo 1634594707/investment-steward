@@ -1,83 +1,94 @@
+# ===========================================================================
+# Investment Steward 忽略规则
+# 原则：可再生成的产物、本机密钥、私人数据不入库；源码/配置/契约产物一律入库。
+# 否定规则（!）必须写在其父级规则之后，否则不生效。
+# ===========================================================================
+
+# --- 依赖与通用构建产物 ----------------------------------------------------
 node_modules/
+.venv/
 dist/
 build/
-.venv/
-.uv-cache/
-.runtime-test/
-.runtime-local/
-.runtime-acceptance/
-.runtime-acceptance-f/
-.runtime-*/
-.pytest_cache/
-.ruff_cache/
-__pycache__/
-*.tsbuildinfo
-*.py[cod]
-*.sqlite3
-*.sqlite3-*
-.env
-.env.*
-!.env.example
 coverage/
 artifacts/
 reports/
+*.tsbuildinfo
+
+# --- 桌面端打包产物（electron-builder / PyInstaller）----------------------
+# dist-desktop*/ 覆盖 dist-desktop、dist-desktop2、dist-desktop-20261026 等历史与按日期命名的输出目录
+dist-desktop*/
+apps/desktop-host/build*/
+apps/desktop-host/dist*/
+# tools/ 下只保留 *.spec、hooks/、sidecar_entry.py
+apps/desktop-host/tools/build*/
+apps/desktop-host/tools/dist*/
+
+# --- Python 缓存与测试临时目录 --------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.uv-cache/
+apps/core-api/tmp*/
+apps/core-api/pytest-of-*/
+apps/core-api/tests/fixtures/*.bak-*/
+
+# 脚本用 tempfile.mkdtemp 建的临时数据目录：TEMP 未继承时回落到当前目录，
+# Windows 下 SQLite 未关闭会让删除失败而残留（详见 scripts/export_contracts.py）
+contracts-????????/
+route-inventory-????????/
+
+# --- 运行期数据、日志与本地工作目录 ---------------------------------------
 .local-data/
+# Core 以 cwd 为基准的相对数据目录（旧版脚本在 apps/core-api 下跑出来的库）
+apps/core-api/.data/
+.runtime-*/
+**/.runtime/
 .tmp_*.json
-scripts/_inline.tmp.js
 .tmp-pytest*
 .pytest-tmp*
 .tmp-verify-data/
 _tmp_*
-apps/core-api/tmp*/
-apps/core-api/pytest-of-*/
 .cleanup-trash/
-dist-desktop/
-dist-desktop2/
-apps/desktop-host/build*/
-apps/desktop-host/dist*/
+.recovery-*/
+/logs/
+*.log
 
-# 插件签名私钥：仅公钥入库，私钥本地生成不得提交
+# --- 环境变量 --------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- 数据库 ----------------------------------------------------------------
+*.sqlite3
+*.sqlite3-*
+
+# --- 密钥与凭据 ------------------------------------------------------------
+# 插件签名：仅公钥入库，私钥本地生成不得提交
 apps/core-api/keys/*.pem
 !apps/core-api/keys/*.pub.pem
-
-# 移动端签名密钥与口令：密钥本体、口令配置都不得入库
+# 移动端签名密钥与口令
 *.keystore
 *.jks
 *.p12
 *.pfx
 mobile/.env.local
+# 中继部署凭据
+scripts/relay_bootstrap_token.txt
+scripts/relay-app.tar.gz
 
+# --- 内部过程文档（路线图/设计方案/实施记录/证据归档）仅本地保留 ----------
+docs/*.md
+docs/evidence/
+
+# --- AI 工具目录（本机安装产物）-------------------------------------------
+.codebuddy/
+.claude/
+.cursor/
+# skills 目录 = teamai pull 分发的本地副本，源头在 .teamai/skills/
+.codex/skills/
 # WorkBuddy：笔记/临时产物不入库，仅放行 teamai 注入的 hooks
 # （teamai single-repo 模式靠它让队友 clone 后自动引导）
 .workbuddy/*
 !.workbuddy/settings.json
-
-# 未选用的 AI 工具目录（本机安装产物）
-.codebuddy/
-.claude/
-.cursor/
-
-# AI 工具 skills 目录 = teamai pull 分发的本地副本，源头在 .teamai/skills/
-.codex/skills/
-
-# 运行日志
-*.log
-scripts/relay_bootstrap_token.txt
-scripts/relay-app.tar.gz
-
-# 会话运行时临时目录（任意层级）
-**/.runtime/
-# 桌面端 PyInstaller 构建产物（tools/ 下同理，只留 *.spec / hooks / sidecar_entry.py）
-apps/desktop-host/tools/build*/
-apps/desktop-host/tools/dist/
-
-#  fixtures 重命名期的就地备份：内容已在 youzi/ 下入库，不再重复提交
-apps/core-api/tests/fixtures/*.bak-*/
-
-# 内部过程文档（任务路线图/设计方案/实施记录/证据归档）：仅保留本地，不入库
-docs/*.md
-docs/evidence/
-
-# 本地工作目录
-.recovery-*/
 .workbuddy-ai/

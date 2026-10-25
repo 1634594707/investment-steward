@@ -2,22 +2,22 @@
 .review-heading h2 { margin: calc(var(--space-2) * var(--density-scale)) 0; font-size: 20px; font-weight: 600; }
 .review-heading p { margin: 0; color: var(--muted); }
 .review-period { display: grid; gap: calc(var(--space-1) * var(--density-scale)); color: var(--muted); font-size: var(--text-2); min-width: 120px; }
-.review-page .metric-row { margin-top: calc(var(--space-4) * var(--density-scale)); border-block: 1px solid var(--line); }
-.review-page .weekly-review-band { margin-top: calc(var(--space-8) * var(--density-scale)); padding: 0 0 calc(var(--space-6) * var(--density-scale)); background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
-.review-page .review-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--space-6) * var(--density-scale)); }
-.review-page .review-section { padding: 0 0 0 calc(var(--space-3) * var(--density-scale)); border: 0; border-left: 2px solid var(--line); border-radius: 0; background: transparent; }
+.review-page .metric-row { margin-top: calc(var(--space-4) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); overflow: hidden; }
+.review-page .weekly-review-band { margin-top: calc(var(--space-6) * var(--density-scale)); padding: calc(var(--space-5) * var(--density-scale)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-2); }
+.review-page .review-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--space-5) * var(--density-scale)); }
+.review-page .review-section { padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale)); border: 1px solid var(--line); border-left: 3px solid var(--mint-a45); border-radius: var(--radius-2); background: var(--canvas); }
 .review-page .review-section-title { font-size: var(--text-4); color: var(--ink); }
 .review-page .review-principle-note { grid-column: 1 / -1; }
 .review-page .decision-timeline { border-left: 1px solid var(--line); margin-left: calc(var(--space-2) * var(--density-scale)); padding-left: calc(var(--space-6) * var(--density-scale)); }
-.review-page .decision-card { position: relative; display: block; margin: 0; padding: 0 0 calc(var(--space-6) * var(--density-scale)); border: 0; background: transparent; }
-.review-page .decision-marker { position: absolute; top: 8px; left: -29px; width: 9px; height: 9px; background: var(--mint); border: 2px solid var(--canvas); border-radius: 50%; }
-.review-page .decision-card-body { padding: 0 0 calc(var(--space-4) * var(--density-scale)); border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+.review-page .decision-card { position: relative; display: block; margin: 0; padding: 0 0 calc(var(--space-5) * var(--density-scale)); border: 0; background: transparent; }
+.review-page .decision-marker { position: absolute; top: 14px; left: -29px; width: 9px; height: 9px; background: var(--mint); border: 2px solid var(--canvas); border-radius: 50%; }
+.review-page .decision-card-body { padding: calc(var(--space-4) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); }
 .review-page .decision-card-head { display: flex; justify-content: space-between; gap: calc(var(--space-3) * var(--density-scale)); flex-wrap: wrap; }
 .review-page .decision-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--space-4) * var(--density-scale)); }
 .review-page .decision-detail-grid .retro { grid-column: auto; }
 .review-page .decision-card h4 { margin: calc(var(--space-3) * var(--density-scale)) 0; font-size: 14px; }
 .review-page .decision-detail-grid p { overflow-wrap: anywhere; }
-.review-page .review-plan-band { display: flex; gap: calc(var(--space-3) * var(--density-scale)); flex-wrap: wrap; padding: calc(var(--space-4) * var(--density-scale)) 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.review-page .review-plan-band { display: flex; gap: calc(var(--space-3) * var(--density-scale)); flex-wrap: wrap; padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); }
 .review-page .plan-row { flex-wrap: wrap; gap: calc(var(--space-3) * var(--density-scale)); }
 .review-plan-history { margin-top: calc(var(--space-4) * var(--density-scale)); color: var(--muted); }
 .review-plan-history summary { cursor: pointer; padding-block: calc(var(--space-3) * var(--density-scale)); }

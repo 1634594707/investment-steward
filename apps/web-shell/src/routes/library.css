@@ -1,16 +1,17 @@
 .library-heading { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--space-4) * var(--density-scale)); }
 .library-heading h2 { font-size: 20px; margin: calc(var(--space-2) * var(--density-scale)) 0; }
 .library-heading button { display: inline-flex; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); }
-.library-summary { display: grid; grid-template-columns: 1fr 2fr 1fr; border-block: 1px solid var(--line); margin: calc(var(--space-6) * var(--density-scale)) 0; }
-.library-summary > div { padding: calc(var(--space-4) * var(--density-scale)); min-width: 0; }
+.library-summary { display: grid; grid-template-columns: 1fr 2fr 1fr; border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); margin: calc(var(--space-5) * var(--density-scale)) 0; overflow: hidden; }
+.library-summary > div { padding: calc(var(--space-4) * var(--density-scale)); border-right: 1px solid var(--line); min-width: 0; }
+.library-summary > div:last-child { border-right: 0; }
 .library-summary dt { color: var(--muted); font-size: var(--text-2); }
-.library-summary dd { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font: 14px var(--font-data); overflow-wrap: anywhere; }
+.library-summary dd { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font: 500 15px var(--font-data); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .library-summary small { color: var(--muted); font-size: var(--text-2); }
 .library-workspace { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: calc(var(--space-6) * var(--density-scale)); }
 .library-workspace > * { min-width: 0; }
 .library-load-error { display: flex; flex-wrap: wrap; justify-content: space-between; gap: calc(var(--space-3) * var(--density-scale)); margin-bottom: calc(var(--space-4) * var(--density-scale)); padding: calc(var(--space-3) * var(--density-scale)); border-left: 2px solid var(--amber); color: var(--muted); }
 .library-plan { padding-left: calc(var(--space-6) * var(--density-scale)); border-left: 1px solid var(--line); }
-.library-page .panel, .library-page .panel-grad { background: transparent; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
+.library-page .panel, .library-page .panel-grad { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-2); padding: calc(var(--space-4) * var(--density-scale)); }
 .library-page .sec-head { flex-wrap: wrap; gap: calc(var(--space-3) * var(--density-scale)); }
 .library-page .sec-head h3 { font-size: 14px; }
 .library-filters { display: flex; gap: calc(var(--space-2) * var(--density-scale)); flex-wrap: wrap; margin-bottom: calc(var(--space-4) * var(--density-scale)); }
@@ -18,8 +19,9 @@
 .library-search input { width: 100%; min-width: 0; min-height: 36px; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-1); background: var(--panel); color: var(--ink); font: inherit; }
 .library-page .book-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: calc(var(--space-4) * var(--density-scale)); }
 .library-page .book-list.compact { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: calc(var(--space-3) * var(--density-scale)); }
-.library-page .book-card { min-width: 0; padding: calc(var(--space-3) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-1); background: var(--panel); }
-.book-cover { display: flex; flex-direction: column; justify-content: space-between; gap: calc(var(--space-3) * var(--density-scale)); aspect-ratio: 4 / 3; padding: calc(var(--space-4) * var(--density-scale)); border-left: 4px solid var(--mint); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+.library-page .book-card { min-width: 0; padding: calc(var(--space-3) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); transition: border-color 0.15s ease; }
+.library-page .book-card:hover { border-color: var(--mint-a40); }
+.book-cover { display: flex; flex-direction: column; justify-content: space-between; gap: calc(var(--space-3) * var(--density-scale)); aspect-ratio: 4 / 3; padding: calc(var(--space-4) * var(--density-scale)); border-left: 4px solid var(--mint); border-radius: var(--radius-1); background: var(--surface-raised); color: var(--ink); overflow-wrap: anywhere; }
 .book-cover[data-status="finished"] { border-color: var(--blue); }
 .book-cover[data-status="wishlist"] { border-color: var(--amber); }
 .book-cover strong { font-size: 16px; line-height: 1.5; }

@@ -15,15 +15,15 @@
 .set-core-status.wait i { background: var(--amber); }
 
 .settings-page .set-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: calc(var(--space-7) * var(--density-scale)); align-items: start; }
-.settings-page .set-nav { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 2px; padding: calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--ink-a10); border-radius: 10px; background: var(--white-a03); }
-.settings-page .set-item { min-height: 34px; padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); border: 0; border-radius: 8px; color: var(--muted); background: transparent; text-align: left; font-size: var(--text-3); cursor: pointer; }
+.settings-page .set-nav { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 2px; padding: calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); }
+.settings-page .set-item { min-height: 34px; padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); border: 0; border-radius: var(--radius-1); color: var(--muted); background: transparent; text-align: left; font-size: var(--text-3); cursor: pointer; transition: color 0.15s ease, background-color 0.15s ease; }
 .settings-page .set-item:hover { color: var(--ink); background: var(--white-a04); }
-.settings-page .set-item.active { color: var(--mint); background: var(--mint-a10); }
+.settings-page .set-item.active { color: var(--mint); background: var(--mint-a10); font-weight: 600; }
 .settings-workspace { min-width: 0; max-width: 1040px; }
 .settings-group-title { margin: 0 0 calc(var(--space-3) * var(--density-scale)); font-size: var(--text-5); font-weight: 600; }
 
 /* 区块卡片 */
-.settings-page .dl-block { margin: 0 0 calc(var(--space-4) * var(--density-scale)); padding: calc(var(--space-4) * var(--density-scale)) calc(var(--space-5) * var(--density-scale)); border: 1px solid var(--ink-a10); border-radius: 10px; background: var(--white-a03); }
+.settings-page .dl-block { margin: 0 0 calc(var(--space-4) * var(--density-scale)); padding: calc(var(--space-4) * var(--density-scale)) calc(var(--space-5) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); }
 .settings-page .dl-block h4 { margin: 0 0 calc(var(--space-1) * var(--density-scale)); font-size: var(--text-4); font-weight: 600; }
 .settings-page .dl-block > p { max-width: 820px; margin: calc(var(--space-1) * var(--density-scale)) 0 calc(var(--space-3) * var(--density-scale)); color: var(--muted); font-size: var(--text-3); line-height: 1.7; }
 
@@ -84,9 +84,9 @@
 .storage-paths button { margin-top: calc(var(--space-1) * var(--density-scale)); }
 .storage-lifecycle { margin-top: calc(var(--space-3) * var(--density-scale)); }
 /* 迁移工具条：输入与操作收纳为一个虚线工具栏 */
-.storage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); margin-top: calc(var(--space-3) * var(--density-scale)); padding: calc(var(--space-3) * var(--density-scale)); border: 1px dashed var(--ink-a14); border-radius: 8px; }
-.storage-actions input { flex: 1 1 260px; min-width: 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--panel-2, #14161a); color: var(--ink); font: 12px "JetBrains Mono", monospace; }
-.storage-report { margin-top: calc(var(--space-3) * var(--density-scale)); padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); border: 1px solid var(--line); border-left: 2px solid var(--blue-a35); border-radius: 8px; background: var(--white-a02); font-size: var(--text-3); }
+.storage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); margin-top: calc(var(--space-3) * var(--density-scale)); padding: calc(var(--space-3) * var(--density-scale)); border: 1px dashed var(--ink-a14); border-radius: var(--radius-2); }
+.storage-actions input { flex: 1 1 260px; min-width: 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--surface-input); color: var(--ink); font: 12px "JetBrains Mono", monospace; }
+.storage-report { margin-top: calc(var(--space-3) * var(--density-scale)); padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale)); border: 1px solid var(--line); border-left: 2px solid var(--blue-a35); border-radius: var(--radius-2); background: var(--white-a02); font-size: var(--text-3); }
 .storage-report ul { margin: calc(var(--space-2) * var(--density-scale)) 0; padding-left: calc(var(--space-4) * var(--density-scale)); color: var(--muted); line-height: 1.7; }
 .storage-report .storage-problem { color: var(--amber); }
 .storage-report .primary-button, .storage-report .ghost-btn { margin: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)) 0 0; }

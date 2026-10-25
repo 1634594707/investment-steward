@@ -20,6 +20,8 @@ export const BRIDGE_MANIFEST: { version: number; routes: BridgeRoute[] } = {
   { method: "GET", path: "/ai-research/reports/{report_id}", pattern: "^/ai-research/reports/[^/]+$" },
   { method: "GET", path: "/ai-research/reports/{report_id}/follow-ups", pattern: "^/ai-research/reports/[^/]+/follow-ups$" },
   { method: "POST", path: "/ai-research/reports/{report_id}/follow-ups", pattern: "^/ai-research/reports/[^/]+/follow-ups$" },
+  { method: "POST", path: "/ai-research/reports/{report_id}/repair", pattern: "^/ai-research/reports/[^/]+/repair$" },
+  { method: "POST", path: "/ai-research/reports/{report_id}/watchpoints/{index}/review", pattern: "^/ai-research/reports/[^/]+/watchpoints/[^/]+/review$" },
   { method: "GET", path: "/ai-research/review-queue", pattern: "^/ai-research/review-queue$" },
   { method: "GET", path: "/audit", pattern: "^/audit$" },
   { method: "GET", path: "/brief/today", pattern: "^/brief/today$" },

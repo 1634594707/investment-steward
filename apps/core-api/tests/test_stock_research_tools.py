@@ -70,6 +70,11 @@ def _synth_bars(count: int = 60) -> list[dict[str, object]]:
             "high": price * 1.02,
             "low": price * 0.98,
             "volume": 1_000_000 + index * 1000,
+            # 复权口径只能由供应商声明的序列给出，缺 adjust 时价格图会如实标「复权未确认」；
+            # 这里模拟腾讯 qfqday 的真实返回，保证断言覆盖「前复权」这条真实路径。
+            "adjust": "qfq",
+            "source_series": "qfqday",
+            "requested_adjust": "qfq",
         })
     return rows
 

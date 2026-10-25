@@ -23,7 +23,12 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
+from conftest import (  # noqa: F401  确保 fixture 可用
+    SAMPLE_CONCLUSION,
+    SAMPLE_SUMMARY_IN_BAND,
+    client as client_fixture,
+    run_stock_report,
+)
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -47,13 +52,16 @@ def _bars(count: int, start: str = "2026-01-01") -> list[dict[str, object]]:
 
 
 def _report_json(**extra) -> str:
+    # G1：摘要须落在目标区间、结论须非空，否则会多出「重写摘要 / 补写结论」两次调用，
+    # 本文件多处 `assert len(calls) == 2` 会变成 4。
     base = {
         "title": "甲股：缓涨",
-        "executive_summary": "结论：技术面缓涨，基本面稳健。",
+        "executive_summary": SAMPLE_SUMMARY_IN_BAND,
         "report": "### 技术面\n股价沿 MA20 缓涨上行，量能温和放大，结构完好 [S1]\n### 消息面\n公司公告中标大单，市场关注度明显上升 [S2]\n### 基本面\n营收净利稳健增长，经营现金流为正 [S4]\n### 综合判断\n趋势向好但估值已不便宜，总体中性看待，跟踪量能确认。",
         "citations": ["S1", "S2", "S4"],
         "confidence": "medium",
         "valuation": {"verdict": "合理"},
+        "conclusion": SAMPLE_CONCLUSION,
     }
     base.update(extra)
     return json.dumps(base, ensure_ascii=False)
@@ -65,13 +73,36 @@ def _report_json(**extra) -> str:
 
 
 def test_evidence_quality_tiers_are_honest_about_no_grade_a():
-    """★ 诚实守卫：当前没有任何来源达到 A 级，不得为了好看把数据商接口写成 A。"""
+    """★ 诚实守卫：只有公告标题时**不得**把它写成 A 级（A 只给公告正文全文）。
+
+    D1（研报产出与交付链路路线图 2026-09-27，分级 v1→v2）后 A 级第一次有了真实产生路径
+    （S3A = 公告正文全文）。本用例同时锁住两件事：
+      ① S3（仅标题）仍是 B 级，不许因为「全文可能取到」就把标题抬成 A；
+      ② 本次拿不到 A 级时必须给出**本股本次**的原因，而不是一句静态口号。
+    """
     report = report_quality.evidence_quality_report({"S1", "S2", "S3", "S4", "S5"})
     by_id = {item["id"]: item["quality"] for item in report["sources"]}
     assert by_id == {"S1": "B", "S2": "C", "S3": "B", "S4": "B", "S5": "C"}
     assert report["tiers"]["A"] == []
-    assert "尚未接入" in report["note"]
+    assert report["version"] == "v2"
+    # 拿不到 A 级要说清「这次没取到全文」，而不是「产品永远没有一手证据」
+    assert "未取到公告正文全文" in report["note"]
+    assert "S3" in report["note"]
     assert report["core_support_qualities"] == ["A", "B"]
+
+
+def test_evidence_quality_grade_a_comes_only_from_announcement_full_text():
+    """D1 验收：公告正文全文进入证据包时 A 级首次非空，且说明写清渠道边界（不宣称交易所直连）。"""
+    report = report_quality.evidence_quality_report({"S1", "S2", "S3", "S3A", "S4", "S5"})
+    assert report["tiers"]["A"] == ["S3A"]
+    by_id = {item["id"]: item["quality"] for item in report["sources"]}
+    assert by_id["S3A"] == "A"
+    assert by_id["S3"] == "B", "标题口径不得因为同次存在全文而被抬级"
+    assert "S3A" in report["note"] and "转载" in report["note"]
+    # 覆盖字段与 S3 一致（差别在可信度而不是覆盖面），且都必须是词表子集
+    assert set(report_quality.SOURCE_PROFILES["S3A"]["coverage"]) == set(
+        report_quality.SOURCE_PROFILES["S3"]["coverage"]
+    )
 
 
 def test_source_profiles_only_cover_declared_vocab():
@@ -444,6 +475,8 @@ def test_review_queue_buckets_overdue_scheduled_and_event_anchored(client, tmp_p
     assert [item["judgment_id"] is not None for item in body["items"]] == [True, True, False]
     assert body["closure"] == {
         "materialized": 2, "filled": 0, "overdue_unfilled": 1, "not_materialized": 1,
+        # G2：锚定事件的人工复核计数（本次没复核过 → 0，不是「不统计」）。
+        "manually_reviewed": 0,
     }
     overdue = body["items"][0]
     assert overdue["days_until"] == -3

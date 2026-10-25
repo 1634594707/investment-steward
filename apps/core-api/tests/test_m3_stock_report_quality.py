@@ -78,6 +78,26 @@ def test_d01_align_adds_note_and_clears_gate():
     assert rq.valuation_conclusion_hits(aligned, "undetermined", "") == []
 
 
+def test_valuation_alignment_keeps_rule_ids_in_trace_instead_of_reader_note():
+    aligned, changes = rq.align_valuation_language(_report(_DR_CONTRADICTION), "undetermined", "")
+    assert "D01" not in aligned
+    assert changes[0]["rules"] == ["D01"]
+    assert "PS处于历史低位" in aligned
+
+
+def test_legacy_alignment_note_is_not_added_again():
+    legacy = "PS处于历史低位，提供安全垫（估值状态为「无法判断」：本句不成立低估/安全垫结论，已按 D01 口径标注）"
+    aligned, changes = rq.align_valuation_language(legacy, "undetermined", "")
+    assert aligned == legacy and changes == []
+    assert rq.valuation_conclusion_hits(legacy, "undetermined", "") == []
+
+
+def test_valuation_alignment_trace_preserves_the_whole_original_sentence():
+    sentence = "测试说明" * 40 + "PS处于历史低位，提供安全垫"
+    _, changes = rq.align_valuation_language(sentence, "undetermined", "")
+    assert changes[0]["sentence"] == sentence
+
+
 def test_d01_no_action_when_status_is_not_undetermined():
     report = _report(_DR_CONTRADICTION)
     assert rq.valuation_conclusion_hits(report, "undervalued", "") == []
@@ -352,14 +372,32 @@ def test_d03_bare_month_anchor_is_not_a_timepoint():
 
 @pytest.mark.parametrize(
     "chars,expected",
-    [(120, False), (165, False), (166, True), (176, True), (181, True)],
+    [(0, False), (120, True), (150, False), (165, False), (166, True), (176, True), (181, True)],
 )
-def test_d04_needs_summary_rewrite_between_target_and_hard_max(chars, expected):
+def test_d04_needs_summary_rewrite_outside_target_band(chars, expected):
+    """D04 + G1：摘要落在目标区间 [150, 165] **之外**（过短或过长）都要重写。
+
+    - D04：超出目标上界（165）即重写（原策略只在超 180 硬上限时重写）；
+    - G1（2026-09-27 路线图）：**低于目标下界（150）同样重写**——样报 002468 的 118 字
+      摘要此前只落一条形式告警就照发，而改写提示词本来就是现成的。
+    - 0 字不在此列：空摘要走 `repair_strategy_of` 的 `summary_missing` 分支
+      「只生成执行摘要」，与「改写已有摘要」是不同的修复动作。
+    """
     summary = "摘" * chars
     assert rq.needs_summary_rewrite(summary) is expected
     # 176 字（东瑞实测）在原策略下不触发重写、在新策略下必须触发
     if chars == 176:
         assert rq.report_char_count(summary) > rq.SUMMARY_TARGET_MAX
+
+
+@pytest.mark.parametrize(
+    "chars,expected",
+    [(0, None), (120, "summary_below_target"), (149, "summary_below_target"),
+     (150, None), (165, None), (166, "summary_over_target"), (200, "summary_over_target")],
+)
+def test_g1_summary_rewrite_reason_labels_both_directions(chars, expected):
+    """G1：`summary_rewrite_reason` 给出方向标签，供对称的改写提示词分支使用。"""
+    assert rq.summary_rewrite_reason("摘" * chars) == expected
 
 
 def test_d04_validate_report_keeps_format_warning_when_still_over_target():

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { BriefContext, type BriefNavigation } from "../components/BriefContext";
 import type { AgentResponse, ArtifactPoolView, CandleSeries, CredentialRecord, DecisionEntry, Evidence, Holding, InvestmentPolicyVersion, InvestorProfile, LearningActivity, LearningGoal, LearningUnit, ModelProfile, Notification, PersonalSettings, PersonalSettingsInput, Plan, PluginCapability, PluginCatalogEntry, ResearchRun, Thesis, TodayBrief, UpdateChannelView, WeeklyReview } from "@investment-steward/domain-contracts";
 import { useMacro } from "../hooks/useMacro";
 import { useTactics } from "../hooks/useTactics";
@@ -68,7 +69,8 @@ function KeepAlive({ active, children }: { active: boolean; children: ReactNode 
 }
 
 export function AppShell() {
-  const client = useMemo(() => createCoreClient(), []);  const [view, setView] = useState<AppView>(() => {
+  const [briefNavigation, setBriefNavigation] = useState<BriefNavigation | null>(null);
+  const client = useMemo(() => createCoreClient(), []);  const [view, setCurrentView] = useState<AppView>(() => {
     // 优先级：个人中心「默认落地页」> 上次所在页面 > 系统默认。
     const preferred = loadDefaultView();
     if (preferred && NAV_ALL.some((entry) => entry.id === preferred)) return preferred as AppView;
@@ -76,6 +78,14 @@ export function AppShell() {
     const saved = localStorage.getItem("steward.last-view");
     return NAV_ALL.some((entry) => entry.id === saved) ? (saved as AppView) : DEFAULT_VIEW;
   });
+  const setView = useCallback((next: AppView) => {
+    setBriefNavigation(null);
+    setCurrentView(next);
+  }, []);
+  const openBriefItem = useCallback((navigation: BriefNavigation) => {
+    setBriefNavigation(navigation);
+    setCurrentView(navigation.target);
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem("steward.last-view", view);
@@ -893,7 +903,8 @@ export function AppShell() {
                 </div>
               )}
               <Suspense fallback={<div className="booting-pane" role="status"><strong>正在加载页面…</strong><SkeletonLines lines={3} /></div>}>
-              {keptViews.includes("today") && <KeepAlive active={view === "today"}><ErrorBoundary><TodayPage counts={{ evidence: evidence.filter((item) => { const age = Date.now() - new Date(item.observed_at ?? item.collected_at).getTime(); return age >= 0 && age <= 24 * 60 * 60 * 1000; }).length, open: notifications.length, learning: learningGoal?.completed_count ?? 0 }} evidence={evidence} brief={todayBrief} notifications={notifications} learningUnit={learningUnit} learningGoal={learningGoal} onNavigate={setView} onOpenEvidence={setOpenEvidenceId} onMarkNotificationRead={markNotificationRead} onEvaluateNotifications={evaluateNotifications} onSubmitLearning={submitLearningActivity} onGenerateBrief={generateTodayBrief} onboarding={{ hasPolicy: Boolean(policy), holdings: holdings.length, research: runs.length }} isDemo={client.isDemo} /></ErrorBoundary></KeepAlive>}
+              {briefNavigation?.target === view && <BriefContext item={briefNavigation.item} onOpenEvidence={setOpenEvidenceId} onClose={() => setBriefNavigation(null)} />}
+              {keptViews.includes("today") && <KeepAlive active={view === "today"}><ErrorBoundary><TodayPage counts={{ evidence: evidence.filter((item) => { const age = Date.now() - new Date(item.observed_at ?? item.collected_at).getTime(); return age >= 0 && age <= 24 * 60 * 60 * 1000; }).length, open: notifications.length, learning: learningGoal?.completed_count ?? 0 }} evidence={evidence} brief={todayBrief} notifications={notifications} learningUnit={learningUnit} learningGoal={learningGoal} onNavigate={setView} onOpenEvidence={setOpenEvidenceId} onMarkNotificationRead={markNotificationRead} onEvaluateNotifications={evaluateNotifications} onSubmitLearning={submitLearningActivity} onGenerateBrief={generateTodayBrief} onOpenBriefItem={openBriefItem} onboarding={{ hasPolicy: Boolean(policy), holdings: holdings.filter((item) => item.status === "holding").length, watchlist: holdings.filter((item) => item.status === "watchlist").length, research: runs.length }} isDemo={client.isDemo} /></ErrorBoundary></KeepAlive>}
               {keptViews.includes("investment") && <KeepAlive active={view === "investment"}><ErrorBoundary><InvestmentPage policy={policy} evidence={evidence} holdings={holdings} theses={theses} candles={candles} candlesLoading={candlesLoading} candlePeriod={candlePeriod} marketPluginEnabled={marketPluginEnabled} onNavigate={setView} onOpenEvidence={setOpenEvidenceId} onSaveThesis={saveThesis} onCreateHolding={createHolding} onDeleteHolding={deleteHolding} onLookupInstrument={lookupInstrument} onCreateThesis={createThesis} onCreatePolicyDraft={createPolicyDraft} onConfirmPolicy={confirmPolicy} onSelectInstrument={selectInstrument} onSelectCandlePeriod={changeCandlePeriod} onPullEvidence={pullEvidence} onDedupEvidence={dedupEvidence} isDemo={client.isDemo} /></ErrorBoundary></KeepAlive>}
               {keptViews.includes("workbench") && <KeepAlive active={view === "workbench"}><ErrorBoundary><ResearchWorkbenchPage holdings={holdings.map((item) => ({ instrument: item.instrument, label: item.label }))} aiReady={aiReady} isDemo={client.isDemo} modelProfiles={modelProfiles} active={view === "workbench"} onCreateHolding={createHolding} onSendToTactics={sendToTactics} onNavigate={setView} reportHandoff={reportHandoff} /></ErrorBoundary></KeepAlive>}
               {keptViews.includes("research") && <KeepAlive active={view === "research"}><ErrorBoundary><ResearchPage evidence={evidence} response={agentResponse} runs={runs} onNavigate={setView} onOpenEvidence={setOpenEvidenceId} onCardAction={handleCardAction} onCreateRun={createResearchRun} onSelectRun={loadRunResponse} onTransitionRun={transitionRun} onDeleteRun={deleteResearchRun} onPatrolFreshness={patrolEvidenceFreshness} aiReady={aiReady} /></ErrorBoundary></KeepAlive>}

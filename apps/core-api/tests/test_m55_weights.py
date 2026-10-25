@@ -69,6 +69,12 @@ def test_default_version_still_labeled_v1():
     assert not any("高度个性化" in item for item in positioning.limitations)
 
 
+def test_weights_only_on_missing_dimensions_do_not_fabricate_a_composite():
+    assert compute_positioning("cn", _cn_readings(), _cn_values(2.5, 6.2),
+        weights={"growth": 1.0, "employment": 0.0, "inflation": 0.0, "monetary": 0.0},
+        weight_version="v2") is None, "No usable positive weight means no composite, even when other readings exist"
+
+
 # ---- 端点：权重保存 / 校验 / 快照使用最新版本 ----
 
 

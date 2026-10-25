@@ -432,10 +432,66 @@ def test_q09_core_support_ratio_names_the_counted_claims() -> None:
     assert "importance=high" in trace["note"]
 
 
+def test_source_catalog_does_not_choose_between_different_urls_of_the_same_type() -> None:
+    catalog = followup_research.build_source_catalog({
+        "sources": {"S3": "公告标题"},
+        "evidence": [
+            {"evidence_type": "announcement", "source_uri": "https://example.test/notice-one"},
+            {"evidence_type": "announcement", "source_uri": "https://example.test/notice-two"},
+        ],
+    })
+    assert catalog[0]["url"] == ""
+    assert "来源文本" in catalog[0]["url_note"]
+
+
+def test_source_catalog_full_text_does_not_borrow_a_title_record_link() -> None:
+    catalog = followup_research.build_source_catalog({
+        "sources": {"S3A": "已取得公告正文"},
+        "evidence": [{"evidence_type": "announcement", "source_uri": "https://example.test/title-only"}],
+    })
+    assert catalog[0]["url"] == ""
+    assert "披露原文" in catalog[0]["scope_note"]
+
+
+@pytest.mark.parametrize("source_id,evidence_type", [
+    ("S2", "analysis"), ("S3", "announcement"), ("S4", "financial"),
+])
+def test_source_catalog_requires_explicit_source_link_even_for_one_evidence_url(source_id, evidence_type):
+    payload = {"sources": {source_id: "本报告的来源文本"}, "evidence": [
+        {"evidence_type": evidence_type, "source_uri": "https://example.test/unrelated-record"},
+    ]}
+    assert followup_research.build_source_catalog(payload)[0]["url"] == "", (
+        "Same evidence type and a single URL do not establish this report source's identity"
+    )
+    payload["source_links"] = {source_id: "https://example.test/explicit-source"}
+    assert followup_research.build_source_catalog(payload)[0]["url"] == payload["source_links"][source_id]
+
+
+def test_source_catalog_missing_text_does_not_claim_a_local_evidence_package_exists() -> None:
+    catalog = followup_research.build_source_catalog({"citations": ["S3"]})
+    assert "未保留" in catalog[0]["url_note"]
+    assert "本地证据包" not in catalog[0]["url_note"]
+
+
 def test_q09_followup_turn_embeds_catalog_for_export() -> None:
     catalog = analysis_followup.source_catalog(followup_research.build_source_catalog(REPORT))
     assert len(catalog) == 5
     assert catalog[1]["used_by"] == ["C4"]
+
+
+def test_source_documents_survive_catalog_and_followup_without_borrowing_links() -> None:
+    documents = [
+        {"title": "第一篇", "data_date": "2026-10-01 12:30", "url": "https://example.test/" + "a" * 600},
+        {"title": "第二篇", "data_date": "", "url": ""},
+    ]
+    catalog = followup_research.build_source_catalog({
+        "sources": {"S2": "新闻摘要"}, "source_documents": {"S2": documents},
+    })
+    assert catalog[0]["documents"] == documents
+    normalized = analysis_followup.source_catalog(catalog)[0]
+    assert normalized["documents"] == documents, "Every document needs its own date and exact URL, including missing URLs"
+    assert normalized["url"] == "", "A document URL must not become a group-wide source URL"
+    assert normalized["url_note"] == catalog[0]["url_note"]
 
 
 # ---------------------------------------------------------------------------

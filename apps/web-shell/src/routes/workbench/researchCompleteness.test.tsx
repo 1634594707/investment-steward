@@ -7,10 +7,11 @@
  *   反方检查根本没跑时，更要直说「检查未运行」，不假装已修订。
  */
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReviewQueue, StockReport } from "./researchTypes";
-import { ReportQualityPanel, ResearchCompletenessCard, ReviewQueuePanel } from "./panels";
-import { buildStockReportMarkdown } from "./export";
+import { ReportQualityPanel, ResearchCompletenessCard, ReviewQueuePanel, ReportFirstScreen, ReportResultTabs } from "./panels";
+import { buildStockReportMarkdown, markdownToHtml } from "./export";
+import { earningsAnalysisDisplay, earningsNoteDisplay, comparableReviewNote, valuationEvidenceDisplay, valuationEvidenceReadingNote, reportReadingSummary, valuationRepairDisplayLines } from "./format";
 
 const COMPLETENESS = {
   version: "v1",
@@ -60,6 +61,163 @@ function baseReport(overrides: Partial<StockReport> = {}): StockReport {
 }
 
 describe("ResearchCompletenessCard · v39 Q19 深研完成度", () => {
+  it("模型原有措辞显式标明来源，阅读分层不改写历史正文和限制", () => {
+    const original = "估值结论不能给出，verdict为无数据。";
+    const limitation = "正常化盈利置信度为low，估值状态必须为undetermined";
+    const report = baseReport({ report: original, valuation: {
+      pe_ttm: "14.37", pe_percentile: "71.6%", peer_position: "第4/38", verdict: "无数据", basis: "缺正常化盈利验证",
+      valuation_limitations: [limitation],
+    } });
+    const { container } = render(<ReportResultTabs report={report} />);
+    expect(container.textContent).toContain("模型提供的估值限制（原文）");
+    expect(container.textContent).toContain(limitation);
+    fireEvent.click(screen.getByRole("tab", { name: "正文" }));
+    expect(container.textContent).toContain("以下保留报告原有措辞；应用核验及修订留痕另列。");
+    expect(container.textContent).toContain(original);
+    const md = buildStockReportMarkdown(report);
+    for (const output of [md, new DOMParser().parseFromString(markdownToHtml(md), "text/html").body.textContent ?? ""]) {
+      expect(output).toContain(original);
+      expect(output).toContain(`模型提供的估值限制（原文）：${limitation}`);
+    }
+    expect(report.report).toBe(original);
+  });
+  it("首屏估值使用指标名称，保留未验证限制与完整原说明，不改非固定说明", () => {
+    const note = "pe_ttm 14.37｜pe_percentile 近1250个交易日71.6%分位｜peer_position 盈利样本第4/38 已取得，但正常化盈利未经验证，不能给出低估或偏贵结论。";
+    const report = baseReport({ valuation: { verdict: "无数据", pe_ttm: "14.37", pe_percentile: "近1250个交易日71.6%分位", peer_position: "盈利样本第4/38", basis: "正常化盈利未经验证", valuation_evidence: {
+      state: "normalization_unverified", note,
+      metrics: { peer_position: "盈利样本第4/38", pe_percentile: "近1250个交易日71.6%分位", pe_ttm: "14.37" },
+    } } });
+    const { container } = render(<ReportResultTabs report={report} />);
+    const reading = "PE(TTM) 14.37｜历史分位 近1250个交易日71.6%分位｜同业位置 盈利样本第4/38 已取得，但正常化盈利未经验证，不能给出低估或偏贵结论。";
+    expect(container.textContent).toContain(reading);
+    const audit = screen.getByText("估值指标说明留痕").closest("details");
+    expect(audit?.hasAttribute("open")).toBe(false);
+    expect(audit?.textContent).toContain(note);
+    const md = buildStockReportMarkdown(report);
+    expect(md.slice(0, md.indexOf("## 生成记录附录"))).not.toContain(note);
+    expect(md).toContain(reading);
+    expect(md.split(note)).toHaveLength(2);
+    expect(new DOMParser().parseFromString(markdownToHtml(md), "text/html").body.textContent).toContain(reading);
+    const custom = valuationEvidenceDisplay({ state: "normalization_unverified", note: "需核对 pe_ttm 的计算来源", metrics: { pe_ttm: "14.37" } });
+    expect(valuationEvidenceReadingNote(custom)).toBe(custom.note);
+  });
+  it("阅读区解释完成度边界，计算实现原话只在页面留痕与导出附录出现", () => {
+    const report = baseReport({ research_completeness: COMPLETENESS });
+    const reading = render(<ResearchCompletenessCard completeness={COMPLETENESS} />);
+    expect(reading.container.textContent).not.toContain(COMPLETENESS.note);
+    expect(reading.container.textContent).toContain("未核验或证据不足的项目不算完成");
+    reading.unmount();
+    const audit = render(<ReportQualityPanel report={report} />);
+    const auditDetails = screen.getByText("完成度计算留痕").closest("details");
+    expect(auditDetails?.textContent).toContain(COMPLETENESS.note);
+    expect(auditDetails?.hasAttribute("open")).toBe(false);
+    const md = buildStockReportMarkdown(report);
+    const beforeAppendix = md.slice(0, md.indexOf("## 生成记录附录"));
+    expect(beforeAppendix).not.toContain(COMPLETENESS.note);
+    expect(beforeAppendix).toContain("未核验或证据不足的项目不算完成");
+    expect(md.split(COMPLETENESS.note)).toHaveLength(2);
+    const html = new DOMParser().parseFromString(markdownToHtml(md), "text/html");
+    expect(html.body.textContent?.split(COMPLETENESS.note)).toHaveLength(2);
+  });
+
+  it("先交付分析和使用限制，再列完整校验与来源，来源后置仍可回查", () => {
+    const report = baseReport({
+      report: "### 基本面\n分析正文引用财务材料[S4]。",
+      cash_flow_quality: { operating_cash_flow: 3.43, verdict: "不足以判断盈利质量" },
+      research_completeness: COMPLETENESS,
+      limitations: ["本报告缺少资本开支性质证据。"],
+      quality_warnings: ["校验记录应完整保留。"],
+      evidence_quality: { version: "v1", sources: [], tiers: { A: [], B: ["S4"] },
+        coverage_vocab: [], core_support_qualities: ["B"] },
+      source_catalog: [{ source_id: "S4", name: "原财务材料", url: "", quality: "B" }],
+    });
+    const markdown = buildStockReportMarkdown(report);
+    const html = new DOMParser().parseFromString(markdownToHtml(markdown), "text/html");
+    const order = ["研报正文", "深研拆解（盈利增长 · 现金流质量 · 估值分化）",
+      "深研完成度", "局限与口径声明",
+      "证据质量与结论支撑",
+      "来源目录（可回查：编号 / 名称 / 链接 / 数据日期 / 获取时间 / 口径限制）",
+      "质量校验记录"];
+    const headings = Array.from(html.querySelectorAll("h2"), (node) => node.textContent);
+    for (let index = 0; index < order.length; index += 1) {
+      expect(markdown).toContain(`## ${order[index]}`);
+      expect(headings).toContain(order[index]);
+      if (index > 0) {
+        expect(markdown.indexOf(`## ${order[index - 1]}`)).toBeLessThan(markdown.indexOf(`## ${order[index]}`));
+        expect(headings.indexOf(order[index - 1]!)).toBeLessThan(headings.indexOf(order[index]!));
+      }
+    }
+    for (const text of ["本报告缺少资本开支性质证据。", "校验记录应完整保留。", "原财务材料"]) {
+      expect(markdown.split(text)).toHaveLength(2);
+      expect((html.body.textContent ?? "").split(text)).toHaveLength(2);
+    }
+    const citation = Array.from(html.querySelectorAll("a")).find((node) => node.textContent === "[S4]");
+    expect(citation).toBeTruthy();
+    expect(html.getElementById(citation!.getAttribute("href")!.slice(1))?.textContent).toContain("原财务材料");
+  });
+  it.each([
+    { stale_claims: ["C1"], staleness_checked: true, expected: "1 条判断所引数据超期（C1）" },
+    { stale_claims: [], staleness_checked: true, expected: "不代表数据当前仍有效" },
+    { stale_claims: [], staleness_checked: false, expected: "不能认定来源未过期" },
+  ])("首屏与导出保留生成时效边界：$expected", ({ expected, ...timing }) => {
+    const report = baseReport({ claim_findings: {
+      claims: [], total: 0, supported: 0, downgraded: [], no_source: [],
+      core_conclusion_supported: null, warnings: [], ...timing,
+    } });
+    const { container } = render(<ReportFirstScreen report={report} />);
+    const md = buildStockReportMarkdown(report);
+    const html = markdownToHtml(md);
+    expect(container.textContent).toContain(expected);
+    expect(md.slice(0, md.indexOf("## 研报正文"))).toContain(expected);
+    expect(html).toContain(expected);
+  });
+
+  it("阅读核对先于长篇限制且跨页签保留一份，避免风险边界埋在概览下方", () => {
+    const report = baseReport({ limitations: ["需要保留的完整限制"] });
+    const { container } = render(<><ReportFirstScreen report={report} /><ReportResultTabs report={report} /></>);
+    const summary = screen.getByText("阅读前核对");
+    const guard = screen.getByTestId("report-firstscreen-guard");
+    expect(summary.compareDocumentPosition(guard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const tab of ["正文", "证据", "概览"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.getAllByText("阅读前核对")).toHaveLength(1);
+      for (const line of reportReadingSummary(report)) expect(container.textContent).toContain(line);
+      expect(guard.textContent).toContain("需要保留的完整限制");
+    }
+  });
+
+  it("校验附录保留完整原句、加注与规则，旧记录不补造编号", () => {
+    const original = "测试原句".repeat(40);
+    const report = baseReport({ valuation_language_repairs: [
+      { line: 3, sentence: original, notes: ["测试风险加注"], rules: ["D01"] },
+      { line: 5, sentence: "旧记录原句", notes: ["旧记录加注"] },
+    ] });
+    const { container } = render(<ReportResultTabs report={report} />);
+    fireEvent.click(screen.getByRole("tab", { name: "证据" }));
+    const md = buildStockReportMarkdown(report);
+    for (const line of valuationRepairDisplayLines(report)) {
+      expect(container.textContent).toContain(line);
+      expect(md).toContain(line);
+    }
+    expect(md).toContain(original);
+    expect(md).toContain("旧记录未记录编号");
+    expect(md.indexOf("## 估值表述校验附录")).toBeGreaterThan(md.indexOf("## 研报正文"));
+  });
+
+  it("概览和导出共用分母说明，旧记录缺口不得显示为已完成", () => {
+    const report = baseReport({ research_completeness: COMPLETENESS });
+    const { container } = render(<ReportFirstScreen report={report} />);
+    const md = buildStockReportMarkdown(report);
+    for (const line of reportReadingSummary(report)) {
+      expect(container.textContent).toContain(line);
+      expect(md).toContain(line);
+    }
+    expect(md).toContain("研究完成度：1/4（已完成研究项数／要求研究项数）");
+    expect(md).toContain("核心判断支撑：未记录可统计的判断校验结果");
+    expect(md.indexOf("## 阅读前核对")).toBeLessThan(md.indexOf("## 研报正文"));
+    expect(md).toContain("下一验证动作：未提供");
+  });
+
   it("四项逐条给出状态、已覆盖与缺口，字数提示只作辅助且排在完成度之后", () => {
     const { container } = render(<ReportQualityPanel report={baseReport({ research_completeness: COMPLETENESS })} />);
     expect(screen.getByText(/深研完成度 1\/4 · 关键研究项缺失/)).toBeTruthy();
@@ -83,7 +241,7 @@ describe("ResearchCompletenessCard · v39 Q19 深研完成度", () => {
 
   it("导出写「深研完成度」并点名缺失项与辅助性质的字数提示", () => {
     const markdown = buildStockReportMarkdown(baseReport({ research_completeness: COMPLETENESS }));
-    expect(markdown).toContain("## 深研完成度（系统写入，非模型产出）");
+    expect(markdown).toContain("## 深研完成度");
     expect(markdown).toContain("判定：关键研究项缺失（1/4）");
     expect(markdown).toContain("盈利增长拆解：缺失");
     expect(markdown).toContain("缺：业务量、价格、成本效率");
@@ -109,7 +267,7 @@ describe("摘要修订留痕 · v39 Q20", () => {
 
   it("反方检查否认后：导出同时给出标注句与模型原话，读者能看到改了什么", () => {
     const markdown = buildStockReportMarkdown(baseReport({ summary_overreach: revised }));
-    expect(markdown).toContain("## 摘要修订留痕（反方检查触发，服务端只加注不改写事实句）");
+    expect(markdown).toContain("## 摘要修订留痕");
     expect(markdown).toContain("反方：低 PE 不等于安全边际");
     expect(markdown).toContain("模型原话：PE 历史分位仅 1.7%，构成安全边际。");
     expect(markdown).toContain("执行摘要过度断言");
@@ -172,13 +330,81 @@ const DEEP = {
 };
 
 describe("DeepAnalysisBlocks · v39 Q16/Q17/Q18", () => {
+  it("可比样本数量冲突保留三指标分母及模式限制，内部原话只在审计留痕出现", () => {
+    const count_conflict = "模型自述可比样本 5 只，服务端同业快照为 38 只（同业池共 60 只，各口径可比数：pb_mrq:60、pe_ttm:38、ps_ttm:60）——按服务端口径解释中位数，自述只作留痕。";
+    const review = { sample_count: 38, model_claimed_sample_count: 5, server_peer_count: 60,
+      comparable_basis: { pb_mrq: 60, pe_ttm: 38, ps_ttm: 60 }, count_conflict,
+      note: `商业模式口径未核对，无法判断样本是否同模式。 ${count_conflict}`, exclusion_rule: "未声明剔除规则" };
+    expect(comparableReviewNote({ note: review.note, count_conflict })).toBe(review.note);
+    const report = baseReport({ valuation_divergence: { comparable_review: review } });
+    const { container } = render(<ReportQualityPanel report={report} />);
+    const reading = comparableReviewNote(review);
+    expect(reading).toContain("商业模式口径未核对");
+    expect(reading).toContain("模型列出 5 只，同业快照采用 38 只");
+    expect(reading).toContain("同业池共 60 只");
+    expect(reading).toContain("PB（MRQ） 60 只、PE（TTM） 38 只、PS（TTM） 60 只");
+    expect(container.textContent).toContain(reading);
+    const audit = screen.getByText("可比样本计算留痕").closest("details");
+    expect(audit?.textContent).toContain(review.note);
+    expect(audit?.hasAttribute("open")).toBe(false);
+    const md = buildStockReportMarkdown(report);
+    const body = md.slice(0, md.indexOf("## 生成记录附录"));
+    expect(body).toContain(reading);
+    expect(body).toContain(review.exclusion_rule);
+    expect(body).not.toContain(count_conflict);
+    expect(md.split(count_conflict)).toHaveLength(2);
+    const html = new DOMParser().parseFromString(markdownToHtml(md), "text/html");
+    expect(html.body.textContent).toContain(reading);
+    expect(html.body.textContent?.split(count_conflict)).toHaveLength(2);
+  });
+  it("贡献比例限制在三种阅读交付中一致，固定实现原话只留审计且不改其他注释", () => {
+    const note = "贡献比例缺少计算依据（basis/formula），按未量化处理；引用的来源不属于本次真实取到的来源：S9";
+    const report = baseReport({ earnings_growth: [{ factor: "volume", factor_label: "业务量", note }] });
+    const { container } = render(<ReportQualityPanel report={report} />);
+    const reading = earningsNoteDisplay(note);
+    expect(reading).toBe("贡献比例缺少计算依据或公式，按未量化处理；引用的来源不属于本次真实取到的来源：S9");
+    expect(earningsNoteDisplay("未取得分产品销量；无法判断销量影响")).toBe("未取得分产品销量；无法判断销量影响");
+    expect(container.textContent).toContain(reading);
+    const audit = screen.getByText("贡献比例校验留痕").closest("details");
+    expect(audit?.textContent).toContain(note);
+    expect(audit?.hasAttribute("open")).toBe(false);
+    const md = buildStockReportMarkdown(report);
+    const body = md.slice(0, md.indexOf("## 生成记录附录"));
+    expect(body).toContain(reading);
+    expect(body).not.toContain("basis/formula");
+    expect(md.split(note)).toHaveLength(2);
+    const html = new DOMParser().parseFromString(markdownToHtml(md), "text/html");
+    expect(html.body.textContent).toContain(reading);
+    expect(html.body.textContent?.split(note)).toHaveLength(2);
+  });
+  it("证据不足的因素在页面与导出保持同一状态，旧行明确未核验", () => {
+    const rows = [
+      { factor: "volume", factor_label: "业务量", effect: "缺产销量，无法验证" },
+      { factor: "price", factor_label: "价格", effect: "缺产品价格及价差，无法验证" },
+      { factor: "cost_efficiency", factor_label: "成本效率", effect: "缺成本费用拆分，无法验证" },
+    ].map((row) => ({ ...row, sources: ["S4"], source_note: "S4", contribution_pct: null,
+      analysis_state: "insufficient" as const, analysis_note: "已检查，证据不足以支持该因素分析。",
+      analysis_model: "test-factor-review" }));
+    const report = baseReport({ earnings_growth: rows });
+    const { container } = render(<ReportQualityPanel report={report} />);
+    const markdown = buildStockReportMarkdown(report);
+    const html = new DOMParser().parseFromString(markdownToHtml(markdown), "text/html");
+    const status = "已检查，证据不足；已检查，证据不足以支持该因素分析。（核验模型：test-factor-review）";
+    for (const output of [container.textContent ?? "", markdown, html.body.textContent ?? ""]) {
+      expect(output.split(status)).toHaveLength(4); // 三条缺口均留痕，不能被当作已完成分析。
+      for (const row of rows) expect(output).toContain(row.effect);
+      expect(output).not.toContain("证据核验支持完成分析");
+      expect(output).not.toContain("0%");
+    }
+    expect(earningsAnalysisDisplay({ factor: "volume" })).toBe("未核验，不计为完成分析");
+  });
   it("贡献比例算不出显示「未给出」而不是 0%；现金流只有倍数时结论自动降档；低 PE 不当安全边际", () => {
     render(<ReportQualityPanel report={baseReport(DEEP as Partial<StockReport>)} />);
     expect(screen.getByText("盈利增长拆解（贡献比例只在能从原始数据复算时才给）")).toBeTruthy();
     expect(screen.getByText("未给出")).toBeTruthy();
     expect(screen.getByText("20%")).toBeTruthy();
     expect(screen.queryByText("0%")).toBeNull();
-    expect(screen.getByText("未给出").getAttribute("title")).toContain("服务端不代填");
+    expect(screen.getByText("未给出").getAttribute("title")).toBe("缺少可复算的贡献比例，不补填数值");
     expect(screen.getByText("不足以判断盈利质量")).toBeTruthy();
     expect(screen.getByText(/正文出现「盈利质量较好」式结论/)).toBeTruthy();
     expect(screen.getByText(/可比样本 2（样本偏少）/).textContent).toContain("2");

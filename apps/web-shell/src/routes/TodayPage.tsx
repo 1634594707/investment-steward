@@ -7,6 +7,7 @@ import { renderCard } from "../cards/renderers";
 import type { AppView } from "../shell/nav";
 import { IconRefresh } from "../shell/icons";
 import { DemoNotice } from "../components/DemoNotice";
+import type { BriefNavigation } from "../components/BriefContext";
 
 interface Props {
   counts: { evidence: number; open: number; learning: number };
@@ -18,6 +19,7 @@ interface Props {
   /** 路线图 A1：演示模式明示（内容为界面示例，刷新即还原、不落库）。 */
   isDemo: boolean;
   onNavigate: (view: AppView) => void;
+  onOpenBriefItem?: (navigation: BriefNavigation) => void;
   onOpenEvidence: (evidenceId: string) => void;
   onMarkNotificationRead: (notificationId: string) => Promise<boolean>;
   onEvaluateNotifications: () => Promise<boolean>;
@@ -32,7 +34,7 @@ interface Props {
   /** 手动生成今日简报（POST /brief/today/generate，立即落库）。 */
   onGenerateBrief: () => Promise<TodayBrief | null>;
   /** 上手三步引导数据源（原则/持仓/研究问题是否已建立）。 */
-  onboarding: { hasPolicy: boolean; holdings: number; research: number };
+  onboarding: { hasPolicy: boolean; holdings: number; watchlist?: number; research: number };
 }
 
 const SIGNAL_TONE: Record<string, "mint" | "amber" | "blue"> = {
@@ -46,28 +48,32 @@ const SIGNAL_TONE: Record<string, "mint" | "amber" | "blue"> = {
  * `BriefItem.signal` 与通知行的 `action_mode` 同一套语义（observe/research/review_plan），
  * 按钮名称写明点击后的去处；无对应处理的 signal（如 no_action）只给「查看依据」，不猜去处。
  */
-const BRIEF_ACTION: Record<string, { label: string; view: AppView }> = {
+const BRIEF_ACTION: Record<string, { label: string; view: BriefNavigation["target"] }> = {
   observe: { label: "看持仓与逻辑", view: "investment" },
   research: { label: "去研究", view: "research" },
   review_plan: { label: "去复核", view: "review" },
 };
 
-export function TodayPage({ counts, evidence, brief, notifications, learningUnit, learningGoal, isDemo, onNavigate, onOpenEvidence, onMarkNotificationRead, onEvaluateNotifications, onSubmitLearning, onGenerateBrief, onboarding }: Props) {
+const EMPTY_LEARNING_DRAFT = { answer: "", reflection: "", saved: false, submitting: false };
+
+export function TodayPage({ counts, evidence, brief, notifications, learningUnit, learningGoal, isDemo, onNavigate, onOpenBriefItem, onOpenEvidence, onMarkNotificationRead, onEvaluateNotifications, onSubmitLearning, onGenerateBrief, onboarding }: Props) {
   const hasBrief = Boolean(brief && brief.has_personalization);
   // 上手三步：把散落在三个页面的空态入口收成一条进度引导（全部完成即隐藏）
   const steps = [
     { key: "policy", label: "① 建立投资原则", done: onboarding.hasPolicy, view: "investment" as AppView },
-    { key: "holding", label: "② 录入第一个标的", done: onboarding.holdings > 0, view: "investment" as AppView },
+    { key: "holding", label: "② 录入第一个标的", done: onboarding.holdings + (onboarding.watchlist ?? 0) > 0, view: "investment" as AppView },
     { key: "research", label: "③ 提出第一个研究问题", done: onboarding.research > 0, view: "research" as AppView },
   ];
   const doneCount = steps.filter((step) => step.done).length;
   const goalProgress = learningGoal
     ? `${String(learningGoal.completed_count).padStart(2, "0")} / ${String(learningGoal.target_count).padStart(2, "0")}`
     : "--";
-  const [answer, setAnswer] = useState("");
-  const [reflection, setReflection] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [learningDrafts, setLearningDrafts] = useState<Record<string, typeof EMPTY_LEARNING_DRAFT>>({});
+  const unitId = learningUnit?.unit_id ?? "";
+  const { answer, reflection, saved, submitting } = learningDrafts[unitId] ?? EMPTY_LEARNING_DRAFT;
+  function setDraft(patch: Partial<typeof EMPTY_LEARNING_DRAFT>) {
+    setLearningDrafts((current) => ({ ...current, [unitId]: { ...(current[unitId] ?? EMPTY_LEARNING_DRAFT), ...patch } }));
+  }
   const [briefBusy, setBriefBusy] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
 
@@ -82,7 +88,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
 
   async function handleSubmitLearning() {
     if (!learningUnit || submitting) return;
-    setSubmitting(true);
+    setDraft({ submitting: true });
     const ok = await onSubmitLearning({
       unit_id: learningUnit.unit_id,
       objective: learningUnit.objective,
@@ -91,11 +97,9 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
       user_answer: answer,
       reflection,
     });
-    setSubmitting(false);
+    setDraft({ submitting: false });
     if (ok) {
-      setSaved(true);
-      setAnswer("");
-      setReflection("");
+      setDraft({ saved: true, answer: "", reflection: "" });
     }
   }
 
@@ -109,6 +113,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
           <p>{hasBrief ? brief!.items[0]?.summary ?? "今日简报已更新" : brief?.empty_reason ?? "今日简报尚未生成"}</p>
           <div className="decision-context">
             <span>{onboarding.holdings} 个持仓标的</span>
+            <span>{onboarding.watchlist ?? 0} 个自选标的</span>
             <span>{onboarding.hasPolicy ? "已建立投资原则" : "待建立投资原则"}</span>
           </div>
         </div>
@@ -168,7 +173,11 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
                       <span className="action-item-missing">暂无依据可查</span>
                     )}
                     {BRIEF_ACTION[item.signal] && (
-                      <button className="text-btn" onClick={() => onNavigate(BRIEF_ACTION[item.signal]!.view)}>
+                      <button className="text-btn" onClick={() => {
+                        const target = BRIEF_ACTION[item.signal]!.view;
+                        if (onOpenBriefItem) onOpenBriefItem({ target, item });
+                        else onNavigate(target);
+                      }}>
                         {BRIEF_ACTION[item.signal]!.label}
                       </button>
                     )}
@@ -248,14 +257,14 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
             )}
             <p className="learning-guidance">{learningUnit.guidance}</p>
             {saved ? (
-              <p className="learning-saved">已保存本次练习与反思，目标进度已更新。</p>
+              <p className="learning-saved">已保存本次练习与反思，可在复盘页查看记录。</p>
             ) : (
               <div className="learning-form">
                 <label>
                   <span>你的回答</span>
                   <textarea
                     value={answer}
-                    onChange={(event) => setAnswer(event.target.value)}
+                    onChange={(event) => setDraft({ answer: event.target.value })}
                     placeholder="用自己的话重述条件并给出判断…"
                     rows={3}
                   />
@@ -264,7 +273,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
                   <span>反思（可导出）</span>
                   <textarea
                     value={reflection}
-                    onChange={(event) => setReflection(event.target.value)}
+                    onChange={(event) => setDraft({ reflection: event.target.value })}
                     placeholder="记录你学到或想修正的地方…"
                     rows={3}
                   />

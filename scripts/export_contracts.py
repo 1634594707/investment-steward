@@ -110,10 +110,16 @@ def public_models() -> dict[str, type]:
 
     with tempfile.TemporaryDirectory(prefix="contracts-", ignore_cleanup_errors=True) as tmp:
         app = create_app(CoreSettings(session_token="contracts-token", data_dir=Path(tmp)))
-        found: dict[str, type] = {}
-        for _route, leaves in _response_models(app):
-            for leaf in leaves:
-                found[leaf.__name__] = leaf
+        try:
+            found: dict[str, type] = {}
+            for _route, leaves in _response_models(app):
+                for leaf in leaves:
+                    found[leaf.__name__] = leaf
+        finally:
+            # 必须显式关闭：SQLAlchemy engine 持有连接池，Windows 下 SQLite 文件仍被占用时
+            # TemporaryDirectory 删除会撞 WinError 32，ignore_cleanup_errors 把这个失败吞掉，
+            # 于是每跑一次契约检查就残留一个 contracts-<随机>/steward.sqlite3（实测累积过 117 个）。
+            app.state.core.database.close()
     return found
 
 
@@ -125,11 +131,14 @@ def route_index(models: dict[str, type]) -> dict[str, list[str]]:
     index: dict[str, list[str]] = {name: [] for name in models}
     with tempfile.TemporaryDirectory(prefix="contracts-", ignore_cleanup_errors=True) as tmp:
         app = create_app(CoreSettings(session_token="contracts-token", data_dir=Path(tmp)))
-        for route, leaves in _response_models(app):
-            methods = sorted(set(getattr(route, "methods", set())) - {"HEAD", "OPTIONS"})
-            for leaf in leaves:
-                for method in methods:
-                    index.setdefault(leaf.__name__, []).append(f"{method} {route.path}")
+        try:
+            for route, leaves in _response_models(app):
+                methods = sorted(set(getattr(route, "methods", set())) - {"HEAD", "OPTIONS"})
+                for leaf in leaves:
+                    for method in methods:
+                        index.setdefault(leaf.__name__, []).append(f"{method} {route.path}")
+        finally:
+            app.state.core.database.close()
     for key, value in index.items():
         index[key] = sorted(set(value))
     return index

@@ -738,6 +738,7 @@ export interface LibraryPlan {
 
 /** 宏观雷达单指标读数：pending=未接入/无数据，绝不编造数值（ADR-0006）。 */
 export interface MacroIndicatorReading {
+  frequency?: string | null;
   indicator: string;
   label: string;
   /** growth / employment / inflation / monetary / other */

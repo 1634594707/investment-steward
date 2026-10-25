@@ -9,19 +9,19 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("./fonts/noto-sans-sc-400-subset.woff2") format("woff2");
+  src: url("./noto-sans-sc-400-subset.woff2") format("woff2");
 }
 @font-face {
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("./fonts/noto-sans-sc-500-subset.woff2") format("woff2");
+  src: url("./noto-sans-sc-500-subset.woff2") format("woff2");
 }
 @font-face {
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("./fonts/noto-sans-sc-600-subset.woff2") format("woff2");
+  src: url("./noto-sans-sc-600-subset.woff2") format("woff2");
 }

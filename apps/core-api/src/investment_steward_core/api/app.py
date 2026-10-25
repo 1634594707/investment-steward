@@ -6,10 +6,10 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
@@ -142,13 +142,19 @@ from investment_steward_core.market_feed import (
     fetch_cn_market_full_a,
     fetch_cn_sector_list,
     fetch_cn_sector_members,
+    kline_adjustment,
+    kline_adjustment_label,
     score_market_rows,
 )
 from investment_steward_core.news_evidence import (
+    ANNOUNCEMENT_BODY_CHARS,
     NewsError,
     NoticeError,
+    announcement_body_targets,
+    clean_notice_content,
     content_hash_for,
     content_hash_for_news,
+    fetch_announcement_bodies,
     fetch_cn_announcements,
     fetch_cn_news,
     parse_notice_timestamp,
@@ -176,6 +182,8 @@ from investment_steward_core import (
     quant_strategy_packs,
     quant_track_records,
     report_quality,
+    # G1（2026-09-27 路线图）：定向修复的唯一实现，生成路径与手动修复端点共用。
+    report_repair,
     tactics_ai,
     tactics_score,
     valuation_evidence,
@@ -553,6 +561,39 @@ class StockResearchReportRequest(BaseModel):
     # v31 §2.4：按失败类型自动修复一轮（缺摘要只写摘要 / 缺一节只补该节 / 缺两节以上重跑全文），
     # 修复后重跑同一闸门；仍不完整保留草稿。成本敏感场景可置 false 关闭（collab 不参与，走阶段重试）。
     with_auto_repair: bool = True
+
+
+class ReportRepairRequest(BaseModel):
+    """G1（研报产出与交付链路路线图 2026-09-27）：对已落库报告执行一次**定向修复**。
+
+    只接受三条**低成本**路径——它们都只需落库正文，不需要当时的完整证据包：
+
+    - `summary_only`：摘要为空 → 从正文补写；落在目标区间外 → 按方向改写（四句话结构）；
+    - `conclusion_only`：补写一句话结论（首屏结论卡的第一行）；
+    - `section_only`：只重新生成 `section` 指定的缺失小节（缺两节及以上时请重新生成整份）。
+
+    `full_rerun` **刻意不开放**：整稿重跑需要当时的 K 线/新闻/公告/财务/估值快照，
+    落库 payload 里没有；谎称能跑只会烧一次钱再失败。前端对这类告警显式禁用并指路。
+    """
+
+    strategy: Literal["summary_only", "conclusion_only", "section_only"]
+    # 仅 `section_only` 使用：要补写的小节名（缺哪节补哪节）。
+    section: str = Field(default="", max_length=40)
+
+
+class WatchpointReviewRequest(BaseModel):
+    """G2（研报产出与交付链路路线图 2026-09-27）：锚定型验证点的**手工复核**。
+
+    只适用于「锚定事件」型验证点（无确切日期，如「三季报披露后」）。带确切日期的验证点
+    会被幂等落成 `verifiable_judgments`，走既有的 `POST /judgments/{id}/verify`——
+    两条链路不重叠，避免同一件事有两种写法。
+
+    `result` 与回填三态**共用词表**（`VerificationResult`），这样「人工判定」与
+    「到期回填」在队列里说的是同一套话，不会出现「成立 / 已验证成立」两种标签。
+    """
+
+    result: Literal["verified", "refuted", "insufficient_data"]
+    outcome: str = Field(default="", max_length=4000)
 
 
 class CompareSynthesisItem(BaseModel):
@@ -1357,6 +1398,47 @@ def _s4_financial_lines(fin_rows: list[Any]) -> list[str]:
     ]
 
 
+def _announcement_body_segment(
+    items: Sequence[Any], bodies: Mapping[str, Any], *, chars: int = ANNOUNCEMENT_BODY_CHARS
+) -> tuple[str, list[str], str]:
+    """D1：把取到的公告正文拼成 S3A 证据块，返回 `(文本, 用到的 art_code 列表, 原文链接)`。
+
+    三条硬边界：
+    - 只用 `bodies` 里**确实取到**的条目：取不到的那一条整条不出现在这里（它仍走 S3 标题口径），
+      绝不拿标题或空串冒充正文；
+    - 逐条按 `chars` 截断，截断处**显式标注**（不静默截），读者才知道自己看到的是节选；
+    - 优先返回实际使用正文的 PDF 链接，缺失时返回对应公告已有页面地址；不借用失败条目。
+    """
+    blocks: list[str] = []
+    used: list[str] = []
+    attach = ""
+    page = ""
+    for item in items:
+        code = str(getattr(item, "art_code", "") or "")
+        body = bodies.get(code)
+        if body is None:
+            continue
+        text = str(getattr(body, "content", "") or "").strip()
+        if not text:
+            continue
+        if len(text) > chars:
+            text = text[:chars] + "…（正文已按预算截断，完整原文见来源链接）"
+        blocks.append(
+            f"- [{str(getattr(item, 'notice_date_raw', '') or '')[:10]}] "
+            f"{getattr(item, 'title', '')}\n{text}"
+        )
+        used.append(code)
+        if not page:
+            page = str(getattr(item, "url", "") or "").strip()
+        if not attach:
+            candidate = str(getattr(body, "attach_url", "") or "").strip()
+            if candidate:
+                attach = candidate
+    if not blocks:
+        return "", [], ""
+    return "公告正文原文（数据商转载的交易所披露全文）：\n" + "\n".join(blocks), used, attach or page
+
+
 def _recent_signals_with_state(signals: list[dict[str, Any]], bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """S1 证据快照的近期信号附上确定性四态状态（§五 颜色联动 2026-09-13）。
 
@@ -1402,6 +1484,10 @@ class _ScanProgress:
         self._job_id = job_id
         self.done = 0
         self.total = 0
+
+    @property
+    def job_id(self) -> str:
+        return self._job_id
 
     def add_total(self, count: int) -> None:
         self.total += count
@@ -1656,7 +1742,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             if requested is not None and export_key not in requested and table not in requested:
                 continue
             rows = body.data.get(export_key)
-            if isinstance(rows, list) and rows:
+            if isinstance(rows, list) and (rows or body.mode == "replace"):
                 resolved.append((export_key, table))
         unknown_tables = [name for name in (requested or []) if name not in core.database.IMPORT_TABLE_MAP and name not in core.database.IMPORT_TABLE_MAP.values()]
         if unknown_tables:
@@ -1665,6 +1751,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
         # 恢复前强制备份：失败即中止（绝不无回退点地改库）。
         try:
             backup_path = rotate_backup(core.database.path)
+            if backup_path is None:
+                raise RuntimeError("未生成恢复前备份")
         except Exception as error:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"恢复前备份失败，已中止恢复：{error}") from error
 
@@ -5677,6 +5765,19 @@ def create_app(settings: CoreSettings) -> FastAPI:
 
     @app.post("/tactics/scan")
     def tactics_scan(body: TacticsScanRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        """执行日常扫描，为每次调用保留独立批次及真实终态。"""
+        job_id = str(uuid4())
+        fingerprint = hashlib.sha256(body.model_dump_json().encode("utf-8")).hexdigest()
+        core.database.create_scan_job(job_id, fingerprint, body.model_dump(mode="json"))
+        try:
+            summary = _execute_daily_scan(body, core, job_id)
+        except Exception as error:
+            core.database.finish_scan_job(job_id, "error", {"detail": str(error)})
+            raise
+        core.database.finish_scan_job(job_id, "done", summary)
+        return summary
+
+    def _execute_daily_scan(body: TacticsScanRequest, core: CoreState, job_id: str) -> dict[str, object]:
         """按「观察清单 + 持仓 + 手动列表」扫描战法命中；逐票取数、单票失败不拖垮整体。
 
         命中口径（v24）：**最近 recent_bars 根 K 线**内出现该战法信号（按 K 线日期下界过滤）。
@@ -5703,6 +5804,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         if "manual" in body.sources:
             for symbol in body.symbols:
                 _push(symbol, "")
+        core.database.update_scan_job_progress(job_id, 0, len(candidates))
         # JV05：本端点走的是**自己的**扫描循环（不是 `_scan_run_engine`——那只服务市场扫描的
         # boards/all/sectors 三模式），所以必须在这里单独接一次。真机验证时才发现漏了它：
         # 「观察清单 + 持仓 + 手动列表」是 2026-09-07 拍板的**日常主用范围**，不接等于
@@ -5723,16 +5825,24 @@ def create_app(settings: CoreSettings) -> FastAPI:
             }
 
         results: list[dict[str, object]] = []
+        def _record_daily(row: dict[str, object], bars: list[dict[str, object]] | None = None) -> None:
+            core.database.insert_scan_observation(
+                job_id, {"request_body": body.model_dump(mode="json"), "result": row,
+                       "bars": bars, "adjust": kline_adjustment(bars)},
+            )
+            results.append(row)
+            core.database.update_scan_job_progress(job_id, len(results), len(candidates))
+
         for index, (symbol, name) in enumerate(candidates):
             if index > 0:
                 time.sleep(0.15)  # 公开行情接口限速礼貌间隔
             try:
                 bars, provider = _tactic_bars(core, symbol)
             except HTTPException as error:
-                results.append({"symbol": symbol, "name": name, "ok": False, "error": str(error.detail)})
+                _record_daily({"symbol": symbol, "name": name, "ok": False, "error": str(error.detail)})
                 continue
             except FeedError as error:
-                results.append({"symbol": symbol, "name": name, "ok": False, "error": f"K 线取数失败：{error}"})
+                _record_daily({"symbol": symbol, "name": name, "ok": False, "error": f"K 线取数失败：{error}"})
                 continue
             snap = stock_tactics.snapshot(bars)
             scored = _tactic_score_row(bars, snap, body.recent_bars)
@@ -5748,7 +5858,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             if reviewer is not None:
                 # 与 `_scan_run_engine` 同口径：在**拉到 K 线的同一处**顺带算出摘要，不另起一遍取数。
                 row["_jev_bars_tail"] = tactics_ai.jev_scan_bars_tail(bars)
-            results.append(row)
+            _record_daily(row, bars)
         # v24：排序主键改为战法质量分（不再用命中数量——十字星等恒命中形态会稀释该指标）。
         # v28：改用共享门槛键（先过硬门再按 rank_score）；数据齐全时与 tactic_score 同序，向后兼容。
         results.sort(key=_tactics_rank_key, reverse=True)
@@ -5807,15 +5917,27 @@ def create_app(settings: CoreSettings) -> FastAPI:
         pace = _RequestPacer(interval)
 
         def _process_one(symbol: str, name: str) -> dict[str, object]:
+            def _record(row: dict[str, object], bars: list[dict[str, object]] | None = None) -> dict[str, object]:
+                core.database.insert_scan_observation(
+                    progress.job_id if progress is not None else None,
+                    {"request_body": body.model_dump(mode="json"), "result": row,
+                     "bars": bars, "adjust": kline_adjustment(bars), "sector_context": sector_context,
+                     "sector_meta": sector_meta, "count_progress": count_progress},
+                )
+                return row
+
             if progress is not None:
                 progress.raise_if_cancelled()
             pace.wait()
+            # Cancellation may have arrived while this request was waiting for its rate slot.
+            if progress is not None:
+                progress.raise_if_cancelled()
             try:
                 bars, provider = _tactic_bars(core, symbol)
             except HTTPException as error:
-                return {"symbol": symbol, "name": name, "ok": False, "error": str(error.detail)}
+                return _record({"symbol": symbol, "name": name, "ok": False, "error": str(error.detail)})
             except FeedError as error:
-                return {"symbol": symbol, "name": name, "ok": False, "error": f"K 线取数失败：{error}"}
+                return _record({"symbol": symbol, "name": name, "ok": False, "error": f"K 线取数失败：{error}"})
             snap = stock_tactics.snapshot(bars, tactic_ids=selected_ids)
             scored = _tactic_score_row(bars, snap, body.recent_bars, sector_context=sector_context)
             row: dict[str, object] = {
@@ -5836,7 +5958,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             # 否则该票质量分会无声偏低，而排名照常输出、界面无从分辨。
             if snap.get("degraded_tactics"):
                 row["degraded_tactics"] = snap["degraded_tactics"]
-            return row
+            return _record(row, bars)
 
         if concurrency > 1:
             # D03：并发模式（≤4）——K 线取数为 I/O，线程池即够；结果按提交顺序回填，
@@ -6544,7 +6666,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             as_of=bars[-1].timestamp,
             is_demo=False,
             limitations=[
-                f"K 线来自公开行情接口（前复权{_period_label[period]}），{_period_label[period]}在收盘后即含当期最新蜡烛；非实时 tick，以供应商为准。",
+                f"K 线来自公开行情接口（{kline_adjustment_label(rows)}，{_period_label[period]}），{_period_label[period]}在收盘后即含当期最新蜡烛；非实时 tick，以供应商为准。",
                 "离线或接口异常时自动回退为演示数据，界面会以「演示」标注。",
             ],
         )
@@ -6643,6 +6765,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
 
         网关：要求 cn-market-data 插件 ENABLED（与行情端点一致）；取数失败时不生成
         任何证据，返回 available=False 与降级说明（ADR-0004 不变量 #4，不编造）。
+
+        D1（研报产出与交付链路路线图 2026-09-27）：除标题外**尽力抓取披露正文全文**
+        （最近 N 条 + art_code 形状合格），落进 `summary` 与 `raw_locator`。
+        正文取到的条目 `source_dataset_version` 记为 `np-anotice-stock+content`，
+        取不到的保持 `np-anotice-stock`——**不拿标题冒充正文**，也不因某条取不到就让整批降级。
         """
         installation = core.database.get_plugin_installation("official.cn-market-data")
         if installation is None or installation.state != PluginInstallationState.ENABLED:
@@ -6660,12 +6787,32 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 source_name="中国市场公告（东方财富）",
                 limitations=["公告取数失败，未生成任何证据；请稍后重试（详见 ADR-0004 不进行再分发）。"],
             )
+        # D1：正文是加分项——整批不因某条正文取不到而一起降级，故逐条尽力、失败只跳过。
+        body_targets = announcement_body_targets(items)
+        bodies = fetch_announcement_bodies(body_targets) if body_targets else {}
+
         now = datetime.now(UTC)
-        produced = []
+        created: list[Evidence] = []
+        upgraded: list[Evidence] = []
         for item in items:
             collected = now
             published = parse_notice_timestamp(item.notice_date_raw) or collected
-            summary = "・".join(filter(None, (item.title, item.ann_type))) or item.title
+            header = "・".join(filter(None, (item.title, item.ann_type))) or item.title
+            body = bodies.get(item.art_code)
+            # 正文在前、标题行在首：summary 上限 10000 字，超出按上限截（模型侧另有更紧的预算）。
+            summary = f"{header}\n{body.content}" if body is not None else header
+            if len(summary) > 10000:
+                summary = summary[:10000]
+            locator = json.loads(
+                raw_locator_for(
+                    "https://np-anotice-stock.eastmoney.com/api/security/ann", symbol, item
+                )
+            )
+            locator["body_available"] = body is not None
+            if body is not None:
+                locator["content_api"] = "https://np-cnotice-stock.eastmoney.com/api/content/ann"
+                if body.attach_url:
+                    locator["attach_url"] = body.attach_url
             evidence = Evidence(
                 evidence_id=uuid4(),
                 tenant_id=core.local_user_id,
@@ -6678,35 +6825,69 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 published_at=published,
                 observed_at=collected,
                 collected_at=collected,
-                source_dataset_version="np-anotice-stock",
+                source_dataset_version="np-anotice-stock+content" if body is not None else "np-anotice-stock",
                 producer_plugin_id="official.cn-market-data",
                 producer_release="0.1.0",
                 schema_version="1.0",
                 summary=summary,
-                raw_locator=raw_locator_for("https://np-anotice-stock.eastmoney.com/api/security/ann", symbol, item),
+                raw_locator=json.dumps(locator, ensure_ascii=False),
                 content_hash=content_hash_for(symbol, item.art_code, item.title, item.notice_date_raw),
                 relation="unknown",
                 freshness="as_of_fetch",
                 quality_flags=[],
-                limitations=["公告为原始稿件标题，正文需回链原始来源阅读（art_code 定位）。"],
+                limitations=(
+                    [
+                        "公告正文为数据商转载的交易所披露原文（含董事会保证声明与落款），不是摘要；"
+                        "关键数字请与原文核对（raw_locator.attach_url 为原文 PDF）。",
+                    ]
+                    if body is not None
+                    else ["公告为原始稿件标题，正文本次未取到；正文需回链原始来源阅读（art_code 定位）。"]
+                ),
                 status="active",
             )
             # v23 拉取查重：同租户同内容哈希已入账即跳过（换号重发/重复拉取不再重复入库）。
-            if core.database.get_evidence_by_hash(evidence.content_hash, core.local_user_id) is not None:
+            existing = core.database.get_evidence_by_hash(evidence.content_hash, core.local_user_id)
+            if existing is not None:
+                # D1 升级出口：历史记录只有标题（正文抓取上线前入账），而本次拿到了正文 →
+                # 原地更新 payload（id 与内容哈希都不变，去重口径不受影响）。没有这个出口，
+                # 老用户的账本会永久停在「仅标题」，与报告链路已经取到的全文不一致。
+                if body is not None and "content" not in (existing.source_dataset_version or ""):
+                    updated = evidence.model_copy(update={"evidence_id": existing.evidence_id})
+                    if core.database.update_evidence(updated):
+                        upgraded.append(updated)
                 continue
             core.database.insert_evidence(evidence)
-            produced.append(evidence)
-        for evidence in produced:
+            created.append(evidence)
+        for evidence in created:
             _audit(core, "evidence.created", "evidence", str(evidence.evidence_id))
+        for evidence in upgraded:
+            _audit(core, "evidence.announcement.body_upgraded", "evidence", str(evidence.evidence_id))
+
+        limitations = [
+            "公告来自东方财富公开网页接口，仅作本地个人复盘证据，不在用户允许外再分发。",
+            "公告非实时推送，以供应商发布为准；正文原文请回链 art_code 定位。",
+        ]
+        if bodies:
+            limitations.append(
+                f"本次 {len(bodies)} 条已附披露正文全文（数据商转载自交易所披露原文，非摘要）；"
+                "关键数字请与原文 PDF 核对。"
+            )
+        if upgraded:
+            limitations.append(
+                f"本次 {len(upgraded)} 条历史「仅标题」记录已原地升级为含正文"
+                "（内容哈希不变，不产生重复证据）。"
+            )
+        if len(bodies) < len(body_targets):
+            limitations.append(
+                f"正文抓取 {len(body_targets)} 条尝试、{len(bodies)} 条成功，"
+                "其余仍为标题口径（不编造正文，稍后可重试）。"
+            )
         return AnnouncementBatch(
             instrument=symbol,
             available=True,
-            entries=produced,
+            entries=[*created, *upgraded],
             source_name="中国市场公告（东方财富）",
-            limitations=[
-                "公告来自东方财富公开网页接口，仅作本地个人复盘证据，不在用户允许外再分发。",
-                "公告非实时推送，以供应商发布为准；正文原文请回链 art_code 定位。",
-            ],
+            limitations=limitations,
         )
 
     @app.get("/evidence/news/{symbol:path}", response_model=AnnouncementBatch)
@@ -6879,10 +7060,20 @@ def create_app(settings: CoreSettings) -> FastAPI:
         一并带出，供质量闸门做「数据日期是否过期」判定、供首屏结论卡拼「同业样本 N 只」标签：
         - `source_asof`：{S1..S5 -> 该来源中出现的**最新数据日期**}，解析不出一律不填（不猜）；
         - `peer_count`：S5 快照的同业样本数（取数结果，非模型自述），取数失败为 None。
+
+        R2（研报产出与交付链路路线图 2026-09-27）：新增 `source_links` —— {来源编号 -> 该来源的
+        **真实可访问链接**}。此前个股研报响应体既无 `source_links` 也无 `evidence`，导致
+        `followup_research.build_source_catalog` 的链接列**恒为空**（「来源目录（可回查）」名不副实）。
+        取值只搬这里**确实拿到**的 URL（新闻/公告来自取数条目自身的 url，与 `/evidence/*` 落库的
+        `Evidence.source_uri` 同源；财报沿用固定的东财报表入口），取不到就**不写这个键**——
+        沿用「不猜 URL、不拼 URL」原则。S1/S5/S6 没有面向用户的原文页，一律留空。
         """
         sources: dict[str, str] = {}
         source_errors: dict[str, str] = {}
         source_asof: dict[str, str] = {}
+        # R2：来源编号 -> 真实链接；只有取到 URL 才写键。
+        source_links: dict[str, str] = {}
+        source_documents: dict[str, list[dict[str, str]]] = {}
         peer_count: int | None = None
         tech_summary = ""
         # v29（三次方案 §3）：价格量能图数据包 —— 取数成功才填，失败保持空（前端如实降级，不画空图）。
@@ -6965,22 +7156,74 @@ def create_app(settings: CoreSettings) -> FastAPI:
 
         try:
             news_items = fetch_cn_news(symbol, limit=news_limit)
+            source_documents["S2"] = [
+                {"title": item.title, "data_date": item.published_raw, "url": getattr(item, "url", "") or ""}
+                for item in news_items
+            ]
             lines = [f"- [{item.published_raw or '日期未知'}] {item.title}" for item in news_items]
             sources["S2"] = "近期新闻（东方财富）：\n" + ("\n".join(lines) if lines else "- 无检索结果")
             # v28：S2 数据日期 = 新闻里出现的最新发布日期（解析不出就不填，不猜今天）。
             news_latest = _latest_date_of([item.published_raw for item in news_items])
             if news_latest:
                 source_asof["S2"] = news_latest
+            # R2：新闻链接取第一条**真实带 url** 的条目（与 /evidence/news 落库的 source_uri 同源）。
+            # 用 getattr 兜底：取数条目的形状由数据源决定，缺 url 字段时当作「取不到链接」，不炸。
+            news_url = next((str(getattr(item, "url", "") or "").strip() for item in news_items
+                             if str(getattr(item, "url", "") or "").strip()), "")
+            if news_url:
+                source_links["S2"] = news_url
         except Exception as error:  # 单来源失败只降级该来源（NewsError 或底层网络异常）
             source_errors["news"] = f"新闻取数失败：{error}"
 
         try:
             ann_items = fetch_cn_announcements(symbol, limit=announcement_limit)
+            source_documents["S3"] = [
+                {"title": item.title, "data_date": item.notice_date_raw, "url": item.url or ""}
+                for item in ann_items
+            ]
             lines = [f"- [{item.notice_date_raw or '日期未知'}] {item.title}" for item in ann_items]
             sources["S3"] = "近期公告（东方财富，标题口径）：\n" + ("\n".join(lines) if lines else "- 无公告")
             ann_latest = _latest_date_of([item.notice_date_raw for item in ann_items])
             if ann_latest:
                 source_asof["S3"] = ann_latest
+            # R2：公告链接是 art_code 拼出的原文页（Announcement.url），与 /evidence/announcements 同源。
+            ann_url = next((str(getattr(item, "url", "") or "").strip() for item in ann_items
+                            if str(getattr(item, "url", "") or "").strip()), "")
+            if ann_url:
+                source_links["S3"] = ann_url
+
+            # —— D1（研报产出与交付链路路线图 2026-09-27）：公告正文抓取 → A 级来源 S3A ——
+            # 此前 S3 只有标题，`SOURCE_PROFILES["S3"]` 只能判 B 级，整条链路拿不到任何 A 级；
+            # 而 A 股投资者最认的恰是交易所披露原文。这里按「最近 N 条 + art_code 形状合格」取正文：
+            #   · 取到 → 追加 S3A（A 级，与 S3 并列；coverage 相同，差别在可信度）；
+            #   · 一条都没取到 → **不建 S3A**（不生成空壳、不拿标题冒充全文），S3 仍是 B 级；
+            #   · 部分失败 → 只降级那几条，并把「N 条尝试 / M 条成功」如实写进 source_errors。
+            body_targets = announcement_body_targets(ann_items)
+            if body_targets:
+                bodies = fetch_announcement_bodies(body_targets)
+                segment, body_codes, attach_url = _announcement_body_segment(body_targets, bodies)
+                if segment:
+                    sources["S3A"] = segment
+                    source_documents["S3A"] = [
+                        {"title": item.title, "data_date": item.notice_date_raw,
+                         "url": bodies[item.art_code].attach_url or item.url or ""}
+                        for item in body_targets if item.art_code in body_codes
+                    ]
+                    body_latest = _latest_date_of([
+                        item.notice_date_raw for item in body_targets
+                        if str(getattr(item, "art_code", "") or "") in set(body_codes)
+                    ])
+                    if body_latest:
+                        source_asof["S3A"] = body_latest
+                    # 链接仅来自实际采用的正文条目，不借用标题列表中其他公告的页面。
+                    if attach_url:
+                        source_links["S3A"] = attach_url
+                failed = len(body_targets) - len(body_codes)
+                if failed:
+                    source_errors["announcement_body"] = (
+                        f"公告正文抓取：{len(body_targets)} 条尝试、{len(body_codes)} 条成功，"
+                        f"{failed} 条失败（失败条目仍按 S3 标题口径、B 级处理，不编造正文）。"
+                    )
         except Exception as error:  # 单来源失败只降级该来源（NoticeError 或底层网络异常）
             source_errors["announcements"] = f"公告取数失败：{error}"
 
@@ -6998,6 +7241,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
             periods = [value for value in periods if len(value) == 10 and value[4] == "-"]
             if periods:
                 source_asof["S4"] = max(periods)
+            # R2：财报沿用 /evidence/financials 落库时用的同一固定入口（不另拼 URL）。
+            if fin_rows:
+                source_links["S4"] = "https://data.eastmoney.com/bbsj/"
         except Exception as error:
             source_errors["financials"] = f"财报取数失败：{error}"
 
@@ -7046,7 +7292,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
 
         # —— v29（三次方案 §3）：图表数据包 —— 纯取数结果的搬运与整型，不在服务端做任何主观判断；
         # 每块独立降级，取不到就缺省（前端如实显示「数据不可用」，绝不画空图冒充）。
-        # 1) 价格量能图：最近 120 根日线（前复权：东财 fqt=1 / 腾讯 qfq），MA5/20/60 按全序列滚动后截尾。
+        # 1) 价格量能图：最近 120 根日线，复权口径按实际行情元数据；MA5/20/60 按全序列滚动后截尾。
         price_chart: dict[str, object] = {}
         if price_bars:
             try:
@@ -7076,7 +7322,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 ]
                 ma_full = {w: _rolling_ma(closes_all, w) for w in (5, 20, 60)}
                 price_chart = {
-                    "adjust": "前复权",
+                    "adjust": kline_adjustment_label(price_bars),
                     "provider": kline_provider,
                     "candles": candles,
                     "ma5": ma_full[5][-tail_n:],
@@ -7126,6 +7372,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "S1": kline_provider,
             "S2": "东方财富",
             "S3": "东方财富",
+            # D1：S3A 与 S3 同源（东财公告接口族），只是取到的是正文全文而不是标题。
+            "S3A": "东方财富",
             "S4": "东方财富 F10",
             "S5": "东方财富 datacenter（RPT_VALUEANALYSIS_DET）",
         }
@@ -7143,6 +7391,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "source_asof": source_asof,
             "peer_count": peer_count,
             "source_meta": source_meta,
+            # R2：来源编号 -> 真实链接（取不到就不出现在这个 dict 里）。
+            "source_links": source_links,
+            "source_documents": source_documents,
             "price_chart": price_chart,
             "quarterly": quarterly,
             "valuation_chart": valuation_chart,
@@ -7285,20 +7536,30 @@ def create_app(settings: CoreSettings) -> FastAPI:
             parsed["report"] = _aligned_report
         summary_rewrite: dict[str, object] = {"needed": False, "rewritten": False}
         _summary_text = str(parsed.get("executive_summary", "")).strip()
+        _summary_original_chars = report_quality.report_char_count(_summary_text)
         # D04：超出**目标上界**（165）即重写摘要（原策略只在超 180 硬上限时重写）。
-        if report_quality.needs_summary_rewrite(_summary_text):
+        # G1（研报产出与交付链路路线图 2026-09-27）：**低于目标下界（150）同样重写**——
+        # 过短与过长是同一缺陷的两个方向（缺「结论/证据/反证/验证动作」四要素之一），
+        # 修复动作也相同；样报 002468 的 118 字摘要此前只落一条告警就照发。
+        _rewrite_reason = report_quality.summary_rewrite_reason(_summary_text)
+        if _rewrite_reason is not None:
             summary_rewrite = {
                 "needed": True,
                 "rewritten": False,
-                "original_chars": report_quality.report_char_count(_summary_text),
+                "original_chars": _summary_original_chars,
                 "hard_limit": report_quality.MAX_SUMMARY_CHARS,
+                "target_min": report_quality.SUMMARY_TARGET_MIN,
                 "target_max": report_quality.SUMMARY_TARGET_MAX,
-                "reason": "summary_over_target",
+                "reason": _rewrite_reason,
             }
+            _band_note = (
+                f"超出目标区间 {report_quality.SUMMARY_TARGET_MIN}-{report_quality.SUMMARY_TARGET_MAX} 字"
+                if _rewrite_reason == "summary_over_target"
+                else f"低于目标区间 {report_quality.SUMMARY_TARGET_MIN}-{report_quality.SUMMARY_TARGET_MAX} 字"
+            )
             rewrite_user = (
                 f"研报标题：{str(parsed.get('title', '')).strip()}\n"
-                f"原执行摘要（{report_quality.report_char_count(_summary_text)} 字，"
-                f"超出目标区间 {report_quality.SUMMARY_TARGET_MIN}-{report_quality.SUMMARY_TARGET_MAX} 字）：\n"
+                f"原执行摘要（{_summary_original_chars} 字，{_band_note}）：\n"
                 f"{_summary_text}\n\n"
                 "请把这份执行摘要改写为四句话结构、150-165 字："
                 "①方向性结论 ②最强的基本面或估值依据 ③最重要的技术面或资金面依据 ④最大的风险/反证。"
@@ -7316,23 +7577,27 @@ def create_app(settings: CoreSettings) -> FastAPI:
                  purpose="研报",)
                 rewritten = (rewrite_reply.content or "").strip()
                 rewritten_chars = report_quality.report_char_count(rewritten)
-                # 接受条件：落进目标区间；或**确实变短且未超硬上限**（改善版保留，软告警继续标注）。
+                # 接受条件：落进目标区间；或**朝正确方向改善**且未超硬上限（改善版保留，软告警继续标注）。
+                # 「正确方向」按原因分支：过长 → 变短；过短 → 变长（G1 新增的后半个分支）。
+                _in_target_band = (
+                    report_quality.SUMMARY_TARGET_MIN <= rewritten_chars <= report_quality.SUMMARY_TARGET_MAX
+                )
+                _improved = (
+                    rewritten_chars < _summary_original_chars
+                    if _rewrite_reason == "summary_over_target"
+                    else rewritten_chars > _summary_original_chars
+                )
                 if rewritten and (
-                    rewritten_chars <= report_quality.SUMMARY_TARGET_MAX
-                    or (
-                        rewritten_chars <= report_quality.MAX_SUMMARY_CHARS
-                        and rewritten_chars < report_quality.report_char_count(_summary_text)
-                    )
+                    _in_target_band
+                    or (rewritten_chars <= report_quality.MAX_SUMMARY_CHARS and _improved)
                 ):
                     parsed["executive_summary"] = rewritten
                     summary_rewrite["rewritten"] = True
                     summary_rewrite["rewritten_chars"] = rewritten_chars
-                    summary_rewrite["in_target_band"] = (
-                        report_quality.SUMMARY_TARGET_MIN <= rewritten_chars <= report_quality.SUMMARY_TARGET_MAX
-                    )
+                    summary_rewrite["in_target_band"] = _in_target_band
                 else:
                     summary_rewrite["detail"] = (
-                        "重写输出为空、未变短或仍超硬上限，保留原文（软告警标注，交人工复核）。"
+                        "重写输出为空、未朝目标区间改善或仍超硬上限，保留原文（软告警标注，交人工复核）。"
                     )
             except model_client.ModelUnavailable as exc:
                 summary_rewrite["detail"] = f"摘要重写模型调用失败：{exc}"
@@ -7372,9 +7637,13 @@ def create_app(settings: CoreSettings) -> FastAPI:
         parsed_before_repair = dict(parsed)
         quality_before_repair = quality
         summary_missing_now = not str(parsed.get("executive_summary", "") or "").strip()
+        # G1（2026-09-27 路线图）：一句话结论缺失也进修复策略——首屏结论卡是整份报告
+        # 信息密度最高的一行，此前模型没给就只落一条 warning 放过，首屏永远是空的。
+        conclusion_missing_now = not str((quality.get("conclusion") or {}).get("statement") or "").strip()
         repair_strategy = report_quality.repair_strategy_of(
             missing_sections=list(quality["missing_sections"]),
             summary_missing=summary_missing_now,
+            conclusion_missing=conclusion_missing_now,
         )
         if repair_strategy is not None and body.with_auto_repair:
             repair_trace["attempted"] = True
@@ -7383,95 +7652,32 @@ def create_app(settings: CoreSettings) -> FastAPI:
             reason = "；".join(
                 ([f"缺少必需小节「{'、'.join(missing_now)}」"] if missing_now else [])
                 + (["缺少执行摘要"] if summary_missing_now else [])
+                + (["缺少一句话结论（首屏结论卡）"] if conclusion_missing_now else [])
             )
             repair_detail = ""
             repaired = False
             try:
-                if repair_strategy == report_quality.REPAIR_STRATEGY_FULL_RERUN:
-                    rerun_reply = model_client.call_active_model(
-                        profile,
-                        resolve_store(core.database),
-                        model_client.format_messages(
-                            "你是严谨的 A 股研究助理：只依据给定来源输出，每条判断必须可溯源；"
-                            "证据不足时如实说证据不足；宁可给「无数据」也不编造。你的输出不构成投资建议。",
-                            user_prompt,
-                        ),
-                     purpose="研报",)
-                    rerun_parsed = macro_ai.extract_json_object(rerun_reply.content)
-                    if (
-                        isinstance(rerun_parsed, dict)
-                        and isinstance(rerun_parsed.get("report"), str)
-                        and rerun_parsed.get("report", "").strip()
-                        and rerun_parsed.get("citations")
-                    ):
-                        parsed = rerun_parsed
-                        repaired = True
-                        repair_detail = "重跑完整初稿（同证据包、同模式）。"
-                    else:
-                        repair_detail = "重跑输出无法解析为带引用的报告 JSON，保留原稿。"
-                elif repair_strategy == report_quality.REPAIR_STRATEGY_SECTION:
-                    section_name = missing_now[0]
-                    section_user = (
-                        f"研究对象：A 股 {symbol}。用户关注点：{body.question.strip() or '综合趋势与基本面'}\n\n"
-                        f"{numbered}{unavailable}\n\n"
-                        f"现有报告缺失「{section_name}」小节，正文其余部分如下：\n{str(parsed.get('report', ''))[:4000]}\n\n"
-                        "请只补写这一个缺失小节。请输出严格 JSON（无 markdown 围栏）：\n"
-                        f'{{"section": "{section_name}", "content": "以 ### {section_name} 开头的 markdown 正文（300-600 字；'
-                        '每条判断末尾挂 [S1..S5] 来源标注；证据不足时如实写「无数据」并解释原因）"}}\n'
-                        "铁律：只依据给定来源；禁止编造来源里不存在的数字或事件；"
-                        f"禁止重复其他小节已有的内容；禁止为通过检查补标题、重复内容或编造事实。"
-                    )
-                    section_reply = model_client.call_active_model(
-                        profile,
-                        resolve_store(core.database),
-                        model_client.format_messages(
-                            "你是严谨的研究编辑：只补写指定的缺失小节，绝不新增证据里不存在的信息。",
-                            section_user,
-                        ),
-                     purpose="研报",)
-                    section_parsed = macro_ai.extract_json_object(section_reply.content)
-                    content = str(section_parsed.get("content", "")).strip() if isinstance(section_parsed, dict) else ""
-                    if content:
-                        merged_report = report_quality.merge_section(str(parsed.get("report", "")), section_name, content)
-                        # 合并后引用清单 = 原清单 ∪ 新小节里真实可用的引用（避免自产「清单不一致」告警）。
-                        merged_refs = report_quality.citation_consistency(
-                            {"report": merged_report, "executive_summary": parsed.get("executive_summary", ""), "valuation": parsed.get("valuation")},
-                            allowed=allowed_citations,
-                        )["text_refs"]
-                        declared_before = parsed.get("citations") if isinstance(parsed.get("citations"), list) else []
-                        parsed["citations"] = sorted(
-                            {str(item).strip() for item in declared_before if str(item).strip()}
-                            | {ref for ref in merged_refs if ref in allowed_citations}
-                        )
-                        parsed["report"] = merged_report
-                        repaired = True
-                        repair_detail = f"只重新生成缺失小节「{section_name}」。"
-                    else:
-                        repair_detail = "小节补写输出为空或无法解析，保留原稿。"
-                else:  # summary_only
-                    summary_user = (
-                        f"研报标题：{str(parsed.get('title', '')).strip()}\n"
-                        f"研报正文：\n{str(parsed.get('report', ''))[:4000]}\n\n"
-                        "请为这份研报补写执行摘要，四句话结构、150-165 字："
-                        "①方向性结论 ②最强的基本面或估值依据 ③最重要的技术面或资金面依据 ④最大的风险/反证。"
-                        "只输出摘要纯文本（不要 JSON、不要前缀、不要解释）；"
-                        "只允许使用正文中已出现的信息，不得新增任何数字、事件或判断。"
-                    )
-                    summary_reply = model_client.call_active_model(
-                        profile,
-                        resolve_store(core.database),
-                        model_client.format_messages(
-                            "你是严谨的研究编辑：只做摘要撰写，绝不新增信息，绝不改动事实口径。",
-                            summary_user,
-                        ),
-                     purpose="研报",)
-                    written = (summary_reply.content or "").strip()
-                    if written and report_quality.report_char_count(written) <= report_quality.MAX_SUMMARY_CHARS:
-                        parsed["executive_summary"] = written
-                        repaired = True
-                        repair_detail = "只生成缺失的执行摘要（正文未改写）。"
-                    else:
-                        repair_detail = "摘要生成输出为空或超上限，保留原状。"
+                # 三种定向修复 + 整稿重跑的**唯一实现**在 report_repair.apply_repair：
+                # 生成路径与修复端点（POST /ai-research/reports/{id}/repair）共用同一套
+                # 提示词与验收条件，避免「自动修复」与「手动修复」产出不一致。
+                # full_rerun 需要当时的完整证据包，只有本路径拿得到，因此显式传入提示词。
+                parsed, repaired, repair_detail = report_repair.apply_repair(
+                    strategy=repair_strategy,
+                    parsed=parsed,
+                    profile=profile,
+                    store=resolve_store(core.database),
+                    symbol=symbol,
+                    question=body.question.strip(),
+                    numbered=numbered,
+                    unavailable=unavailable,
+                    allowed_citations=allowed_citations,
+                    missing_sections=missing_now,
+                    full_rerun_prompts=(
+                        "你是严谨的 A 股研究助理：只依据给定来源输出，每条判断必须可溯源；"
+                        "证据不足时如实说证据不足；宁可给「无数据」也不编造。你的输出不构成投资建议。",
+                        user_prompt,
+                    ),
+                )
             except model_client.ModelUnavailable as exc:
                 repair_detail = f"修复模型调用失败：{exc}"
             except Exception as exc:  # noqa: BLE001 - 修复尽力而为，失败保留原稿
@@ -7575,6 +7781,10 @@ def create_app(settings: CoreSettings) -> FastAPI:
         earnings_growth = report_quality.normalize_earnings_growth(
             parsed.get("earnings_growth"), allowed_sources=set(quality["citations"])
         )
+        earnings_growth = report_quality.review_earnings_growth(
+            earnings_growth, source_texts=sources,
+            judge=jev_client.build_judge(core, resolve_store(core.database), purpose="jev:earnings-analysis"),
+        )
         raw_cash_flow = parsed.get("cash_flow_quality") if isinstance(parsed.get("cash_flow_quality"), dict) else {}
         cash_flow_block = report_quality.cash_flow_quality(
             operating_cash_flow=raw_cash_flow.get("operating_cash_flow"),
@@ -7586,6 +7796,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
             # 统计期一致才允许服务端相减出自由现金流（TTM 的现金流减 H1 的资本开支是假数）。
             operating_cash_flow_period=str(raw_cash_flow.get("operating_cash_flow_period") or ""),
             capex_period=str(raw_cash_flow.get("capex_period") or ""),
+            metric_metadata=raw_cash_flow.get("metric_metadata"),
+            allowed_sources=quality["citations"],
+            periods=raw_cash_flow.get("periods"),
             # 正文已经写了「盈利质量较好」而口径不足时，服务端给降档说明而不是沉默。
             claimed_quality="盈利质量较好" if "盈利质量较好" in str(parsed.get("report") or "") else "",
         )
@@ -7751,6 +7964,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "summary_downgrade_notes": quality["summary_downgrade_notes"],
             "decision_card": decision_card,
             "source_asof": evidence_meta.get("source_asof") or {},
+            # R2（2026-09-27 路线图）：来源编号 -> 真实链接。此前响应体没有这个键，
+            # build_source_catalog 的两个取值来源（source_links / evidence）都拿不到，
+            # 来源目录的「可用链接」整列恒为空。
+            "source_links": evidence_meta.get("source_links") or {},
+            "source_documents": evidence_meta.get("source_documents") or {},
             # —— v29 三次升级：模式字数预算 + 图表数据包（图表由结构化字段直接生成，证据同源）——
             "report_mode": quality.get("report_mode") or report_mode,
             "source_meta": evidence_meta.get("source_meta") or {},
@@ -7763,6 +7981,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "source_errors": source_errors,
             "generated_at": datetime.now(UTC).isoformat(),
         }
+        response["source_catalog"] = analysis_followup.source_catalog(
+            followup_research.build_source_catalog(response)
+        )
         # v22 持久化：个股研报落库（重启不丢）；落库失败不阻断返回。
         # v31 §八.4：incomplete 报告仍保存为可回看的草稿（is_draft=true，含缺失项与原因），
         # 由前端与统计排除在正式报告数量之外，不混入正式报告。
@@ -8143,6 +8364,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     or report_quality.summary_downgrade_notes(stage.get("claim_findings") or {}),
                     "decision_card": collab_decision_card,
                     "source_asof": collab_meta.get("source_asof") or {},
+                    # R2：协同修订稿与个股端点同一字段口径（来源目录链接列不再恒空）。
+                    "source_links": collab_meta.get("source_links") or {},
+                    "source_documents": collab_meta.get("source_documents") or {},
                     # v29：图表数据包与来源元数据随落库留存（历史报告详情可复现图表，证据同源）。
                     # v31：模式来自运行定稿值（不再写死字面量），与闸门/展示共用同一 report_mode。
                     "report_mode": run.get("report_mode") or "standard",
@@ -8151,6 +8375,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "quarterly": collab_meta.get("quarterly") or {},
                     "valuation_chart": collab_meta.get("valuation_chart") or {},
                     "revision_notes": str(parsed.get("revision_notes", "")).strip(),
+                    "earnings_growth": parsed.get("earnings_growth"),
+                    "cash_flow_quality": parsed.get("cash_flow_quality"),
+                    "research_completeness": parsed.get("research_completeness"),
                     "limitations": parsed.get("limitations", []),
                     "confidence": str(parsed.get("confidence", "low")),
                     "prompt_policy_version": STOCK_REPORT_PROMPT_VERSION,
@@ -8244,6 +8471,38 @@ def create_app(settings: CoreSettings) -> FastAPI:
         的口径必须屏显、导出、追问三处同源，否则同一条报告会在三个地方说出三种话。
         """
         hydrated = dict(item)
+        cash = hydrated.get("cash_flow_quality")
+        # Current normalization always retains free_cash_flow_reported, even when None.
+        # Legacy blocks lack that field; recheck their inputs without changing storage.
+        if isinstance(cash, dict) and "free_cash_flow_reported" not in cash:
+            hydrated["cash_flow_quality"] = report_quality.cash_flow_quality(
+                operating_cash_flow=cash.get("operating_cash_flow"),
+                net_income=cash.get("net_income"),
+                depreciation_amortization=cash.get("depreciation_amortization"),
+                working_capital_change=cash.get("working_capital"),
+                capex=cash.get("capex"),
+                free_cash_flow=cash.get("free_cash_flow"),
+                operating_cash_flow_period=str(cash.get("operating_cash_flow_period") or ""),
+                capex_period=str(cash.get("capex_period") or ""),
+                metric_metadata=cash.get("metric_metadata"),
+                allowed_sources=hydrated.get("citations") or [],
+                periods=cash.get("periods"),
+                claimed_quality=str(cash.get("verdict") or ""),
+            )
+            completeness = report_quality.research_completeness(hydrated)
+            hydrated["research_completeness"] = completeness
+            card = hydrated.get("decision_card")
+            if isinstance(card, dict):
+                hydrated["decision_card"] = {**card, "research_completeness": completeness}
+            # Preserve generation-time warnings explicitly as history, alongside current checks.
+            hydrated["quality_warnings"] = [
+                f"生成时告警（历史留痕，不代表当前核验）：{warning}"
+                for warning in hydrated.get("quality_warnings") or []
+            ] + completeness["warnings"]
+            downgrade = hydrated["cash_flow_quality"]["downgrade_note"]
+            if downgrade:
+                hydrated["quality_warnings"].append(downgrade)
+            hydrated["categorized_warnings"] = report_quality.categorize_warnings(hydrated["quality_warnings"])
         valuation = hydrated.get("valuation")
         if isinstance(valuation, dict) and not valuation.get("valuation_evidence"):
             hydrated["valuation"] = {
@@ -8261,6 +8520,259 @@ def create_app(settings: CoreSettings) -> FastAPI:
         if not hydrated.get("core_support") and isinstance(hydrated.get("claim_findings"), dict):
             hydrated["core_support"] = followup_research.core_support_trace(hydrated["claim_findings"])
         return hydrated
+
+    # —— G1（研报产出与交付链路路线图 2026-09-27）：质量告警的「定向修复」出口 ——
+    #
+    # 症状：闸门「发现得准、修不了」——摘要过短（<150 字）、一句话结论缺失只写进「质量校验
+    # 痕迹」，报告照发；界面上没有任何一个「补写摘要 / 补写结论 / 重新生成本节」的入口，
+    # 用户只能重新发起一次完整生成（又一次模型调用 + 一次等待），而系统已经精确知道缺什么。
+    #
+    # 三条硬边界：
+    #   1. 只开放**低成本**路径（summary_only / conclusion_only / section_only）。整稿重跑需要
+    #      生成当时的完整证据包，落库 payload 不保存证据 → 本入口如实拒绝，不谎称能跑
+    #      （谎称只会白烧一次付费调用再失败）。
+    #   2. 与生成路径共用 `report_repair.apply_repair` 的**同一套**提示词与验收条件——
+    #      「自动修复」与「手动修复」的产出必须一致，这是抽出该模块的唯一理由。
+    #   3. 修复后**重跑同一闸门**；引用若不再全部真实存在 → 整条修复作废、原 payload 逐字节
+    #      不变（无引用不发布，绝不引入虚构引用）。
+    def _repair_reason(strategy: str, before_summary: str, missing_sections: list[str]) -> str:
+        """一次手动定向修复的「为什么修」（与生成路径自动修复的 `reason` 同一口径：可读、可追溯）。"""
+        if strategy == report_quality.REPAIR_STRATEGY_SUMMARY:
+            if not before_summary:
+                return "用户点选「补写执行摘要」：该报告执行摘要为空。"
+            chars = report_quality.report_char_count(before_summary)
+            rewrite_reason = report_quality.summary_rewrite_reason(before_summary)
+            if rewrite_reason == "summary_below_target":
+                band = f"低于目标区间 {report_quality.SUMMARY_TARGET_MIN}-{report_quality.SUMMARY_TARGET_MAX} 字"
+            elif rewrite_reason == "summary_over_target":
+                band = f"超出目标区间 {report_quality.SUMMARY_TARGET_MIN}-{report_quality.SUMMARY_TARGET_MAX} 字"
+            else:
+                band = "在目标区间内（用户仍选择重写）"
+            return f"用户点选「重写执行摘要」：原摘要 {chars} 字，{band}。"
+        if strategy == report_quality.REPAIR_STRATEGY_CONCLUSION:
+            return "用户点选「补写一句话结论」：该报告缺少 conclusion.statement（首屏结论卡留空）。"
+        if strategy == report_quality.REPAIR_STRATEGY_SECTION:
+            return f"用户点选「重新生成本节」：缺少必需小节「{'、'.join(missing_sections)}」。"
+        return f"用户点选定向修复（策略 {strategy}）。"
+
+    @app.post("/ai-research/reports/{report_id}/repair")
+    def repair_ai_research_report(
+        report_id: str, body: ReportRepairRequest, core: CoreState = Depends(_require_session)
+    ) -> dict[str, object]:
+        """对已落库个股研报执行一次定向修复（G1），成功即**原地更新**该报告。
+
+        响应：`{"ok": true, "item": <更新后的报告>, "repair": {strategy, label, repaired, detail, revision}}`。
+
+        `repaired=false` **不是错误**——它表示这一次没能改善（输出为空 / 未进目标区间 / 引用
+        校验未过），报告保持原状，由前端如实提示；不重试、不伪造成功、不静默截断。
+        """
+        payload = core.database.get_ai_research_report(report_id)
+        if payload is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在或已删除")
+        if str(payload.get("kind") or "") != "stock":
+            return {"ok": False, "stage": "unsupported_kind", "detail": "定向修复当前只覆盖个股研报。"}
+        strategy = str(body.strategy or "")
+        if strategy == report_quality.REPAIR_STRATEGY_FULL_RERUN:
+            return {
+                "ok": False,
+                "stage": "evidence_unavailable",
+                "detail": (
+                    "整稿重跑需要生成当时的完整证据包，落库报告不保存证据，本入口无法执行"
+                    "（请在标的页重新发起一次完整生成）。"
+                ),
+            }
+        if not core.settings.model_access_enabled:
+            return {
+                "ok": False,
+                "stage": "model_access_disabled",
+                "detail": "模型出网已关闭（STEWARD_MODEL_ACCESS=0），未发起任何模型请求",
+            }
+        profile = model_client.active_model_profile(core.database.list_model_profiles())
+        if profile is None:
+            return {
+                "ok": False,
+                "stage": "no_active_profile",
+                "detail": "没有「使用中」的模型方案：先在设置页把一个方案置为使用中。",
+            }
+        # 可引用来源：优先取生成时落库的 `available_citations`（与生成路径同一判据）。
+        # 老记录缺该键时按证据分级明细回推（同一 allowed 生成）；仍取不到就**不修复**——
+        # 拿不准「哪些来源真实存在」时补写会产出无法校验的引用。
+        allowed = {
+            str(item).strip()
+            for item in (payload.get("available_citations") or payload.get("source_keys") or [])
+            if str(item).strip()
+        }
+        if not allowed:
+            for source in (payload.get("evidence_quality") or {}).get("sources") or []:
+                if isinstance(source, dict) and str(source.get("id") or "").strip():
+                    allowed.add(str(source["id"]).strip())
+        if not allowed:
+            return {
+                "ok": False,
+                "stage": "no_available_citations",
+                "detail": "这份报告没有留下可引用来源清单，无法校验补写内容的引用真实性，故不修复。",
+            }
+        missing_sections = [str(item) for item in (payload.get("missing_sections") or [])]
+        if strategy == report_quality.REPAIR_STRATEGY_SECTION and body.section.strip():
+            # 前端按钮带着告警里解析出的小节名；以请求为准（缺哪节补哪节）——它可能不在
+            # 落库的 missing_sections 里（例如上一轮修复刚改动了结构）。
+            missing_sections = [body.section.strip()]
+        before_summary = str(payload.get("executive_summary") or "").strip()
+        parsed: dict[str, Any] = dict(payload)
+        repair_detail = ""
+        repaired = False
+        updated: dict[str, Any] | None = None
+        revision = int(payload.get("report_revision") or 1)
+        history = [dict(entry) for entry in (payload.get("revision_history") or []) if isinstance(entry, dict)]
+        try:
+            parsed, repaired, repair_detail = report_repair.apply_repair(
+                strategy=strategy,
+                parsed=parsed,
+                profile=profile,
+                store=resolve_store(core.database),
+                symbol=str(payload.get("subject") or ""),
+                allowed_citations=allowed,
+                missing_sections=missing_sections,
+            )
+            if repaired:
+                mode = str(payload.get("report_mode") or report_quality.DEFAULT_REPORT_MODE)
+                # 修复后的同一闸门（与生成路径同一口径）：引用真实性 / 小节实质 / 结构 / 摘要预算全重跑。
+                recomputed = report_quality.validate_report(
+                    parsed,
+                    allowed=allowed,
+                    source_asof=payload.get("source_asof") or {},
+                    today=datetime.now().astimezone().date(),
+                    mode=mode,
+                    source_texts=None,
+                    jev_judge=None,
+                )
+                if not recomputed["citations"]:
+                    # 修复输出的引用均不属于本报告的真实来源 → 回滚（无引用不发布）。
+                    repaired = False
+                    repair_detail = "修复后引用校验未通过（引用的来源不属于本报告），已回滚，报告保持原状。"
+                else:
+                    # ⚠ 落库 payload **不保存证据正文**，JV04 语义支撑层在本入口无法重跑。
+                    # 因此 P2 复查与驾驶舱一律用**报告实际落库的** claim_findings / valuation
+                    # （重算版缺 jev 叠加层，会让过度断言复查看得比实际乐观）。
+                    recomputed["claim_findings"] = payload.get("claim_findings") or recomputed["claim_findings"]
+                    recomputed["valuation"] = payload.get("valuation") or recomputed["valuation"]
+                    # P2 同一遍：摘要若被改写，过度断言复查要跟着重跑（纯函数、零模型调用）；
+                    # 完成度视图也随新正文重算（补了小节的报告，研究完成度会真的变好）。
+                    overreach, completeness = _apply_p2_summary_and_completeness(
+                        parsed, recomputed, payload.get("counter_check") or {}, mode=mode
+                    )
+                    # 该层跑过的结论原样带回——绝不因为「这次没跑」就把「跑过且发现问题」
+                    # 显示成「干净」（同一原则：没跑就说没跑，跑过就别抹掉）。
+                    jev_warnings = [
+                        str(item)
+                        for item in ((payload.get("claim_findings") or {}).get("jev_warnings") or [])
+                    ]
+                    if jev_warnings:
+                        recomputed["warnings"].extend(jev_warnings)
+                        recomputed["quality_status"] = report_quality.quality_status_of(
+                            blockers=recomputed["quality_blockers"], warnings=recomputed["warnings"]
+                        )
+                        recomputed["quality_status_label"] = report_quality.QUALITY_STATUS_LABELS[
+                            recomputed["quality_status"]
+                        ]
+                    status_now = recomputed["quality_status"]
+                    valuation_chart = payload.get("valuation_chart") or {}
+                    peer_count = valuation_chart.get("peer_count")
+                    updated = {
+                        **parsed,
+                        "executive_summary": str(parsed.get("executive_summary", "") or "").strip(),
+                        "report": str(parsed.get("report", "")),
+                        "citations": recomputed["citations"],
+                        "citation_dropped": recomputed["dropped_citations"],
+                        "available_citations": recomputed["available_citations"],
+                        "conclusion": recomputed["conclusion"],
+                        "quality_warnings": recomputed["warnings"],
+                        "categorized_warnings": report_quality.categorize_warnings(recomputed["warnings"]),
+                        "quality_status": status_now,
+                        "quality_status_label": recomputed["quality_status_label"],
+                        "quality_blockers": recomputed["quality_blockers"],
+                        "missing_sections": recomputed["missing_sections"],
+                        "section_states": recomputed["section_states"],
+                        "citation_consistency": recomputed["citation_consistency"],
+                        "report_sections": recomputed["sections"],
+                        "report_chars": recomputed["report_chars"],
+                        "summary_chars": recomputed["summary_chars"],
+                        "summary_budget": recomputed["summary_budget"],
+                        "summary_overreach": overreach,
+                        "research_completeness": completeness,
+                        "summary_downgrade_notes": report_quality.summary_downgrade_notes(
+                            payload.get("claim_findings") or {}
+                        ),
+                        "decision_card": report_quality.decision_card(
+                            symbol=str(payload.get("subject") or ""),
+                            conclusion=recomputed["conclusion"],
+                            evidence_quality=payload.get("evidence_quality") or {},
+                            claim_findings=payload.get("claim_findings") or {},
+                            counter_check=payload.get("counter_check"),
+                            watchpoints=payload.get("watchpoints") or [],
+                            valuation=payload.get("valuation") or {},
+                            peer_count=peer_count if isinstance(peer_count, int) else None,
+                            pillar_verdicts=payload.get("pillar_verdicts"),
+                            research_completeness=completeness,
+                        ),
+                        # 修好了就该离开「草稿」——否则前端与统计仍把它排除在正式报告之外。
+                        "is_draft": status_now == report_quality.QUALITY_STATUS_INCOMPLETE,
+                    }
+                    revision += 1
+                    history.append({
+                        "revision": revision,
+                        "reason": _repair_reason(strategy, before_summary, missing_sections),
+                        "strategy": strategy,
+                        "strategy_label": report_quality.REPAIR_STRATEGY_LABELS.get(strategy, strategy),
+                        "changes": repair_detail,
+                        "result": status_now,
+                        "result_label": recomputed["quality_status_label"],
+                        "repaired_at": datetime.now(UTC).isoformat(),
+                        # 生成路径的自动修复没有这个键；留痕里如实区分「自动 / 手动」，
+                        # 复盘时才能回答「这条修订是谁触发的」。
+                        "origin": "manual",
+                    })
+                    updated["report_revision"] = revision
+                    updated["revision_history"] = history
+        except model_client.ModelUnavailable as exc:
+            repaired = False
+            repair_detail = f"修复模型调用失败：{exc}"
+        except Exception as exc:  # noqa: BLE001 - 修复尽力而为，失败保留原稿
+            logger.exception("研报定向修复异常 report_id=%s strategy=%s", report_id, strategy)
+            repaired = False
+            repair_detail = f"修复执行异常：{exc}"
+        if updated is not None:
+            # 落库（upsert）：`created_at` 在冲突分支由 insert_ai_research_report 保留原值，
+            # 因此一次修复不会把这份报告顶到历史列表最前——修订时刻记在 revision_history 里。
+            record = {
+                **updated,
+                "report_id": report_id,
+                "kind": str(updated.get("kind") or "stock"),
+                "subject": str(updated.get("subject") or ""),
+                "generated_at": str(updated.get("generated_at") or datetime.now(UTC).isoformat()),
+            }
+            try:
+                core.database.insert_ai_research_report(record)
+                _audit(core, "evidence.ai_research.repaired", "report_id", report_id)
+            except Exception:
+                logger.exception("研报定向修复落库失败 report_id=%s", report_id)
+                return {
+                    "ok": False,
+                    "stage": "persist",
+                    "detail": "修复已完成但未能保存（落库失败），报告保持原状；请稍后重试。",
+                }
+        final = updated if updated is not None else payload
+        return {
+            "ok": True,
+            "item": _hydrate_report_for_view(final),
+            "repair": {
+                "strategy": strategy,
+                "label": report_quality.REPAIR_STRATEGY_LABELS.get(strategy, strategy),
+                "repaired": repaired,
+                "detail": repair_detail,
+                "revision": int(final.get("report_revision") or 1),
+            },
+        }
 
     @app.delete("/ai-research/reports/{report_id}")
     def delete_ai_research_report(report_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
@@ -8610,6 +9122,10 @@ def create_app(settings: CoreSettings) -> FastAPI:
         overdue_unfilled = 0
         materialized = 0
         skipped_undated = 0
+        # G2（2026-09-27 路线图）：锚定型验证点的人工复核记录一次取全，按报告归组——
+        # 逐报告去查会变成 N+1（队列最多 200 份报告）。取不到就是「没复核过」，不编造。
+        manual_reviews = core.database.list_all_watchpoint_reviews()
+        manually_reviewed = 0
         for record in core.database.list_ai_research_reports(kind="stock", limit=max(1, min(limit, 200))):
             if not isinstance(record, dict):
                 continue
@@ -8674,6 +9190,28 @@ def create_app(settings: CoreSettings) -> FastAPI:
                         filled += 1
                     elif bucket == "overdue":
                         overdue_unfilled += 1
+                # G2：锚定型验证点的人工复核回执（同一 `(report_id, 序号)` 取**最近一次**；
+                # 历史记录全部保留在库里，这里只展示当前结论）。带确切日期的验证点不走这条——
+                # 它们有真正的判断回填通道，人工复核不该与它争同一件事的结论。
+                manual: dict[str, object] | None = None
+                if judgment_id is None:
+                    history = [
+                        review
+                        for review in manual_reviews.get(report_id, [])
+                        if int(review.watchpoint_index) == index
+                    ]
+                    if history:
+                        latest = history[-1]
+                        manually_reviewed += 1
+                        manual = {
+                            "result": str(latest.result.value),
+                            "result_label": followup_research.VERIFICATION_RESULT_LABELS.get(
+                                str(latest.result.value), str(latest.result.value)
+                            ),
+                            "outcome": latest.outcome,
+                            "reviewed_at": latest.reviewed_at.isoformat(),
+                            "history_count": len(history),
+                        }
                 items.append({
                     "report_id": record.get("report_id"),
                     "symbol": record.get("symbol") or record.get("subject"),
@@ -8690,6 +9228,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "judgment_id": judgment_id,
                     "verification": verification,
                     "materialization_note": note,
+                    # G2：手工复核结论（`None` = 从未复核过；与「复核为无数据」是两件事）。
+                    "manual_review": manual,
+                    "watchpoint_index": index,
                     "status": status,
                     "bucket": bucket,
                     "days_until": days_until,
@@ -8732,11 +9273,78 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 "filled": filled,
                 "overdue_unfilled": overdue_unfilled,
                 "not_materialized": skipped_undated,
+                # G2：其中有多少条锚定事件已由人工复核过（不落判断表，只记复核结论）。
+                "manually_reviewed": manually_reviewed,
             },
             "note": (
                 "带确切日期的验证点已幂等落成可回填判断（原研报不可改，回填只追加验证结果）："
                 "`POST /judgments/{id}/verify`。锚定事件的验证点没有日期（判断必须带到期时间），"
-                "不猜日期故不自动落库，等事件发生后再复盘。"
+                "不猜日期故不自动落库；事件发生后可在本队列里**手工标记已复核**"
+                "（`POST /ai-research/reports/{report_id}/watchpoints/{index}/review`，只追加复核结论）。"
+            ),
+            # G2：手工复核的适用边界随返回体下发，前端与文档共用同一份措辞。
+            "manual_review_policy": longterm_service.WATCHPOINT_REVIEW_POLICY,
+        }
+
+    # —— G2（2026-09-27 路线图）：锚定型验证点的「手工标记已复核」落库入口 ——
+    #
+    # 症状：5 条验证点里有 2 条是锚定事件（「三季报披露后」）。它们没有确切日期，而
+    # `VerifiableJudgment.due_at` 是必填字段，所以服务端**不猜日期**、不落库——结果这 2 条
+    # 在界面上既不能回填、也没有任何「我人工看过了」的出口，队列永远显示待复盘。
+    #
+    # 本端点补上那个出口，且**不破坏冻结口径**：不伪造 due_at、不写 verifiable_judgments，
+    # 只追加一条复核记录（append-only，同 judgment_verifications 惯例）；原研报 payload 一字不改。
+    @app.post("/ai-research/reports/{report_id}/watchpoints/{index}/review")
+    def review_report_watchpoint(
+        report_id: str,
+        index: int,
+        body: WatchpointReviewRequest,
+        core: CoreState = Depends(_require_session),
+    ) -> dict[str, object]:
+        """手工标记一条**锚定事件**型验证点已复核（只追加，不改写原报告）。
+
+        带确切日期的验证点**不接受**本入口（409）——它们会被幂等落成可回填判断，
+        回填请走 `POST /judgments/{id}/verify`；同一件事有两种写法必然漂移。
+        """
+        payload = core.database.get_ai_research_report(report_id)
+        if payload is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在或已删除")
+        if str(payload.get("kind") or "") != "stock":
+            return {"ok": False, "stage": "unsupported_kind", "detail": "手工复核当前只覆盖个股研报的验证点。"}
+        watchpoints = report_quality.normalize_watchpoints(payload.get("watchpoints"))
+        if index < 0 or index >= len(watchpoints):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"验证点序号越界：该报告有 {len(watchpoints)} 条验证点（序号 0 起）。",
+            )
+        point = watchpoints[index]
+        due_on = str(point.get("due_on") or "")
+        if due_on:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"该验证点带确切日期（{due_on}），已幂等落成可回填判断——"
+                    "请用 POST /judgments/{id}/verify 回填结论，不要走手工复核（避免同一件事两种写法）。"
+                ),
+            )
+        review = longterm_service.review_watchpoint(
+            core.database,
+            core.local_user_id,
+            report_id=report_id,
+            index=index,
+            signal=str(point.get("signal") or ""),
+            verify_by=str(point.get("verify_by") or ""),
+            result=body.result,
+            outcome=body.outcome,
+        )
+        _audit(core, "evidence.ai_research.watchpoint_reviewed", "report_id", f"{report_id}#{index}")
+        return {
+            "ok": True,
+            "review": review.model_dump(mode="json"),
+            "policy": longterm_service.WATCHPOINT_REVIEW_POLICY,
+            "note": (
+                "已记录人工复核结论（只追加，原报告与验证点文本一字未改）。"
+                "系统不做自动判定，也不承诺自动监控。"
             ),
         }
 

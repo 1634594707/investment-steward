@@ -23,6 +23,14 @@
       "path": "/ai-research/reports/{report_id}/follow-ups"
     },
     {
+      "method": "POST",
+      "path": "/ai-research/reports/{report_id}/repair"
+    },
+    {
+      "method": "POST",
+      "path": "/ai-research/reports/{report_id}/watchpoints/{index}/review"
+    },
+    {
       "method": "GET",
       "path": "/ai-research/review-queue"
     },

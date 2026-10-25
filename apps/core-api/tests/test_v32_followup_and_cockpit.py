@@ -14,7 +14,11 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
+from conftest import (  # noqa: F401  确保 fixture 可用
+    SAMPLE_SUMMARY_IN_BAND,
+    client as client_fixture,
+    run_stock_report,
+)
 from investment_steward_core import analysis_followup, counter_check, report_quality
 
 # ---------------------------------------------------------------------------
@@ -325,10 +329,8 @@ class _CannedModel:
 def _v28_report_payload() -> dict:
     return {
         "title": "甲股：缓涨趋势配合基本面稳健",
-        "executive_summary": (
-            "方向性结论偏多：技术面缓涨趋势完好。最强基本面依据是营收净利双增且现金流为正。"
-            "最重要技术面依据是量价配合与 MA20 支撑有效。最大反证是估值分位虽低但赔率有限。"
-        ),
+        # G1：摘要须落在目标区间 [150, 165] 内，否则会多出一次「只重写摘要」调用。
+        "executive_summary": SAMPLE_SUMMARY_IN_BAND,
         "report": (
             "### 技术面\n股价沿 MA20 缓涨，60 日区间涨幅稳健，量能温和放大，趋势结构完好，关键支撑 6.10。[S1]\n\n"
             "### 消息面\n已落地事实：公司公告回购 [S3]；市场传闻与情绪：中标大单新闻带动关注度 [S2]。\n\n"

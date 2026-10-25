@@ -253,6 +253,8 @@ def compute_positioning(
     if not scored:
         return None
     weight_total = sum(w for _, w in scored)
+    if weight_total <= 0:
+        return None
     composite = round(sum(s * w for s, w in scored) / weight_total, 1)
     band = band_of(composite)
 

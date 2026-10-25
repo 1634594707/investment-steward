@@ -1141,7 +1141,12 @@ def source_catalog(sources: Any) -> list[dict[str, Any]]:
             "source_id": source_id,
             "name": str(item.get("name") or item.get("title") or item.get("source_name") or "").strip()[:120],
             "url": url[:500],
-            "url_note": "" if url else "来源未提供可访问链接（如实标注，不猜测）",
+            "url_note": "" if url else str(item.get("url_note") or "来源未提供可访问链接（如实标注，不猜测）"),
+            "documents": [
+                {"title": str(doc.get("title") or ""),
+                 "data_date": str(doc.get("data_date") or ""), "url": str(doc.get("url") or "")}
+                for doc in (item.get("documents") or []) if isinstance(doc, dict)
+            ],
             "data_date": str(item.get("data_date") or item.get("trade_date") or item.get("published_at") or "")[:10],
             "retrieved_at": str(item.get("retrieved_at") or item.get("fetched_at") or "")[:32],
             "quality": str(item.get("quality") or item.get("evidence_quality") or "").strip()[:4],

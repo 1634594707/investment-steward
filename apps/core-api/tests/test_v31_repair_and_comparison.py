@@ -163,11 +163,15 @@ def _good_report_text() -> str:
 
 
 def _good_payload() -> dict:
+    # 摘要刻意落在目标区间 [150, 165] 内（G1 起，区间外会触发一次摘要重写调用，
+    # 让「完整报告不触发任何额外调用」这类断言失真）。
     return {
         "title": "甲股：缓涨趋势配合基本面稳健",
         "executive_summary": (
-            "方向性结论偏多：技术面缓涨趋势完好。最强基本面依据是营收净利双增且现金流为正。"
-            "最重要技术面依据是量价配合与 MA20 支撑有效。最大反证是估值分位虽低但赔率有限。"
+            "方向性结论偏多：技术面缓涨趋势完好、量价配合健康，中期趋势结构未被破坏。"
+            "最强的基本面依据是营收与净利双双同比增长、经营现金流为正，利润质量较为健康，未见明显的财务瑕疵。"
+            "最重要的技术面依据是 MA20 支撑有效、量能温和放大、回踩不破位。"
+            "最大的风险与反证是估值分位虽处低位但向上赔率有限，且回购落地节奏存在不确定性。"
         ),
         "report": _good_report_text(),
         "citations": ["S1", "S2", "S3", "S4", "S5"],
@@ -183,10 +187,19 @@ def _good_payload() -> dict:
 
 
 def _tech_only_payload() -> dict:
-    """坏样本：只有技术面（方案原始 501 字案例形态），正文带 [S1] 行内引用。"""
+    """坏样本：只有技术面（方案原始 501 字案例形态），正文带 [S1] 行内引用。
+
+    摘要同样落在目标区间内：本样本要暴露的缺陷是「缺小节」，不应再叠一个
+    「摘要过短」（G1 起过短会额外触发一次重写调用），否则用例断言会被噪声污染。
+    """
     return {
         "title": "甲股：技术面速览",
-        "executive_summary": "技术面走弱。",
+        "executive_summary": (
+            "方向性结论中性偏空：技术面走弱、跌破关键支撑，短线动能不足，建议等待企稳信号再确认方向。"
+            "最强的基本面依据暂缺，本期未见足以支撑估值的盈利改善数据，基本面暂无法提供安全垫。"
+            "最重要的技术面依据是量能萎缩、均线系统转空、反弹明显乏力。"
+            "最大的风险与反证是超跌反弹与政策催化可能带来短期修复，需警惕情绪面的反复。"
+        ),
         "report": "### 技术面\n" + "K线走弱，跌破支撑 [S1]，量能萎缩，短线观望为宜，等待企稳信号再确认方向。" * 10,
         "citations": ["S1"],
         "limitations": ["口径限制"],
@@ -276,6 +289,81 @@ def test_repair_summary_only_keeps_report_text(client, tmp_path, monkeypatch):
     assert body["report"] == _good_report_text()
     assert body["executive_summary"] == summary_text
     assert body["report_revision"] == 2
+
+
+def test_repair_conclusion_only_keeps_report_text(client, tmp_path, monkeypatch):
+    """G1（2026-09-27 路线图）：只缺一句话结论 → 单次定向补写，正文一个字都不动，并留痕。
+
+    此前 `conclusion.statement` 缺失只落一条 warning 放过，首屏结论卡永远是空的——
+    而首屏结论卡是整份报告信息密度最高的一行。补写成本远低于重跑整稿。
+    """
+    payload = _good_payload()
+    payload.pop("conclusion")  # 模拟模型没输出 conclusion
+    repaired_conclusion = {
+        "statement": "趋势偏多但估值赔率有限，回购落地节奏是最关键的跟踪变量。",
+        "direction": "偏多",
+        "core_conflict": "趋势向好与赔率有限",
+        "confidence": "medium",
+    }
+    canned = _CannedModel(monkeypatch, [
+        json.dumps(payload, ensure_ascii=False),
+        json.dumps(repaired_conclusion, ensure_ascii=False),
+    ])
+    test_client, headers = _setup(client, tmp_path, monkeypatch)
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    assert body["ok"] is True
+    assert canned.call_count == 2  # 初稿 + 一次结论补写（无反方检查、无摘要重写）
+    assert body["repair"]["attempted"] is True
+    assert body["repair"]["strategy"] == "conclusion_only"
+    assert body["repair"]["repaired"] is True
+    assert body["report"] == _good_report_text()  # 正文未被改写
+    assert body["conclusion"]["statement"] == repaired_conclusion["statement"]
+    assert body["conclusion"]["direction"] == "偏多"
+    assert body["conclusion"]["core_conflict"] == repaired_conclusion["core_conflict"]
+    assert body["conclusion"]["confidence"] == "medium"
+    assert body["report_revision"] == 2
+    assert body["revision_history"][0]["strategy"] == "conclusion_only"
+    assert body["revision_history"][0]["strategy_label"] == "只补写一句话结论"
+    assert "缺少一句话结论" in body["revision_history"][0]["reason"]
+    # 修复后重跑同一闸门 → 「未输出一句话结论」告警消失
+    assert not any("conclusion.statement" in warning for warning in body["quality_warnings"])
+
+
+def test_repair_conclusion_only_drops_invalid_direction(client, tmp_path, monkeypatch):
+    """补写返回越界方向 → 丢弃方向（不编造），只采纳 statement；其余字段照常落库。"""
+    payload = _good_payload()
+    payload.pop("conclusion")
+    canned = _CannedModel(monkeypatch, [
+        json.dumps(payload, ensure_ascii=False),
+        json.dumps(
+            {"statement": "多空交织：趋势与赔率相互掣肘。", "direction": "看多", "core_conflict": "趋势与赔率", "confidence": "high"},
+            ensure_ascii=False,
+        ),
+    ])
+    test_client, headers = _setup(client, tmp_path, monkeypatch)
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    assert body["repair"]["strategy"] == "conclusion_only"
+    assert body["conclusion"]["statement"] == "多空交织：趋势与赔率相互掣肘。"
+    assert body["conclusion"]["direction"] == ""       # 越界方向被丢弃，不臆造
+    assert body["conclusion"]["confidence"] == "high"
+
+
+def test_repair_conclusion_only_empty_output_keeps_original(client, tmp_path, monkeypatch):
+    """补写输出为空 → 保留原状（首屏仍空 + 告警仍在），绝不伪造一句结论。"""
+    payload = _good_payload()
+    payload.pop("conclusion")
+    canned = _CannedModel(monkeypatch, [
+        json.dumps(payload, ensure_ascii=False),
+        json.dumps({"statement": "", "direction": "偏多"}, ensure_ascii=False),
+    ])
+    test_client, headers = _setup(client, tmp_path, monkeypatch)
+    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    assert body["repair"]["strategy"] == "conclusion_only"
+    assert body["repair"]["repaired"] is False
+    assert body["conclusion"]["statement"] == ""
+    assert body["report_revision"] == 1
+    assert body["revision_history"] == []
+    assert any("conclusion.statement" in warning for warning in body["quality_warnings"])
 
 
 def test_repair_failure_keeps_draft(client, tmp_path, monkeypatch):

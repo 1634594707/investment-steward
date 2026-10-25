@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from investment_steward_core import jev_client, macro_ai, model_client, report_quality
+from investment_steward_core import analysis_followup, followup_research, jev_client, macro_ai, model_client, report_quality
 from investment_steward_core.prompting import STOCK_REPORT_RULES_TEXT, STOCK_REPORT_SCHEMA_TEXT
 
 # 角色严格串行：阶段顺序即执行顺序，禁止并行。
@@ -155,7 +155,16 @@ def is_done(run: dict[str, Any]) -> bool:
 
 def public_view(run: dict[str, Any]) -> dict[str, Any]:
     """对外视图：不含原始证据全文（前端只关心阶段产出与失败标注）。"""
+    revise = next((stage for stage in run["stages"] if stage["stage"] == "revise"), {})
+    result = revise.get("result") or {}
+    catalog = analysis_followup.source_catalog(followup_research.build_source_catalog({
+        **(run.get("evidence_meta") or {}),
+        "citations": result.get("citations") or [],
+        "claim_findings": revise.get("claim_findings") or {},
+        "evidence_quality": revise.get("evidence_quality") or report_quality.evidence_quality_report(run["source_keys"]),
+    }))
     return {
+        "source_catalog": catalog,
         "run_id": run["run_id"],
         "symbol": run["symbol"],
         "question": run["question"],
@@ -380,6 +389,28 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
             stage["summary_downgrade_notes"] = quality["summary_downgrade_notes"]
             # 兼容旧断言字段名：parsed 里的 claims 保留原始条目，便于前端逐条对照正文。
             parsed = {**parsed, "claims": quality["claims"]}
+            # 报告类角色与单股入口共用财务口径；不采信模型自报的完成状态或派生金额。
+            parsed["earnings_growth"] = report_quality.review_earnings_growth(
+                report_quality.normalize_earnings_growth(
+                    parsed.get("earnings_growth"), allowed_sources=set(quality["citations"])
+                ),
+                source_texts=evidence.get("sources") or {},
+                judge=jev_client.build_judge(core, credential_store, purpose="jev:earnings-analysis"),
+            )
+            raw_cash = parsed.get("cash_flow_quality") if isinstance(parsed.get("cash_flow_quality"), dict) else {}
+            parsed["cash_flow_quality"] = report_quality.cash_flow_quality(
+                operating_cash_flow=raw_cash.get("operating_cash_flow"),
+                net_income=raw_cash.get("net_income"),
+                depreciation_amortization=raw_cash.get("depreciation_amortization"),
+                working_capital_change=raw_cash.get("working_capital"),
+                capex=raw_cash.get("capex"), free_cash_flow=raw_cash.get("free_cash_flow"),
+                operating_cash_flow_period=str(raw_cash.get("operating_cash_flow_period") or ""),
+                capex_period=str(raw_cash.get("capex_period") or ""),
+                metric_metadata=raw_cash.get("metric_metadata"), allowed_sources=quality["citations"],
+                periods=raw_cash.get("periods"),
+                claimed_quality="盈利质量较好" if "盈利质量较好" in str(parsed.get("report") or "") else "",
+            )
+            parsed["research_completeness"] = report_quality.research_completeness(parsed)
 
         # 数据核对 / 风险审查等非报告类阶段：无质量闸门，直接定稿。
         stage["status"] = "done"

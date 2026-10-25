@@ -774,6 +774,7 @@ def score(
             "note": "暂无后验：样本与市场状态口径尚未建立（属 P1），不参与预测式排序，也不当作 0 或 1。",
         },
         "signal_states": states,
+        "primary_tactic_id": primary_tactic or None,
         "primary_signal_state": primary_state,
         "signal_state_version": SIGNAL_STATE_VERSION,
         "cooldown_merged": cooldown_merged,

@@ -18,6 +18,7 @@ import type { FollowUpSupplementInput } from "../../hooks/useResearch";
 import { MarkdownishText, SourceCatalogTable, WatchpointTable } from "./panels";
 import {
   priceRefCells,
+  formatTimestamp,
   referenceBoundLabel,
   retrievalStatusView,
   scenarioProbabilityWording,
@@ -206,7 +207,7 @@ export function AnalysisTurnCard({ turn }: { turn: AnalysisTurn }) {
           <span className="soft-tag gray" title={modeMeta?.hint ?? turn.mode_label}>入口：{modeMeta?.label ?? turn.mode_label}</span>
         )}
         <span className="wb-followup-time" title={`锚定原报告 v${turn.base_report_version}`}>
-          {new Date(turn.created_at).toLocaleString()}
+          {formatTimestamp(turn.created_at)}
         </span>
       </header>
 
@@ -809,7 +810,7 @@ export function FollowUpPanel({
                     <span className="soft-tag blue">#{turn.turn_index}</span>
                     <span className={`soft-tag ${change.tone}`}>{change.label}</span>
                     <span className="wb-followup-list-question">{turn.question}</span>
-                    <small>{new Date(turn.created_at).toLocaleString()}</small>
+                    <small>{formatTimestamp(turn.created_at)}</small>
                   </button>
                 </li>
               );

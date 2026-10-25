@@ -22,8 +22,10 @@ $core = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $root `
   )
 
 Write-Host "Starting Web Shell on http://127.0.0.1:$WebPort"
+# 用 exec vite 而不是 `run dev -- --port`：pnpm 10 会把分隔符 `--` 原样透传给脚本，
+# 实际命令变成 `vite "--" "--host" 127.0.0.1 ...`，端口参数失效退回默认 5173。
 $web = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $root `
-  -FilePath "pnpm.cmd" -ArgumentList @("--filter", "@investment-steward/web-shell", "dev", "--", "--host", "127.0.0.1", "--port", $WebPort)
+  -FilePath "pnpm.cmd" -ArgumentList @("--filter", "@investment-steward/web-shell", "exec", "vite", "--host", "127.0.0.1", "--port", $WebPort)
 
 # Agent Worker：每日简报 / 证据新鲜度巡逻 / 通知评估落库与外部投递的调度方。
 # 此前 dev 本地从不启动它，三个自动化任务只能手动触发（2026-09-07 用户拍板补上）。

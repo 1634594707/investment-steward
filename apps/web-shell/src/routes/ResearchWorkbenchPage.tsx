@@ -71,8 +71,12 @@ export function ResearchWorkbenchPage({
     deleteAiResearchReport: onDeleteReport,
     createFollowUpTurn: onCreateFollowUp,
     loadFollowUpTurns: onLoadFollowUps,
+    // G1：质量告警的定向修复（补写摘要/结论/小节）——复用服务端同一套修复路径。
+    repairAiResearchReport: onRepairReport,
     // G01：验证点回填（成立/失效/无数据）——复用既有 verify 通道，成功后钩子自己刷新队列。
     verifyJudgment: onVerifyJudgment,
+    // G2：锚定事件型验证点的手工复核——只追加复核记录（不伪造到期日、不写判断表）。
+    reviewReportWatchpoint: onManualReviewWatchpoint,
   } = useResearch(client);
   const [tab, setTab] = useState<WorkbenchTab>("stock");
   const [reportBusy, setReportBusy] = useState(false);
@@ -102,6 +106,19 @@ export function ResearchWorkbenchPage({
   const [historyPageSize, setHistoryPageSize] = useState<10 | 20>(10);
   // v33 A01：一级分区（研究报告 / 待验证 / 历史报告）——切换保留输入、任务、筛选与阅读位置。
   const [section, setSection] = useState<"reports" | "verify" | "history">("reports");
+  const reportSectionRef = useRef<HTMLDivElement>(null);
+  const historyReadingPending = useRef(false);
+  useEffect(() => {
+    if (!historyReadingPending.current || section !== "reports") return;
+    const reading = reportSectionRef.current?.querySelector<HTMLElement>(".wb-firstscreen")?.closest<HTMLElement>(".wb-result");
+    if (!reading) return;
+    historyReadingPending.current = false;
+    const scroller = document.getElementById("mainScroll");
+    if (scroller) {
+      const visibleTop = Math.max(scroller.getBoundingClientRect().top, scroller.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0);
+      scroller.scrollTop += reading.getBoundingClientRect().top - visibleTop;
+    }
+  }, [section, job]);
   const isCollabReport = (item: AiReportItem): boolean => item.kind === "stock" && typeof item.model === "string" && (item.model as string).endsWith("·协同流水线");
   // B01（桌面端升级路线图 2026-09-18）：筛选/分页下沉 SQL——页签计数与模型清单来自服务端
   // COUNT(*) 真值（aiReportFacets），不再由当前页内存过滤拼出（旧口径在第 51 份起必然失真）。
@@ -188,6 +205,7 @@ export function ResearchWorkbenchPage({
       setDirectionError(null);
     } else {
       setTab("stock");
+      historyReadingPending.current = true;
       const stockItem = full as unknown as StockReport;
       updateCompareJob({ results: [{ symbol: full.subject, name: stockItem.model || full.subject, profileId: null, report: stockItem, error: null }], activeIndex: 0 });
       setReportError(null);
@@ -344,7 +362,7 @@ export function ResearchWorkbenchPage({
 
       {/* v33 A01：三个分区**常驻挂载**、按 display 切换——切走不卸载，输入/任务/筛选/阅读位置全部保留；
           运行中的批量/协同任务（模块级 compareJob + 页面状态）不因切换分区或隐藏视图被重置。 */}
-      <div style={{ display: section === "reports" ? undefined : "none" }}>
+      <div ref={reportSectionRef} style={{ display: section === "reports" ? undefined : "none" }}>
       <StockReportPanel
         candidates={holdings}
         aiReady={aiReady}
@@ -378,13 +396,20 @@ export function ResearchWorkbenchPage({
         onRefreshReports={onRefreshReports}
         onCreateFollowUp={onCreateFollowUp}
         onLoadFollowUps={onLoadFollowUps}
+        onRepairReport={onRepairReport}
       />
       </div>
 
       {/* v33 A15：待验证改为操作列表（筛选/检索/分页/跳回来源报告），独立入口不穿过报告。
-          G01：面板自带「回填结论」表单与「到期未回填」计数，回填走既有 verify 通道。 */}
+          G01：面板自带「回填结论」表单与「到期未回填」计数，回填走既有 verify 通道。
+          G2：锚定事件（无确切日期、结构上落不了库）另给「手工标记已复核」通道。 */}
       <div className="wb-section-body" style={{ display: section === "verify" ? undefined : "none" }}>
-        <ReviewQueuePanel queue={reviewQueue} onOpenReport={openReportById} onRefill={onVerifyJudgment} />
+        <ReviewQueuePanel
+          queue={reviewQueue}
+          onOpenReport={openReportById}
+          onRefill={onVerifyJudgment}
+          onManualReview={onManualReviewWatchpoint}
+        />
       </div>
 
       {/* v22 历史产出：落库的研判/研报，重启不丢；点击回看，可删除。

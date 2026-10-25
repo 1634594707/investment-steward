@@ -8,19 +8,20 @@
 .investment-page .holding-head h3 { font-size: 20px; }
 .investment-page .holding-actions { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--space-3) * var(--density-scale)); }
 .investment-page .holding-actions .secondary-button, .investment-page .rail-title .text-button { display: inline-flex; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); }
-.holding-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: calc(var(--space-6) * var(--density-scale)) 0 calc(var(--space-4) * var(--density-scale)); border-block: 1px solid var(--line); }
-.holding-summary > div { padding: calc(var(--space-3) * var(--density-scale)); border-right: 1px solid var(--line); min-width: 0; }
+.holding-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: calc(var(--space-5) * var(--density-scale)) 0 calc(var(--space-4) * var(--density-scale)); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--panel); overflow: hidden; }
+.holding-summary > div { padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale)); border-right: 1px solid var(--line); min-width: 0; }
 .holding-summary > div:last-child { border: 0; }
 .holding-summary dt { color: var(--muted); font-size: var(--text-2); }
-.holding-summary dd { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font: 14px var(--font-data); overflow-wrap: anywhere; }
+.holding-summary dd { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font: 500 15px var(--font-data); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .investment-page .holding-tabs { display: flex; gap: calc(var(--space-1) * var(--density-scale)); border-bottom: 1px solid var(--line); }
-.investment-page .holding-tabs .extension-tab { min-height: 36px; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-4) * var(--density-scale)); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); }
-.investment-page .holding-tabs .extension-tab.active { border-bottom-color: var(--mint); color: var(--mint); }
+.investment-page .holding-tabs .extension-tab { min-height: 36px; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-4) * var(--density-scale)); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease; }
+.investment-page .holding-tabs .extension-tab:hover { color: var(--ink); }
+.investment-page .holding-tabs .extension-tab.active { border-bottom-color: var(--mint); color: var(--mint); font-weight: 600; }
 .investment-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--space-6) * var(--density-scale)); padding-block: calc(var(--space-6) * var(--density-scale)); border-top: 1px solid var(--line); }
 .investment-overview > div { min-width: 0; }
 .investment-overview p, .investment-overview li { color: var(--muted); font-size: var(--text-4); overflow-wrap: anywhere; }
 .investment-overview h4 { margin: calc(var(--space-6) * var(--density-scale)) 0 calc(var(--space-2) * var(--density-scale)); font-size: var(--text-4); }
-.investment-page .thesis-panel { border: 0; border-left: 2px solid var(--line); border-radius: 0; background: transparent; padding: calc(var(--space-3) * var(--density-scale)); }
+.investment-page .thesis-panel { border: 1px solid var(--line); border-left: 3px solid var(--line-2); border-radius: var(--radius-2); background: var(--panel); padding: calc(var(--space-4) * var(--density-scale)); }
 .investment-page .thesis-panel.mint { border-left-color: var(--mint); }
 .investment-page .thesis-panel.amber { border-left-color: var(--amber); }
 .investment-page .thesis-panel textarea { width: 100%; min-width: 0; }

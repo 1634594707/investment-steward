@@ -18,6 +18,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 /** v23 协同流水线各阶段结果的结构（宽松读取，缺字段如实降级显示）。 */
 export interface CollabCheckResult { observations?: string[]; gaps?: string[]; readiness?: string }
 export interface CollabReportResult {
+  earnings_growth?: StockReport["earnings_growth"];
+  cash_flow_quality?: StockReport["cash_flow_quality"];
+  research_completeness?: StockReport["research_completeness"];
   title?: string;
   executive_summary?: string;
   report?: string;
@@ -99,6 +102,9 @@ export function CollabResultBlock({
     levels: revise.levels ?? {},
     watchpoints: revise.watchpoints ?? [],
     valuation: revise.valuation,
+    earnings_growth: revise.earnings_growth,
+    cash_flow_quality: revise.cash_flow_quality,
+    research_completeness: revise.research_completeness,
     revision_notes: revise.revision_notes,
   } : null;
 

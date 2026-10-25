@@ -1,6 +1,6 @@
 /**
  * R04（2026-09-18 排版与研报呈现一致性路线图）：批量 ZIP 与单份导出共用文件名构造；
- * 屏显与导出共用同一「三档概率同值 = 未给概率」判定。
+ * 屏显与导出共用同一「情景倾向存在重复档 = 未给概率」判定（G3 起阈值放宽到重复档）。
  */
 import { describe, expect, it } from "vitest";
 import type { ReportScenario } from "./researchTypes";
@@ -30,6 +30,17 @@ describe("scenarioProbabilityDisplay（屏显/导出同一同值判定）", () =
     const { uniform, displayOf } = scenarioProbabilityDisplay([mid, mid, mid]);
     expect(uniform).toBe(true);
     expect(displayOf(mid)).toBe("—（未给概率）");
+  });
+  // G3（研报产出与交付链路路线图 2026-09-27）：判定放宽到「存在重复档」。
+  it("两档相同（中/中/低）→ uniform（样报 002468 的实际形态）", () => {
+    const mid = scenario("中");
+    const { uniform, displayOf } = scenarioProbabilityDisplay([mid, scenario("中"), scenario("低")]);
+    expect(uniform).toBe(true);
+    expect(displayOf(mid)).toBe("—（未给概率）");
+  });
+  it("三档全无取值（全「—」）不触发同值判定", () => {
+    const { uniform } = scenarioProbabilityDisplay([scenario(undefined), scenario(undefined)]);
+    expect(uniform).toBe(false);
   });
   it("档位不同 → 非 uniform，展示各自等级", () => {
     const high = scenario("高");

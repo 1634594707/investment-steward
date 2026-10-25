@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import bindparam, create_engine, event, text
 from sqlalchemy.engine import Connection
@@ -42,7 +42,7 @@ from investment_steward_core.domain import (
 )
 from investment_steward_core.instruments import canonical_key
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 36
 
 # S2（用户视角路线图 2026-09-26）：后台任务心跳超时阈值。
 # 旧实现把 30 分钟硬编码在 `get_scan_job` 内，且只在**返回值**上把超时的 running 改写成
@@ -75,6 +75,8 @@ EXPORT_PAYLOAD_TABLES: tuple[str, ...] = (
     "quant_experiments",
     "research_snapshots",
     "research_templates",
+    "scan_observations",
+    "scan_job_history",
     "speaker_signals",
     "tactics_ai_reviews",
     "tactics_notes",
@@ -83,6 +85,8 @@ EXPORT_PAYLOAD_TABLES: tuple[str, ...] = (
     "verifiable_judgments",
     "watch_checks",
     "watch_items",
+    # G2（2026-09-27 路线图）：锚定型验证点的手工复核记录（append-only 用户产出，随备份一起走）。
+    "watchpoint_reviews",
 )
 
 
@@ -125,6 +129,16 @@ class Database:
         """
         with self._connection() as connection:
             connection.exec_driver_sql("SELECT 1").scalar_one()
+
+    def close(self) -> None:
+        """释放连接池，解除对 sqlite 文件的占用。
+
+        SQLAlchemy 的 engine 默认持有连接池，而 `Database` 没有生命周期终点。
+        短命进程（例如 `scripts/route_inventory.py` 在临时目录里建库跑完就退出）若不
+        显式 dispose，Windows 下删临时目录会撞 WinError 32（文件被占用）——WAL 模式
+        还会连带留下 `-wal` / `-shm`。长驻进程（Core 服务）不需要调用。
+        """
+        self.engine.dispose()
 
     def _migrate(self) -> None:
         with self._connection() as connection:
@@ -438,6 +452,19 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_judgment_verifications_judgment "
                     "ON judgment_verifications (judgment_id, checked_at)"
                 )
+                # G2（2026-09-27 路线图）：锚定型验证点的手工复核（只追加）。
+                # 与 verifiable_judgments 分开存：锚定事件没有确切日期，due_at 无从取值，
+                # 硬塞进去就得编一个日期——这里只记「用户何时人工复核过哪一条」。
+                connection.exec_driver_sql(
+                    "CREATE TABLE IF NOT EXISTS watchpoint_reviews ("
+                    "review_id TEXT PRIMARY KEY, report_id TEXT NOT NULL, "
+                    "watchpoint_index INTEGER NOT NULL, user_id TEXT NOT NULL, "
+                    "result TEXT NOT NULL, payload TEXT NOT NULL, reviewed_at TEXT NOT NULL)"
+                )
+                connection.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS idx_watchpoint_reviews_report "
+                    "ON watchpoint_reviews (report_id, watchpoint_index, reviewed_at)"
+                )
                 connection.exec_driver_sql(
                     "CREATE TABLE IF NOT EXISTS watch_items ("
                     "watch_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, status TEXT NOT NULL, "
@@ -616,6 +643,24 @@ class Database:
                     "ON research_jobs (fingerprint, state)"
                 )
                 connection.exec_driver_sql("PRAGMA user_version = 34")
+            if current < 35:
+                connection.exec_driver_sql(
+                    "CREATE TABLE IF NOT EXISTS scan_observations ("
+                    "snapshot_id TEXT PRIMARY KEY, job_id TEXT, payload TEXT NOT NULL, "
+                    "created_at TEXT NOT NULL)"
+                )
+                connection.exec_driver_sql(
+                    "CREATE INDEX IF NOT EXISTS idx_scan_observations_job "
+                    "ON scan_observations (job_id, created_at)"
+                )
+                connection.exec_driver_sql("PRAGMA user_version = 35")
+            if current < 36:
+                connection.exec_driver_sql(
+                    "CREATE TABLE IF NOT EXISTS scan_job_history ("
+                    "job_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at TEXT NOT NULL)"
+                )
+                self._archive_scan_jobs(connection)
+                connection.exec_driver_sql("PRAGMA user_version = 36")
             if current > SCHEMA_VERSION:
                 raise RuntimeError(f"database schema {current} is newer than Core {SCHEMA_VERSION}")
 
@@ -746,6 +791,29 @@ class Database:
                     "created_at": evidence.collected_at.isoformat(),
                 },
             )
+
+    def update_evidence(self, evidence: Evidence) -> bool:
+        """按 evidence_id 原地更新证据 payload（同租户），返回是否命中。
+
+        D1（研报产出与交付链路路线图 2026-09-27）用途：公告正文抓取上线前入账的公告证据
+        只有标题，`content_hash` 又是「(标的, 标题, 公告日期)」身份哈希（正文不参与，保证
+        换号重发仍幂等）。因此重新拉取时会被查重挡住、拿不到正文——这里提供唯一的升级出口：
+        **id 与 content_hash 都不变**，只把 payload 换成带正文的版本，历史引用与去重口径不受影响。
+        其它场景不要用它替代 `insert_evidence`：证据是追加型记录，改写需要明确理由。
+        """
+        payload = evidence.model_dump(mode="json")
+        with self._connection() as connection:
+            result = connection.execute(
+                text(
+                    "UPDATE evidence SET payload = :payload WHERE evidence_id = :evidence_id AND tenant_id = :tenant_id"
+                ),
+                {
+                    "payload": self._json(payload),
+                    "evidence_id": str(evidence.evidence_id),
+                    "tenant_id": str(evidence.tenant_id),
+                },
+            )
+            return result.rowcount > 0
 
     def list_evidence(self, tenant_id: UUID) -> list[Evidence]:
         with self._connection() as connection:
@@ -1422,6 +1490,66 @@ class Database:
                 {"jid": str(judgment_id)},
             ).mappings().all()
         return [JudgmentVerification.model_validate(self._load(row["payload"])) for row in rows]
+
+    # —— G2（2026-09-27 路线图）：锚定型验证点的手工复核（只追加，不改写原报告） ——
+    #
+    # 为什么不塞进 verifiable_judgments：那张表的 due_at 是必填字段，而锚定事件（「三季报
+    # 披露后」）没有确切日期。为了「统一表结构」去编一个日期，正是全站禁止的「猜日期」。
+    # 所以另开一张只记「用户何时人工复核过哪一条」的追加表，两条链路互不干扰。
+
+    def insert_watchpoint_review(self, review: Any) -> None:
+        payload = review.model_dump(mode="json")
+        with self._connection() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO watchpoint_reviews "
+                    "(review_id, report_id, watchpoint_index, user_id, result, payload, reviewed_at) "
+                    "VALUES (:rid, :report_id, :idx, :uid, :result, :payload, :reviewed_at)"
+                ),
+                {
+                    "rid": str(review.review_id),
+                    "report_id": str(review.report_id),
+                    "idx": int(review.watchpoint_index),
+                    "uid": str(review.user_id),
+                    "result": review.result.value,
+                    "payload": self._json(payload),
+                    "reviewed_at": review.reviewed_at.isoformat(),
+                },
+            )
+
+    def list_watchpoint_reviews(self, report_id: str) -> list[Any]:
+        """某份报告的全部手工复核记录（按 `reviewed_at` 升序；**最近一条**即当前结论）。"""
+        from investment_steward_core.domain.longterm import WatchpointManualReview
+
+        with self._connection() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT payload FROM watchpoint_reviews "
+                    "WHERE report_id = :report_id ORDER BY reviewed_at, review_id"
+                ),
+                {"report_id": str(report_id)},
+            ).mappings().all()
+        return [WatchpointManualReview.model_validate(self._load(row["payload"])) for row in rows]
+
+    def list_all_watchpoint_reviews(self) -> dict[str, list[Any]]:
+        """全部手工复核记录，按 `report_id` 归组（复盘队列一次性装配，避免逐报告 N+1 查询）。
+
+        单条 payload 坏掉不拖垮整份队列：跳过并继续（与 `list_all_judgment_verifications` 同一原则）。
+        """
+        from investment_steward_core.domain.longterm import WatchpointManualReview
+
+        grouped: dict[str, list[Any]] = {}
+        with self._connection() as connection:
+            rows = connection.execute(
+                text("SELECT payload FROM watchpoint_reviews ORDER BY reviewed_at, review_id")
+            ).mappings().all()
+        for row in rows:
+            try:
+                review = WatchpointManualReview.model_validate(self._load(row["payload"]))
+            except Exception:  # noqa: BLE001 - 队列装配不该因一条脏数据整体失败
+                continue
+            grouped.setdefault(str(review.report_id), []).append(review)
+        return grouped
 
     def list_all_judgment_verifications(self, user_id: UUID) -> dict[str, list[Any]]:
         """G02（桌面端升级路线图 2026-09-18）：一次取全用户的验证记录，按 judgment_id 归组。
@@ -2969,6 +3097,32 @@ class Database:
 
     # ---- D01（桌面端升级路线图 2026-09-18）：市场扫描任务化 ----
 
+    def insert_scan_observation(self, job_id: str | None, payload: dict[str, Any]) -> str:
+        """Append the actual scan inputs/result, independently of the short-lived job list."""
+        snapshot_id = str(uuid4())
+        with self._connection() as connection:
+            connection.execute(
+                text("INSERT INTO scan_observations (snapshot_id, job_id, payload, created_at) "
+                     "VALUES (:snapshot_id, :job_id, :payload, :created_at)"),
+                {"snapshot_id": snapshot_id, "job_id": job_id, "payload": self._json(payload),
+                 "created_at": datetime.now(UTC).isoformat()},
+            )
+        return snapshot_id
+
+    def _archive_scan_jobs(self, connection: Connection) -> None:
+        """Keep each first terminal record in the same transaction as its transition/pruning."""
+        rows = connection.execute(text(
+            "SELECT * FROM scan_jobs WHERE state != 'running' AND NOT EXISTS "
+            "(SELECT 1 FROM scan_job_history WHERE scan_job_history.job_id = scan_jobs.job_id)"
+        )).mappings().all()
+        for row in rows:
+            connection.execute(
+                text("INSERT INTO scan_job_history (job_id, payload, created_at) "
+                     "VALUES (:job_id, :payload, :created_at)"),
+                {"job_id": row["job_id"], "payload": self._json(dict(row)),
+                 "created_at": datetime.now(UTC).isoformat()},
+            )
+
     def create_scan_job(self, job_id: str, fingerprint: str, request_body: dict[str, Any]) -> None:
         """登记一个 running 状态的扫描任务；顺带把已结束任务裁剪到最近 20 个（结果集大）。"""
         now = datetime.now(UTC).isoformat()
@@ -2995,6 +3149,7 @@ class Database:
                     "stale_before": (now - timedelta(minutes=SCAN_JOB_STALE_MINUTES)).isoformat(),
                 },
             )
+            self._archive_scan_jobs(connection)
             connection.execute(
                 text(
                     "DELETE FROM scan_jobs WHERE state != 'running' AND job_id NOT IN "
@@ -3060,6 +3215,7 @@ class Database:
                         ),
                         {"error": SCAN_JOB_STALE_REASON, "now": datetime.now(UTC).isoformat(), "job_id": job_id},
                     )
+            self._archive_scan_jobs(connection)
         if isinstance(job.get("summary"), str) and job["summary"]:
             job["summary"] = self._load(job["summary"])
         return job
@@ -3085,6 +3241,7 @@ class Database:
                 text("UPDATE scan_jobs SET state = 'cancelled', updated_at = :now WHERE job_id = :job_id AND state = 'running'"),
                 {"now": datetime.now(UTC).isoformat(), "job_id": job_id},
             )
+            self._archive_scan_jobs(connection)
         return result.rowcount > 0
 
     # ------------------------------------------------------------------
@@ -3250,6 +3407,7 @@ class Database:
                     "job_id": job_id,
                 },
             )
+            self._archive_scan_jobs(connection)
 
     # E02（桌面端升级路线图 2026-09-18）：/export/all 导出键 → 数据库表名（模型键与 raw 表键并存）。
     # 与 EXPORT_PAYLOAD_TABLES 合起来构成可恢复白名单；credentials/plugin_*/sync_*/audit_events/

@@ -63,6 +63,33 @@ class JudgmentVerification(SchemaModel):
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class WatchpointManualReview(SchemaModel):
+    """G2（研报产出与交付链路路线图 2026-09-27）：锚定型验证点的**手工复核**记录。
+
+    **为什么需要一张单独的表**：研报验证点里有一类是「锚定事件」——「三季报披露后」
+    「下次月度经营简报披露后」。它们没有确切日期，而 `VerifiableJudgment.due_at` 是必填字段，
+    所以服务端**不猜日期**、不落库（`longterm.materialize_watchpoint_judgment` 的冻结口径）。
+    结果是这 2 条在界面上既不能回填、也没有任何「我人工看过了」的出口——队列永远显示待复盘。
+
+    本模型补上那个出口，且**不破坏冻结口径**：
+    - 不伪造 `due_at`、不写 `verifiable_judgments`，只记「用户在某个时刻手工复核过这条验证点」；
+    - 只追加（append-only），与 `JudgmentVerification` 同一惯例；原研报 payload 一字不改；
+    - `result` 复用三态词表（成立/被否定/数据不足），让「人工判定」与「到期回填」可以说同一套话。
+    """
+
+    review_id: UUID
+    user_id: UUID
+    report_id: str = Field(min_length=1, max_length=120)
+    # 验证点在报告 `watchpoints[]` 里的下标（与 `watchpoint_judgment_id(report_id, index)` 同一编号口径）。
+    watchpoint_index: int = Field(ge=0)
+    # 复核时的验证点原话与验证时点口径快照——报告若被后续修订，仍能回溯「当时复核的是哪一条」。
+    signal: str = Field(default="", max_length=4000)
+    verify_by: str = Field(default="", max_length=400)
+    result: VerificationResult
+    outcome: str = Field(default="", max_length=4000)
+    reviewed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class WatchStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"

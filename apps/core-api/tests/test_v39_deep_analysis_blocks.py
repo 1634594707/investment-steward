@@ -20,10 +20,33 @@ from test_v32_followup_and_cockpit import _CannedModel, _setup
 
 ALLOWED = {"S1", "S2", "S3", "S4", "S5"}
 
+def _cash_metadata(operating_period="2026H1", capex_period="2026H1"):
+    """Explicit periods and units for synthetic cash-flow test inputs."""
+    return {key: {"period": capex_period if key == "capex" else operating_period, "unit": "亿元", "sources": []}
+            for key in ("operating_cash_flow", "net_income", "capex", "depreciation_amortization", "working_capital")}
+
+
 
 # ---------------------------------------------------------------------------
 # Q16：盈利增长拆解
 # ---------------------------------------------------------------------------
+
+def test_q16_empty_actual_source_set_does_not_accept_model_source_ids() -> None:
+    rows = rq.normalize_earnings_growth([
+        {"factor": "volume", "effect": "业务量增加", "sources": ["S4"]},
+    ], allowed_sources=set())
+    assert rows[0]["sources"] == []
+    assert rows[0]["source_note"] == "无来源"
+
+
+def test_q16_malformed_source_collection_and_factor_case_are_not_guessed() -> None:
+    rows = rq.normalize_earnings_growth([
+        {"factor": "Volume", "effect": "业务量增加", "sources": "S4"},
+    ], allowed_sources={"S4"})
+    assert rows[0]["factor"] == ""
+    assert rows[0]["factor_raw"] == "Volume"
+    assert rows[0]["sources"] == []
+
 
 def test_q16_keeps_contribution_only_when_it_is_recomputable() -> None:
     rows = rq.normalize_earnings_growth(
@@ -50,7 +73,7 @@ def test_q16_keeps_contribution_only_when_it_is_recomputable() -> None:
     assert rows[0]["factor_label"] == "业务量"
 
 
-def test_q16_block_flips_the_completeness_item() -> None:
+def test_q16_unreviewed_block_does_not_complete_analysis() -> None:
     payload = {
         "report": "### 基本面\n盈利同比增长。",
         "earnings_growth": [
@@ -60,8 +83,8 @@ def test_q16_block_flips_the_completeness_item() -> None:
         ],
     }
     item = next(row for row in rq.research_completeness(payload)["items"] if row["key"] == "earnings_decomposition")
-    assert item["state"] == "done"
-    assert set(item["covered"]) >= {"业务量", "低基数", "成本效率"}
+    assert item["state"] == "partial"
+    assert item["covered"] == []
     assert "价格" in item["gaps"] and "非经常性损益" in item["gaps"]
 
 
@@ -70,7 +93,7 @@ def test_q16_block_flips_the_completeness_item() -> None:
 # ---------------------------------------------------------------------------
 
 def test_q17_coverage_ratio_alone_does_not_prove_quality() -> None:
-    block = rq.cash_flow_quality(operating_cash_flow=51.23, net_income=19.50, claimed_quality="盈利质量较好")
+    block = rq.cash_flow_quality(operating_cash_flow=51.23, net_income=19.50, claimed_quality="盈利质量较好", metric_metadata=_cash_metadata())
     assert block["coverage_ratio"] == 2.63
     assert block["verdict"] == "不足以判断盈利质量"
     assert block["strength"] == "insufficient"
@@ -79,10 +102,11 @@ def test_q17_coverage_ratio_alone_does_not_prove_quality() -> None:
     assert "正文出现「盈利质量较好」" in block["downgrade_note"]
 
 
-def test_q17_two_extras_unlock_verdict_and_capex_can_flip_it_weak() -> None:
+def test_q17_earnings_assessment_is_separate_from_capex_funding_balance() -> None:
     strong = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.50, depreciation_amortization=12.0, capex=20.0,
         operating_cash_flow_period="2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('2026H1', '2026H1'),
     )
     assert strong["free_cash_flow"] == 31.23  # 服务端复算，不采信模型自报
     assert strong["verdict"] == "盈利质量较好"
@@ -91,11 +115,13 @@ def test_q17_two_extras_unlock_verdict_and_capex_can_flip_it_weak() -> None:
     weak = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.50, capex=60.0, working_capital_change=5.0,
         operating_cash_flow_period="2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('2026H1', '2026H1'),
     )
     assert weak["free_cash_flow"] == -8.77
-    assert weak["verdict"] == "盈利质量偏弱" and "吞掉经营现金流" in weak["note"]
+    assert weak["verdict"] == "盈利质量较好"
+    assert "缺口" in weak["funding_balance_note"]  # 现金兑现判断不由资本开支余缺翻转。
 
-    no_data = rq.cash_flow_quality(operating_cash_flow=None, net_income=19.5)
+    no_data = rq.cash_flow_quality(operating_cash_flow=None, net_income=19.5, metric_metadata=_cash_metadata('2026H1', '2026H1'))
     assert no_data["coverage_ratio"] is None and no_data["verdict"] == "无现金流口径"
 
 
@@ -182,7 +208,8 @@ def _canned_report() -> dict[str, Any]:
 
     payload = _v28_report_payload()
     payload["report"] = str(payload.get("report", "")) + "\n盈利质量较好，现金流覆盖充足。"
-    payload["cash_flow_quality"] = {"operating_cash_flow": 51.23, "net_income": 19.5}
+    payload["cash_flow_quality"] = {"operating_cash_flow": 51.23, "net_income": 19.5,
+                                  "metric_metadata": _cash_metadata()}
     payload["earnings_growth"] = [
         {"factor": "volume", "effect": "业务量上升", "basis": "8 月业务量 +18%", "sources": ["S2"]},
         {"factor": "low_base", "effect": "低基数", "contribution_pct": 40, "sources": ["S4"]},
@@ -243,6 +270,7 @@ def test_cash_flow_derived_items_alone_do_not_support_a_positive_verdict() -> No
     block = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.5, capex=31.52, claimed_quality="盈利质量较好",
         operating_cash_flow_period="TTM-2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('TTM-2026H1', '2026H1'),
     )
     assert block["verdict"] == rq.CASH_FLOW_VERDICT_INSUFFICIENT
     assert block["explanatory_present"] == []
@@ -255,14 +283,17 @@ def test_cash_flow_positive_verdict_needs_an_explanatory_item() -> None:
     positive = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.5, depreciation_amortization=18.4, capex=31.52,
         operating_cash_flow_period="2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('2026H1', '2026H1'),
     )
     assert positive["verdict"] == rq.CASH_FLOW_VERDICT_STRONG
-    # 负向结论是算术事实，不需要解释项也成立。
+    # 资金缺口是算术结果，缺解释项仍不能判断盈利质量。
     negative = rq.cash_flow_quality(
         operating_cash_flow=20.0, net_income=19.5, capex=31.52,
         operating_cash_flow_period="2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('2026H1', '2026H1'),
     )
-    assert negative["verdict"] == rq.CASH_FLOW_VERDICT_WEAK
+    assert negative["verdict"] == rq.CASH_FLOW_VERDICT_INSUFFICIENT
+    assert "缺口" in negative["funding_balance_note"]
 
 
 def test_comparable_sample_count_follows_the_server_snapshot_not_the_model() -> None:
@@ -389,6 +420,7 @@ def test_free_cash_flow_is_not_derived_across_mismatched_periods() -> None:
     mismatched = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.5, capex=14.47,
         operating_cash_flow_period="TTM-2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('TTM-2026H1', '2026H1'),
     )
     assert mismatched["free_cash_flow"] is None
     assert mismatched["derived_present"] == ["资本开支"]
@@ -396,6 +428,7 @@ def test_free_cash_flow_is_not_derived_across_mismatched_periods() -> None:
     aligned = rq.cash_flow_quality(
         operating_cash_flow=51.23, net_income=19.5, capex=14.47,
         operating_cash_flow_period="2026H1", capex_period="2026H1",
+        metric_metadata=_cash_metadata('2026H1', '2026H1'),
     )
     assert aligned["free_cash_flow"] == 36.76
     assert aligned["free_cash_flow_derived"] is True

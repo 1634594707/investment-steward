@@ -151,24 +151,32 @@ def build_inventory() -> dict[str, object]:
     from investment_steward_core.api import create_app
     from investment_steward_core.config import CoreSettings
 
-    # ignore_cleanup_errors：CoreState 持有的 sqlite 连接在 app 释放前仍打开，
-    # Windows 下临时目录删除会撞 WinError 32。清理失败不影响本脚本的产物。
+    # ignore_cleanup_errors 只作兜底：正常情况下下面 finally 里的 dispose 已经解除占用。
     with tempfile.TemporaryDirectory(prefix="route-inventory-", ignore_cleanup_errors=True) as tmp:
         app = create_app(CoreSettings(session_token="inventory-token", data_dir=Path(tmp)))
         entries: list[dict[str, object]] = []
-        for route, path in _iter_api_routes(app):
-            methods = _business_methods(route)
-            if not methods:
-                continue
-            for method in methods:
-                entries.append(
-                    {
-                        "method": method,
-                        "path": path,
-                        "auth": _requires_session(route),
-                        "path_params": _path_params(path),
-                    }
-                )
+        try:
+            for route, path in _iter_api_routes(app):
+                methods = _business_methods(route)
+                if not methods:
+                    continue
+                for method in methods:
+                    entries.append(
+                        {
+                            "method": method,
+                            "path": path,
+                            "auth": _requires_session(route),
+                            "path_params": _path_params(path),
+                        }
+                    )
+        finally:
+            # 必须显式 dispose：CoreState.database 的 SQLAlchemy engine 默认持有连接池，
+            # 而 create_app 会把闭包 recorder 装到 model_client / feed_health 的**模块级**
+            # 变量上，那些闭包强引用 app —— 所以 `del app` 甚至 gc.collect() 都释放不掉。
+            # 不 dispose 的话，Windows 下临时目录删除会撞 WinError 32（文件被占用），
+            # 过去只靠 ignore_cleanup_errors=True 把失败吞掉，于是每跑一次就残留一个
+            # route-inventory-<随机> 目录（实测累积过 7 个）。
+            app.state.core.database.close()
     entries.sort(key=lambda item: (str(item["path"]), str(item["method"])))
     return {
         "generated_at": datetime.now(UTC).isoformat(),

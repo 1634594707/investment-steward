@@ -83,3 +83,27 @@ def run_stock_report(test_client, headers, **body):
     """建任务 + 轮询终态，一步到位。测试里绝大多数场景用这个。"""
     started = start_stock_report_job(test_client, headers, **body)
     return await_stock_report_job(test_client, headers, started["job_id"])
+
+
+# —— G1（研报产出与交付链路路线图 2026-09-27）：端点级样本的「已达标」摘要与结论 ——
+#
+# 闸门新增两个**会额外调用模型**的修复出口（详见 report_quality.repair_strategy_of）：
+#   1. 摘要落在目标区间 [150, 165] 之外 → 一次「只重写摘要」调用（D04 上界 + G1 下界）；
+#   2. 缺一句话结论（conclusion.statement）→ 一次定向补写调用。
+#
+# 打桩模型通常只准备「初稿 + 反方检查」两次响应，多出来的调用会让 FIFO 桩返回 `{}`，
+# 或让 `len(payloads)` / `call_count` 断言失真（典型症状：「4 != 2」）。
+# 所以**凡自带正文样本、要断言调用次数或调用内容**的用例，摘要与结论都必须已达标；
+# 专测「过短/缺失会被修复」的用例则**不要**用这两个常量（那正是它要制造的状态）。
+SAMPLE_SUMMARY_IN_BAND = (
+    "方向性结论偏多：技术面缓涨趋势完好、量价配合健康，中期趋势结构未被破坏。"
+    "最强的基本面依据是营收与净利双双同比增长、经营现金流为正，利润质量较为健康，未见明显的财务瑕疵。"
+    "最重要的技术面依据是 MA20 支撑有效、量能温和放大、回踩不破位。"
+    "最大的风险与反证是估值分位虽处低位但向上赔率有限，且回购落地节奏存在不确定性。"
+)
+SAMPLE_CONCLUSION = {
+    "statement": "趋势偏多但估值赔率有限，回购落地节奏是最关键的跟踪变量。",
+    "direction": "偏多",
+    "core_conflict": "趋势向好与赔率有限",
+    "confidence": "medium",
+}

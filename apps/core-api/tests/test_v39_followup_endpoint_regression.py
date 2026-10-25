@@ -245,7 +245,14 @@ def test_q05_q09_q08_legacy_report_view_is_hydrated_without_touching_storage(cli
         "metric_missing", "normalization_unverified", "fair_value_assessed"
     )
     assert first["valuation"]["valuation_evidence"]["verdict_display"] != "无数据"
-    assert first["source_catalog"] and all(row["url_note"] for row in first["source_catalog"])
+    # R2（研报产出与交付链路路线图 2026-09-27）：来源目录的链接列**不再恒为空**。
+    # 旧断言是 `all(row["url_note"] ...)`（每一行都没有链接）——那正是被修掉的缺陷本身：
+    # 响应体既无 source_links 也无 evidence，目录链接列必然为空。现在改为断言两者互斥：
+    # 有真实链接的行 url 非空且 url_note 为空，取不到链接的行如实标 url_note（绝不猜 URL）。
+    catalog = first["source_catalog"]
+    assert catalog
+    assert any(row["url"] for row in catalog)
+    assert all(bool(row["url"]) != bool(row["url_note"]) for row in catalog)
     assert first["core_support"]["counts"]["total"] == len(first["core_support"]["counted_claim_ids"])
     assert first["probability_view"]["probability_label"] == "倾向（未统计校准）"
     # 幂等：同一份 payload 两次补算结果一致（视图字段只加在读路径，不回写存储）。

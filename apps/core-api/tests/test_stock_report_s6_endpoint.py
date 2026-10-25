@@ -13,7 +13,7 @@ import json
 import re
 from types import SimpleNamespace
 
-from conftest import load_youzi_json
+from conftest import SAMPLE_SUMMARY_IN_BAND, load_youzi_json
 from investment_steward_core import lhb_feed as lf
 
 
@@ -90,6 +90,11 @@ def _synth_bars(count: int = 60) -> list[dict[str, object]]:
                 "high": price * 1.02,
                 "low": price * 0.98,
                 "volume": 1_000_000 + index * 1000,
+                # 复权口径只能由供应商声明的响应序列给出：缺 adjust 时价格图如实标「复权未确认」
+                # （2026-10-26 起），这里模拟腾讯 qfqday 的真实返回。
+                "adjust": "qfq",
+                "source_series": "qfqday",
+                "requested_adjust": "qfq",
             }
         )
     return rows
@@ -246,7 +251,7 @@ def _model_reply(monkeypatch, calls: list[set[str]]) -> None:
                         "content": json.dumps(
                             {
                                 "title": "测试报告",
-                                "executive_summary": "摘要",
+                                "executive_summary": SAMPLE_SUMMARY_IN_BAND,
                                 "report": "".join(
                                     f"## {name}\n本节按事实展开，给出可核对的数据与边界条件。\n"
                                     for name in ("技术面", "消息面", "基本面", "综合判断")
@@ -367,7 +372,7 @@ def _capture_prompt(monkeypatch, captured: list[dict]) -> None:
                         "content": json.dumps(
                             {
                                 "title": "测试报告",
-                                "executive_summary": "摘要",
+                                "executive_summary": SAMPLE_SUMMARY_IN_BAND,
                                 "report": "".join(
                                     f"## {name}\n本节按事实展开，给出可核对的数据与边界条件。\n"
                                     for name in ("技术面", "消息面", "基本面", "综合判断")

@@ -160,7 +160,7 @@ def _indicator_context(bars: list[dict[str, Any]]) -> dict[str, Any]:
     rsi = rsi_wilder(closes)
     vol_ma20 = sma(series["volume"], 20)
     return {
-        "series": series, "ma5": ma5, "ma10": ma10, "ma20": ma20,
+        "bars": bars, "series": series, "ma5": ma5, "ma10": ma10, "ma20": ma20,
         "dif": dif, "dea": dea, "hist": hist, "k": k, "d": d, "j": j,
         "rsi": rsi, "vol_ma20": vol_ma20,
     }
@@ -246,7 +246,7 @@ def _detect_volume_breakout(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     return signals
 
 
-def _detect_support_hold(ctx: dict[str, Any], bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _detect_support_hold(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     from investment_steward_core.support_resistance import detect_levels
 
     signals = []
@@ -255,7 +255,7 @@ def _detect_support_hold(ctx: dict[str, Any], bars: list[dict[str, Any]]) -> lis
     if n < 25:
         return signals
     # 支撑位只用「当前考察 bar 之前」的历史计算，避免未来函数。
-    levels = detect_levels(bars[:-3])
+    levels = detect_levels(ctx["bars"][:-3])
     supports = [float(level["price"]) for level in levels if level.get("kind") == "support"]
     for i in range(n - 3, n):
         low, open_, close = series["low"][i], series["open"][i], series["close"][i]

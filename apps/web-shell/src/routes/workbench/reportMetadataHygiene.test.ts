@@ -41,9 +41,27 @@ function scenario(name: string, probabilityLevel: string) {
 }
 
 describe("J07 头部去噪", () => {
+  it("生成留痕放入附录，结论限制无摘要也保留在正文前", () => {
+    const md = buildStockReportMarkdown(report({ executive_summary: "", summary_downgrade_notes: ["测试限制：证据已过期，须先补证"] }));
+    expect(md.indexOf("## 结论使用限制")).toBeLessThan(md.indexOf("## 研报正文"));
+    expect(md).toContain("测试限制：证据已过期，须先补证");
+    expect(md.indexOf("## 生成记录附录")).toBeGreaterThan(md.indexOf("## 研报正文"));
+    expect(md.indexOf("- 生成留痕：")).toBeGreaterThan(md.indexOf("## 生成记录附录"));
+    expect(md.match(/提示词 2\.8/g)).toHaveLength(1);
+  });
+
   it("引用满可用来源时只有一行来源，不再逐字重复", () => {
     const md = buildStockReportMarkdown(report());
-    const sourceLines = md.split("\n").filter((line) => line.startsWith("- ") && line.includes("来源："));
+    // 只统计「引用来源」类行：「阅读前核对」里的 `- 数据来源：…` 是另一节的口径说明，
+    // 用宽泛的 `includes("来源：")` 会把它误算成重复行（2026-10-26 起该行恒有数据基础）。
+    const sourceLines = md
+      .split("\n")
+      .filter(
+        (line) =>
+          line.startsWith("- 引用来源：")
+          || line.startsWith("- 未引用可得来源：")
+          || line.startsWith("- 本次可引用来源："),
+      );
     expect(sourceLines).toEqual(["- 引用来源：S1、S2、S3、S4、S5"]);
     expect(md).not.toContain("本次可引用来源");
   });
@@ -72,7 +90,21 @@ describe("J09 概率三档同值", () => {
       scenarios: [scenario("乐观", "中"), scenario("中性", "中"), scenario("悲观", "中")],
     }));
     expect(md).toContain("—（未给概率）");
-    expect(md).toContain("三档概率同值，按「未给概率」处理");
+    expect(md).toContain("情景倾向存在重复档（模型未做区分），按「未给概率」处理");
+    expect(md).not.toMatch(/\| 乐观 \| t \| 中 \|/);
+  });
+
+  /**
+   * G3（研报产出与交付链路路线图 2026-09-27）：降级阈值从「三档全同」放宽到「存在重复档」。
+   * 样报 002468 是乐观=中 / 中性=中 / 悲观=低——非全同，旧口径不触发，两条「中」照原样印出，
+   * 读起来仍像做了概率区分。现在两档相同即按「未给概率」处理。
+   */
+  it("两档相同（中/中/低）也按未给概率降级，不再照排两条「中」", () => {
+    const md = buildStockReportMarkdown(report({
+      scenarios: [scenario("乐观", "中"), scenario("中性", "中"), scenario("悲观", "低")],
+    }));
+    expect(md).toContain("—（未给概率）");
+    expect(md).toContain("情景倾向存在重复档（模型未做区分），按「未给概率」处理");
     expect(md).not.toMatch(/\| 乐观 \| t \| 中 \|/);
   });
 
@@ -106,8 +138,8 @@ describe("J10 验证点列与 A 级提示", () => {
         signal: "N 字上涨足额确认", verify_by: "2026-09-22", due_on: "2026-09-22", status: "pending_review", expected_if_true: "转确认",
       }],
     }));
-    expect(md).toContain("| 观察信号 | 到期（含来源） | 状态 | 若成立则预期 |");
-    expect(md).toContain("| N 字上涨足额确认 | 2026-09-22 | 待复盘 |");
+    expect(md).toContain("| 观察信号 | 到期（含来源） | 状态 | 可回填 | 若成立则预期 |");
+    expect(md).toContain("| N 字上涨足额确认 | 2026-09-22 | 待复盘 | 可回填 |");
     expect(md).not.toContain("2026-09-22 | 2026-09-22");
   });
 
@@ -117,7 +149,26 @@ describe("J10 验证点列与 A 级提示", () => {
         signal: "三季报增速与现金流", verify_by: "2026年三季报披露后", due_on: "", status: "pending_review", expected_if_true: "支撑增强",
       }],
     }));
-    expect(md).toContain("| 三季报增速与现金流 | 2026年三季报披露后 | 待复盘 |");
+    expect(md).toContain("| 三季报增速与现金流 | 2026年三季报披露后 | 待复盘 | 锚定事件·不可自动回填 |");
+  });
+
+  // G2（2026-09-27 路线图）：5 条验证点里 2 条锚定事件结构上永远无法自动回填，
+  // 导出件此前只写「待复盘」，读者无从知道哪几条点不动。现在列里显式标出，
+  // 并在表下写清口径（含「手工标记已复核」这个人工出口）。
+  it("可回填列区分带日期与锚定事件，并给出计数口径", () => {
+    const md = buildStockReportMarkdown(report({
+      watchpoints: [
+        { signal: "到期点", verify_by: "2026-09-28", due_on: "2026-09-28", status: "pending_review", expected_if_true: "a" },
+        { signal: "锚定点一", verify_by: "三季报披露后", due_on: "", status: "pending_review", expected_if_true: "b" },
+        { signal: "锚定点二", verify_by: "下次月度经营简报披露后", due_on: "", status: "pending_review", expected_if_true: "c" },
+      ],
+    }));
+    expect(md).toContain("| 到期点 | 2026-09-28 | 待复盘 | 可回填 |");
+    expect(md).toContain("| 锚定点一 | 三季报披露后 | 待复盘 | 锚定事件·不可自动回填 |");
+    expect(md).toContain("| 锚定点二 | 下次月度经营简报披露后 | 待复盘 | 锚定事件·不可自动回填 |");
+    expect(md).toContain("共 3 条验证点，1 条带确切日期");
+    expect(md).toContain("2 条锚定事件无确切日期");
+    expect(md).toContain("手工标记已复核");
   });
 
   it("A 级为 0 时在头部提示，A 级有条目时不打扰", () => {
@@ -130,6 +181,30 @@ describe("J10 验证点列与 A 级提示", () => {
     const withA = buildStockReportMarkdown(report({
       evidence_quality: { tiers: { A: ["S3"], B: ["S1"], C: [], D: [] } } as never,
     }));
-    expect(withA).not.toContain("证据资格提示");
+    expect(withA).not.toContain("证据资格提示：**本次无一手");
+  });
+
+  it("D1：拿到 A 级一手来源时头部正向说明，并点名是哪个来源", () => {
+    const md = buildStockReportMarkdown(report({
+      evidence_quality: { tiers: { A: ["S3A"], B: ["S1", "S3", "S4"], C: ["S2", "S5"], D: [] } } as never,
+    }));
+    expect(md).toContain("本次含 A 级一手来源 S3A");
+    expect(md).toContain("经数据商转载");
+    expect(md.indexOf("证据资格提示")).toBeLessThan(md.indexOf("## 执行摘要"));
+  });
+
+  it("D1：本次 A 级说明（note）随导出走——离开界面后仍能自证为什么有/没有 A 级", () => {
+    const md = buildStockReportMarkdown(report({
+      evidence_quality: {
+        version: "v2",
+        sources: [],
+        tiers: { A: [], B: ["S1", "S3", "S4"], C: ["S2", "S5"], D: [] },
+        coverage_vocab: [],
+        core_support_qualities: ["A", "B"],
+        note: "本次**未取到公告正文全文**（S3 仅标题口径，故按 B 级如实标注）",
+      } as never,
+    }));
+    expect(md).toContain("## 证据质量与结论支撑");
+    expect(md).toContain("- 本次 A 级说明：本次**未取到公告正文全文**");
   });
 });

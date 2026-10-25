@@ -42,6 +42,15 @@ def client(tmp_path: Path):
     return TestClient(app), {"X-Core-Session-Token": token}
 
 
+def _content_unavailable(_art_code: str) -> dict[str, object]:
+    """D1 公告正文接口打桩：本文件验证的是**标题口径**的公告证据，正文一律取不到。
+
+    不打桩的话，夹具里形状合格的 art_code 会真的发起网络请求（正文抓取上线后才有的调用）。
+    正文抓取本身的契约见 `test_d1_announcement_body.py`。
+    """
+    raise news_evidence.NoticeError("模拟公告正文接口不可用")
+
+
 # —— 纯函数：内容哈希 / 时间解析 / 来源定位 ——
 
 
@@ -81,6 +90,7 @@ def test_raw_locator_keeps_original_positioning():
 def test_endpoint_produces_announcement_evidence(monkeypatch, client):
     test_client, headers = client
     monkeypatch.setattr(news_evidence, "_ann_http_get", lambda _params: _ANN_FIXTURE)
+    monkeypatch.setattr(news_evidence, "_ann_content_http_get", _content_unavailable)
 
     response = test_client.get("/evidence/announcements/600000", headers=headers)
     assert response.status_code == 200
@@ -106,6 +116,7 @@ def test_endpoint_produces_announcement_evidence(monkeypatch, client):
 def test_endpoint_blocks_when_plugin_revoked(monkeypatch, client):
     test_client, headers = client
     monkeypatch.setattr(news_evidence, "_ann_http_get", lambda _params: _ANN_FIXTURE)
+    monkeypatch.setattr(news_evidence, "_ann_content_http_get", _content_unavailable)
     assert test_client.post("/plugins/official.cn-market-data/revoke", headers=headers).status_code == 200
     assert test_client.get("/evidence/announcements/600000", headers=headers).status_code == 409
 
@@ -118,6 +129,7 @@ def test_endpoint_degrades_without_fabricating_on_failure(monkeypatch, client):
         raise news_evidence.NoticeError("模拟公告源不可达")
 
     monkeypatch.setattr(news_evidence, "_ann_http_get", _offline)
+    monkeypatch.setattr(news_evidence, "_ann_content_http_get", _content_unavailable)
     response = test_client.get("/evidence/announcements/600001", headers=headers)
     assert response.status_code == 200
     body = response.json()

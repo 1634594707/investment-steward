@@ -233,3 +233,51 @@ describe("DecisionCardPanel · Q05 估值行", () => {
     expect(text).not.toContain("无数据");
   });
 });
+
+/* —— D1（研报产出与交付链路路线图 2026-09-27）：A 级来源的正向/缺口两态 —— */
+
+describe("EvidenceQualityPanel · D1 A 级来源", () => {
+  it("有 A 级时正向点名来源，不再显示「无任何来源达 A 级」", () => {
+    const { container } = render(
+      <EvidenceQualityPanel
+        report={baseReport({
+          evidence_quality: {
+            version: "v2",
+            sources: [
+              { id: "S3A", kind: "announcement", quality: "A", label: "公告正文全文（数据商转载的交易所披露原文，非摘要）", coverage: ["corporate_action", "disclosure"] },
+            ],
+            tiers: { A: ["S3A"], B: ["S1", "S3", "S4"], C: ["S2", "S5"], D: [] },
+            coverage_vocab: [],
+            core_support_qualities: ["A", "B"],
+            note: "A 级来源：S3A——公告正文全文（含董事会保证声明与落款，非摘要）。正文经数据商转载自交易所披露原文。",
+          },
+        })}
+      />,
+    );
+    expect(container.querySelector(".wb-evidence-ok")!.textContent).toContain("本次含 A 级一手来源：S3A");
+    expect(container.querySelector(".wb-evidence-gap")).toBeNull();
+    // note 必须上屏：等级变化的依据不能只活在后端。
+    expect(container.textContent).toContain("A 级来源：S3A");
+    expect(container.textContent).toContain("转载");
+  });
+
+  it("没有 A 级时如实提示缺口，并说明本次为什么没有", () => {
+    const { container } = render(
+      <EvidenceQualityPanel
+        report={baseReport({
+          evidence_quality: {
+            version: "v2",
+            sources: [],
+            tiers: { A: [], B: ["S1", "S3", "S4"], C: ["S2", "S5"], D: [] },
+            coverage_vocab: [],
+            core_support_qualities: ["A", "B"],
+            note: "本次**未取到公告正文全文**（S3 仅标题口径，故按 B 级如实标注）",
+          },
+        })}
+      />,
+    );
+    expect(container.querySelector(".wb-evidence-gap")!.textContent).toContain("本次无任何来源达 A 级");
+    expect(container.querySelector(".wb-evidence-ok")).toBeNull();
+    expect(container.textContent).toContain("未取到公告正文全文");
+  });
+});

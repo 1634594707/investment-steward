@@ -2,7 +2,7 @@
  * A04 / D02 交叉回归：研究工作台「报告历史」区（筛选走服务端参数、回看走详情端点、定位到阅读区顶部）。
  *
  * 口径：jsdom + 受控 fetch（走 coreClient 的 HTTP 分支）。这里证明的是**行为**：筛选条件是否真的进入请求参数、
- * 回看是否按 id 取全文、回看后是否把壳层滚动容器复位；不证明真实数据下的列表内容与视觉。
+ * 回看是否按 id 取全文、回看后是否定位阅读区；不证明真实数据下的列表内容与视觉。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -100,15 +100,19 @@ describe("研究工作台 历史产出区（A04/D02）", () => {
     await waitFor(() => expect(queries.some((q) => q.includes("kind=direction") && q.includes("q=%E5%9B%BA%E6%80%81"))).toBe(true), { timeout: 3000 });
   });
 
-  it("回看按 id 取全文，并把壳层滚动容器复位到顶部", async () => {
+  it("回看按 id 取全文并定位阅读区，避免窄屏先看到生成表单", async () => {
     const { queries } = renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /历史报告/ }));
     const scroller = document.getElementById("mainScroll");
     if (!scroller) throw new Error("缺少滚动容器");
     scroller.scrollTop = 240;
+    const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return { top: this.classList.contains("wb-result") ? 340 : 84 } as DOMRect;
+    });
 
     fireEvent.click(screen.getByText("600519 研究报告"));
     await waitFor(() => expect(queries).toContain("/ai-research/reports/s1"));
-    expect(scroller.scrollTop).toBe(0);
+    await waitFor(() => expect(scroller.scrollTop).toBe(256));
+    geometry.mockRestore();
   });
 });

@@ -6,24 +6,39 @@ import { useState, useEffect } from "react";
 import type { StockReport, CompareSynthesis, DirectionReport, CompareEntry, AnalysisTurn, ReportCockpit, SourceCatalogEntry } from "./researchTypes";
 import {
   formatPrice,
+  formatTimestamp,
   scenarioProbabilityDisplay,
   scenarioProbabilityWording,
   valuationEvidenceDisplay,
+  valuationEvidenceReadingNote,
   priceRefCells,
   referenceBoundLabel,
   retrievalStatusView,
-  sourceCatalogUrlText,
+  sourceCatalogUrlMarkdown,
   watchpointDateView,
   watchpointReview,
+  watchpointRefillLabel,
+  watchpointRefillSummary,
   coreSupportBreakdown,
   CLAIM_STATUS_LABEL,
   JEV_SKIP_LABEL,
   ROBUSTNESS_META,
   poolCodeText,
   coreSupportState,
+  cashFlowDisplayLines,
+  earningsAnalysisDisplay,
+  earningsNoteDisplay,
+  comparableReviewNote,
+  reportReadingSummary,
+  RESEARCH_COMPLETENESS_READING_NOTE,
+  valuationRepairDisplayLines,
   deepMetricCell,
+  splitKeyFactSegments,
+  HIGHLIGHT_BUDGET_PER_PARAGRAPH,
+  type ReportHighlight,
 } from "./format";
-import { REPORT_MODE_LABEL, reportDepthLabel, keyFactHighlights, type ReportHighlight } from "./panels";
+import { REPORT_MODE_LABEL, reportDepthLabel, keyFactHighlights } from "./panels";
+import { reportHighlightCss } from "./reportHighlightTones";
 import {
   EFFECT_META,
   CONCLUSION_CHANGE_META,
@@ -53,45 +68,110 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * 轻量 markdown → HTML（与页面 MarkdownishText 同一语法子集：###、- / 1. 列表、
- * | 表格 |（带 |---| 分隔行）、**加粗**、[S#] 引用），已转义实体、零 XSS 面。
+ * 轻量 markdown → HTML（与页面 MarkdownishText 同一语法子集：h1–h6、- / 1. 列表（含缩进嵌套）、
+ * | 表格 |（带 |---| 分隔行）、> 引用、**加粗**、[文字](链接)、[S#] 引用），已转义实体、零 XSS 面。
  * v31 §八.6：`highlights` 传入时，PNG/PDF/HTML 导出**保留颜色**（白底色板，对比度 ≥4.5:1），
  * 且每个彩色标记都带 title 文字标签；Markdown 文件本身仍只保留加粗与文字标签（不依赖颜色）。
+ *
+ * 研报产出与交付链路路线图 2026-09-27（甲组渲染缺陷）：
+ * - R1：高亮切分改用 `format.splitKeyFactSegments`——与屏显 `panels.renderInline` 同一实现，
+ *   两侧 `<mark>` 序列必然一致（此前屏显走子串匹配、导出走 token 全等，位置不同源）；
+ * - R2：`[URL](URL)` 渲染为可点击 `<a>`（来源目录「可用链接」列）；
+ * - R3：缩进列表项按缩进层级输出嵌套 `<ul>`（此前 `  - ` 退化成带裸字符的 `<p>`）；
+ * - R4：标题按 `#` 数量映射 `h1`–`h6`（此前一律 `<h3>`，章节层级全平），并按 `##` 生成文档目录；
+ * - R5：`> ` 引用行渲染为 `<blockquote>`（此前被转义成 `&gt;`，免责声明因此出现两次）。
  */
+const SOURCE_CATALOG_HEADER = "| 编号 | 名称 | 可用链接 | 数据日期 | 获取时间 | 等级 | 引用状态 | 被哪些判断使用 | 口径限制 |";
+
 export function markdownToHtml(md: string, highlights: ReportHighlight[] = []): string {
   const out: string[] = [];
   const lines = md.split("\n").map((line) => line.trimEnd());
-  let listTag: "ul" | "ol" | null = null;
-  const sortedHighlights = [...highlights].sort((a, b) => b.text.length - a.text.length);
+  /** R3：列表栈——索引 = 缩进层级（2 空格算一层，最多 3 层）。 */
+  const openLists: Array<"ul" | "ol"> = [];
+  /** R3：当前是否有未闭合的 `<li>`（深层嵌套时父项保持打开，让嵌套列表落在父项内部）。 */
+  let itemOpen = false;
+  let prevDepth = -1;
+  /** R4：二级标题（`##`）收集成文档目录。 */
+  const toc: Array<{ id: string; text: string }> = [];
+  let headingSeq = 0;
+  const catalogs = new Map<number, Map<string, string>>();
+  const sourceRows = new Map<number, string>();
+  const referenceIds = new Map<string, string[]>();
+  const scopes: number[] = [];
+  let scope = 0;
+  let referenceSeq = 0;
+  const citation = (token: string, sid: string): string => {
+    const target = catalogs.get(scope)?.get(sid);
+    if (!target) return `<span class="cite" title="本节来源目录未提供该编号">${token}（来源目录缺项）</span>`;
+    const id = `wb-cite-${++referenceSeq}`;
+    referenceIds.set(target, [...(referenceIds.get(target) ?? []), id]);
+    return `<a class="cite" id="${id}" href="#${target}" aria-label="查看来源 ${escapeHtml(sid)}">${token}</a>`;
+  };
   /**
-   * 行内组装（v31 §八.6）：先转义，再替换 **加粗** 与 [S#] 引用标签；
+   * 行内组装（v31 §八.6）：先转义，再替换 [文字](链接)、**加粗** 与 [S#] 引用标签；
    * `highlights` 非空时对剩余纯文本段做关键数字高亮（每段最多 2 处，与页面 renderInline 同口径），
    * PNG/PDF/HTML 导出保留颜色（白底色板）且每个 mark 带 title 文字标签。
    */
   const inline = (text: string): string => {
     const escaped = escapeHtml(text)
+      // R2：`[URL](URL)` → 可点击 <a>。放在 [S#] 之前，避免引用标签规则先吃掉方括号。
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
       .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-      .replace(/(\[S\d+\])/g, '<span class="cite">$1</span>');
-    if (sortedHighlights.length === 0) return escaped;
-    let budget = 2;
+      .split(/(<a [^>]*>[^<]*<\/a>)/g)
+      .map((part) => part.startsWith("<a ") ? part : part.replace(/\[([^\]\n]+)\]/g, (token, sid: string) =>
+        catalogs.get(scope)?.has(sid) || /^S\d+$/.test(sid) || sid === "S3A" || [...catalogs.values()].some((rows) => rows.has(sid))
+          ? citation(token, sid) : token))
+      .join("");
+    if (highlights.length === 0) return escaped;
+    /** R1：段内预算——每行重置一次，与屏显「每段最多 2 处」同口径。 */
+    let budget = HIGHLIGHT_BUDGET_PER_PARAGRAPH;
     return escaped
-      .split(/(<b>[^<]*<\/b>|<span class="cite">\[S\d+\]<\/span>)/g)
+      // 已成标签的片段不再嵌套高亮：加粗本身已是强调；链接更不能把 <mark> 塞进 href。
+      .split(/(<b>[^<]*<\/b>|<span class="cite">\[S\d+\]<\/span>|<a [^>]*>[^<]*<\/a>)/g)
       .map((part) => {
-        // 已成标签的片段不再嵌套高亮（加粗本身已是强调，避免双重编码）。
-        if (part.startsWith("<b>") || part.startsWith('<span class="cite">')) return part;
-        return part.replace(/[+-]?\d+(?:\.\d+)?%?/g, (token) => {
-          if (budget <= 0) return token;
-          const hit = sortedHighlights.find((highlight) => highlight.text === token);
-          if (!hit) return token;
-          budget -= 1;
-          const titleAttr = hit.title ? ` title="${escapeHtml(hit.title)}"` : "";
-          return `<mark class="rpt-hl rpt-hl-${hit.tone}"${titleAttr}>${token}</mark>`;
-        });
+        if (part.startsWith("<b>") || part.startsWith('<span class="cite">') || part.startsWith("<a ")) return part;
+        const segments = splitKeyFactSegments(part, highlights, budget);
+        budget -= segments.filter((segment) => segment.highlight).length;
+        return segments
+          .map((segment) => (segment.highlight
+            ? `<mark class="rpt-hl rpt-hl-${segment.highlight.tone}"${segment.highlight.title ? ` title="${escapeHtml(segment.highlight.title)}"` : ""}>${segment.text}</mark>`
+            : segment.text))
+          .join("");
       })
       .join("");
   };
+  /** R3：收掉当前未闭合的 `<li>`。 */
+  const closeItem = (): void => {
+    if (itemOpen) { out.push("</li>"); itemOpen = false; }
+  };
+  /** R3：闭合全部列表（每层先收 `<li>` 再关列表标签）。 */
   const closeList = (): void => {
-    if (listTag) { out.push(`</${listTag}>`); listTag = null; }
+    while (openLists.length > 0) {
+      closeItem();
+      out.push(`</${openLists.pop()}>`);
+    }
+    prevDepth = -1;
+  };
+  /**
+   * R3：按缩进层级同步列表栈——同层续写、回到浅层逐级闭合、进入深层时**不关父项 `<li>`**，
+   * 让嵌套 `<ul>` 落在父项内部（合法 HTML），而不是作为 `<ul>` 的直接子元素。
+   */
+  const syncList = (depth: number, tag: "ul" | "ol"): void => {
+    if (depth <= prevDepth) closeItem();
+    while (openLists.length > depth + 1) {
+      closeItem();
+      out.push(`</${openLists.pop()}>`);
+    }
+    if (openLists.length === depth + 1 && openLists[depth] !== tag) {
+      closeItem();
+      out.push(`</${openLists.pop()}>`);
+    }
+    while (openLists.length <= depth) {
+      const next = openLists.length === depth ? tag : "ul";
+      openLists.push(next);
+      out.push(`<${next}>`);
+    }
+    prevDepth = depth;
   };
   const cells = (line: string): string[] =>
     line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
@@ -100,41 +180,100 @@ export function markdownToHtml(md: string, highlights: ReportHighlight[] = []): 
     return text.includes("|") && text.includes("-") && /^[\s|:-]+$/.test(text);
   };
 
+  // The appendix heading and table header are emitted by this module; IDs remain exact.
+  let sourceSeq = 0;
   for (let i = 0; i < lines.length; i += 1) {
+    if (/^### 附录 #\d+ · /.test(lines[i] ?? "")) scope += 1;
+    scopes[i] = scope;
+    if (lines[i] !== SOURCE_CATALOG_HEADER || !isSeparator(lines[i + 1] ?? "")) continue;
+    const entries = catalogs.get(scope) ?? new Map<string, string>();
+    catalogs.set(scope, entries);
+    for (let j = i + 2; (lines[j] ?? "").trim().startsWith("|"); j += 1) {
+      const sid = cells(lines[j]!)[0] ?? "";
+      const id = `wb-source-${++sourceSeq}`;
+      sourceRows.set(j, id);
+      if (sid && !entries.has(sid)) entries.set(sid, id);
+    }
+  }
+
+  for (let i = 0; i < lines.length; i += 1) {
+    scope = scopes[i] ?? 0;
     const line = lines[i] ?? "";
-    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    // R4：`#` 数量 → 标题层级。导出件已剥掉正文的 `#` 标题行，实际用到 ## / ### / ####。
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       closeList();
-      out.push(`<h3>${inline(heading[1] ?? "")}</h3>`);
+      const level = (heading[1] ?? "#").length;
+      const text = heading[2] ?? "";
+      headingSeq += 1;
+      const id = `wb-doc-sec-${headingSeq}`;
+      if (level === 2) toc.push({ id, text });
+      out.push(`<h${level} id="${id}">${inline(text)}</h${level}>`);
       continue;
     }
     if (line.trim().startsWith("|") && isSeparator(lines[i + 1] ?? "")) {
       closeList();
       const header = cells(line);
       const rows: string[][] = [];
+      const rowIds: Array<string | undefined> = [];
       let j = i + 2;
       while (j < lines.length && (lines[j] ?? "").trim().startsWith("|")) {
         rows.push(cells(lines[j] ?? ""));
+        rowIds.push(sourceRows.get(j));
         j += 1;
       }
       i = j - 1;
-      out.push(`<table><thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>`
-        + `<tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+      out.push(`<div class="doc-table-scroll" role="region" aria-label="表格：${escapeHtml(header.join("、"))}" tabindex="0"><table${line === SOURCE_CATALOG_HEADER ? ' class="doc-source-catalog"' : ""}><thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>`
+        + `<tbody>${rows.map((row, index) => {
+          const id = rowIds[index];
+          return `<tr${id ? ` id="${id}" tabindex="-1"` : ""}>${row.map((cell, column) => `<td>${inline(cell)}${id && column === 0 ? `<!--backlinks-${id}-->` : ""}</td>`).join("")}</tr>`;
+        }).join("")}</tbody></table></div>`);
       continue;
     }
-    const bullet = line.match(/^[-*]\s+(.*)$/);
-    const ordered = line.match(/^\d+[.)]\s+(.*)$/);
+    // R5：引用行（`> …`）——连续引用合并成一个 <blockquote>，不再被转义成 `&gt;` 留在正文里。
+    const quote = line.match(/^\s*>\s?(.*)$/);
+    if (quote) {
+      closeList();
+      const parts: string[] = [quote[1] ?? ""];
+      let j = i + 1;
+      while (j < lines.length) {
+        const next = (lines[j] ?? "").match(/^\s*>\s?(.*)$/);
+        if (!next) break;
+        parts.push(next[1] ?? "");
+        j += 1;
+      }
+      i = j - 1;
+      out.push(`<blockquote>${parts.map((part) => inline(part)).join("<br>")}</blockquote>`);
+      continue;
+    }
+    // R3：允许前导缩进（2 空格一层）——此前 `^[-*]` 锚点不匹配缩进项，落到 <p> 分支留下裸的 `  - `。
+    const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+    const ordered = line.match(/^(\s*)\d+[.)]\s+(.*)$/);
     if (bullet || ordered) {
-      const tag = bullet ? "ul" : "ol";
-      if (listTag !== tag) { closeList(); out.push(`<${tag}>`); listTag = tag; }
-      out.push(`<li>${inline((bullet ?? ordered)?.[1] ?? "")}</li>`);
+      const match = (bullet ?? ordered)!;
+      const depth = Math.min(Math.floor((match[1] ?? "").length / 2), 3);
+      syncList(depth, bullet ? "ul" : "ol");
+      // R3：`<li>` 先不闭合——若下一行缩进更深，嵌套列表要落在这个 <li> 内部（合法 HTML）。
+      out.push(`<li>${inline(match[2] ?? "")}`);
+      itemOpen = true;
       continue;
     }
     closeList();
     if (line.trim() !== "") out.push(`<p>${inline(line)}</p>`);
   }
   closeList();
-  return out.join("\n");
+  let body = out.join("\n");
+  for (const id of sourceRows.values()) {
+    const refs = referenceIds.get(id) ?? [];
+    const links = refs.map((ref, index) => `<a href="#${ref}" aria-label="返回引用 ${index + 1}">返回引用 ${index + 1}</a>`).join(" · ");
+    body = body.split(`<!--backlinks-${id}-->`).join(links ? `<br>${links}` : "");
+  }
+  if (toc.length === 0) return body;
+  // R4：导出件加一项目录（按 `##` 生成），与屏显正文目录同一「章节可跳转」口径。
+  const nav = `<nav class="doc-toc"><span class="doc-toc-label">目录</span>`
+    + toc.map((item) => `<a href="#${item.id}">${escapeHtml(item.text)}</a>`).join("")
+    + "</nav>";
+  return `${nav}\n${body}`;
 }
 
 /** 浅色可打印 HTML 文档（HTML 导出与 Word 导出共用；Word 直接吃同一 HTML）。 */
@@ -143,42 +282,74 @@ export function buildHtmlDocument(title: string, metaLines: string[], bodyHtml: 
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <style>
-  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; max-width: 860px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.75; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; max-width: 860px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.75; overflow-wrap: anywhere; }
   h1 { font-size: 22px; border-bottom: 2px solid #2e7d5b; padding-bottom: 10px; }
+  h2 { font-size: 19px; margin-top: 28px; border-bottom: 1px solid #dcdfdd; padding-bottom: 6px; }
   h3 { font-size: 16px; margin-top: 24px; }
+  h4 { font-size: 14px; margin-top: 20px; }
+  h5 { font-size: 13px; margin-top: 18px; }
+  h6 { font-size: 13px; margin-top: 16px; color: #555; }
   .meta { color: #666; font-size: 13px; margin-bottom: 20px; }
   .meta span { display: inline-block; margin-right: 16px; }
+  /* R4：导出件目录（按 ## 生成）——3561 字的报告不再只能线性滚。 */
+  .doc-toc { margin: 0 0 20px; padding: 10px 14px; border: 1px solid #dcdfdd; border-radius: 4px; font-size: 13px; }
+  .doc-toc-label { color: #888; margin-right: 10px; font-weight: 600; }
+  .doc-toc a { color: #2e7d5b; text-decoration: none; margin-right: 12px; }
   ul { padding-left: 22px; margin: 6px 0; }
   ol { padding-left: 24px; margin: 6px 0; }
   li { margin: 4px 0; }
+  /* R3：缩进列表渲染出的嵌套层，缩进收紧一档。 */
+  ul ul, ul ol, ol ul, ol ol { margin: 2px 0; }
   p { margin: 8px 0; }
+  /* R5：引用行（以「> 」开头，含文末免责声明）——取代上一版 buildHtmlDocument 里固定的 .disclaimer 段落。 */
+  blockquote { margin: 12px 0; padding: 8px 14px; background: #f4f6f5; border-left: 3px solid #2e7d5b; color: #444; font-size: 13px; }
+  a { color: #2e7d5b; word-break: break-all; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  .doc-table-scroll { max-width: 100%; overflow-x: auto; margin: 12px 0; }
+  .doc-table-scroll table { min-width: 640px; margin: 0; }
+  .doc-table-scroll:focus-visible, a:focus-visible { outline: 2px solid #2e7d5b; outline-offset: 3px; }
+  @media screen {
+    .doc-table-scroll .doc-source-catalog { min-width: 1120px; }
+    .doc-source-catalog :is(th, td):nth-child(4), .doc-source-catalog :is(th, td):nth-child(5) { white-space: nowrap; }
+  }
   th, td { border: 1px solid #dcdfdd; padding: 6px 10px; text-align: left; vertical-align: top; }
   th { background: #f4f6f5; font-weight: 600; }
   .cite { color: #2e7d5b; font-weight: 600; }
   /* v31 §八.6 白底导出色板（暗色界面另有对应 token）：彩色标记一律加粗 + title 文字标签，
-     普通文本对比度 ≥ 4.5:1；灰度打印时加粗仍可识别重点，不依赖颜色。 */
+     普通文本对比度 ≥ 4.5:1；灰度打印时加粗仍可识别重点，不依赖颜色。
+     D3：三档色值由 reportHighlightTones.ts 生成——改色值只改那一处，不再两处硬编码。 */
   mark.rpt-hl { background: transparent; font-weight: 700; padding: 0 1px; }
-  mark.rpt-hl-blue  { color: #1d4ed8; }
-  mark.rpt-hl-amber { color: #8a5a00; }
-  mark.rpt-hl-coral { color: #b3261e; }
-  .disclaimer { margin-top: 32px; padding: 10px 14px; background: #f4f6f5; border-left: 3px solid #2e7d5b; color: #555; font-size: 13px; }
-  @media print { body { margin: 0 auto; } }
+${reportHighlightCss()}
+  @media screen and (max-width: 600px) {
+    body { margin: 20px auto; padding: 0 16px; }
+    .meta span { display: block; margin-right: 0; }
+  }
+  /* D2：打印分页控制——表格跨页不破行、表头逐页重复、章节标题不落页尾（此前只有 body 边距）。 */
+  @media print {
+    body { margin: 0 auto; padding: 0 12mm; }
+    .doc-table-scroll { overflow: visible; max-width: none; }
+    .doc-table-scroll table { min-width: 0; width: 100%; table-layout: fixed; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    h1, h2, h3, h4 { page-break-after: avoid; }
+    blockquote { page-break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
 <h1>${escapeHtml(title)}</h1>
-<div class="meta">${metaLines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</div>
+${metaLines.length > 0 ? `<div class="meta">${metaLines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</div>` : ""}
 ${bodyHtml}
-<p class="disclaimer">研究参考，不构成投资建议；关键判断请回链原始来源复核。</p>
 </body>
 </html>`;
 }
 
 export function buildStockReportMarkdown(report: StockReport, followUps: AnalysisTurn[] = []): string {
   const lines: string[] = [];
+  const generationMetadata: string[] = [];
   /** 表格单元格内的 | 会打断表格语法，统一替换为 /。 */
   const cell = (value: string | number | null | undefined): string =>
     String(value ?? "—").replace(/\|/g, "/").replace(/\n+/g, " ").trim() || "—";
@@ -203,6 +374,10 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   const aTierSources = report.evidence_quality?.tiers?.A ?? [];
   if (report.evidence_quality && aTierSources.length === 0) {
     lines.push("- 证据资格提示：**本次无一手公告/财报原文（A 级 0 条）**，财务与估值口径均为二次分发或媒体摘要，结论按此打折看。");
+  } else if (aTierSources.length > 0) {
+    // D1（2026-09-27 路线图）：拿到一手公告全文时也要在头部说出来——否则「无 A 级」有提示、
+    // 「有 A 级」反而无提示，读者只会在没有时被提醒，等级变化静默无声。
+    lines.push(`- 证据资格提示：本次含 A 级一手来源 ${aTierSources.join("、")}（公告披露正文全文，经数据商转载）；关键数字仍建议与原文核对。`);
   }
   // v32 §二.1：首屏驾驶舱三行结论词随导出走（离开界面后仍能一眼看到三个时间尺度的分项判断）。
   const cockpit: ReportCockpit | undefined = report.pillar_verdicts ?? report.decision_card?.cockpit;
@@ -219,7 +394,7 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   // v31 §八.4：草稿与阻断项随导出走——离开界面后同样不得冒充完整报告。
   if (report.is_draft) lines.push(`- 状态：**草稿（生成不完整，不计入正式报告数量）**`);
   for (const blocker of report.quality_blockers ?? []) lines.push(`- 阻断项：${blocker.message}`);
-  lines.push(`- 生成时间：${new Date(report.generated_at).toLocaleString()}`);
+  lines.push(`- 生成时间：${formatTimestamp(report.generated_at)}`);
   // J07（2026-09-18 桌面端路线图）：头部去掉零信息重复行。
   // 过去「引用来源」与「本次可引用来源」两行无条件输出，模型引用满可用来源时两行逐字相同
   // （样报 002468 的 9/10 行即如此）；字数与提示词版本也各写两遍。
@@ -235,18 +410,22 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   ].filter(Boolean) : [];
   // 提示词版本只在留痕里没有、或与策略版本不一致时单独成行——不一致才是版本错位的真信号。
   if (report.prompt_policy_version && !traceParts.some((part) => String(part).includes(report.prompt_policy_version!))) {
-    lines.push(`- 提示词策略版本：${report.prompt_policy_version}`);
+    generationMetadata.push(`- 提示词策略版本：${report.prompt_policy_version}`);
   }
-  if (traceParts.length > 0) lines.push(`- 生成留痕：${traceParts.join(" · ")}`);
+  if (traceParts.length > 0) generationMetadata.push(`- 生成留痕：${traceParts.join(" · ")}`);
   // v31 §4.2：缺失小节在导出中同样显式占位（红色在 Markdown 里退化为文字标签，不依赖颜色）。
   for (const name of report.missing_sections ?? []) {
     lines.push(`- 缺失小节：**${name} · 未生成**`);
   }
   lines.push("");
+  lines.push("## 阅读前核对", ...reportReadingSummary(report).map((line) => `- ${line}`), "");
   if (report.executive_summary) {
     lines.push("## 执行摘要", report.executive_summary, "");
   }
-  lines.push("## 研报正文", report.report.trim(), "");
+  if ((report.summary_downgrade_notes?.length ?? 0) > 0) {
+    lines.push("## 结论使用限制", ...report.summary_downgrade_notes!.map((note) => `- ${note}`), "");
+  }
+  lines.push("## 研报正文", "以下保留报告原有措辞；应用核验及修订留痕另列。", "", report.report.trim(), "");
   // v24 档 A/B/C：估值判断（市盈率一类）——模型未给估值时不写该节，不占位、不编造。
   // v32：正常化盈利/三情景估值/安全边际/四态估值状态随估值节一起导出。
   const valuation = report.valuation;
@@ -274,8 +453,11 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     }
     lines.push(
       `| 估值证据三态 | ${cell(valuationEvidence.label)}`
-      + `${valuationEvidence.note ? `（${cell(valuationEvidence.note)}）` : ""} |`,
+      + `${valuationEvidence.note ? `（${cell(valuationEvidenceReadingNote(valuationEvidence))}）` : ""} |`,
     );
+    if (valuationEvidenceReadingNote(valuationEvidence) !== valuationEvidence.note) {
+      generationMetadata.push(`- 估值指标说明留痕：${cell(valuationEvidence.note)}`);
+    }
     // J01 的原因行不能因为换了措辞就消失：结论词被归一时，读者仍要知道是怎么被改成这一词的。
     if (maskedValuationVerdict && valuation.verdict_note) {
       lines.push(
@@ -319,7 +501,7 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     if (typeof marginOfSafety === "number" && Number.isFinite(marginOfSafety)) {
       lines.push(`- 安全边际：${(marginOfSafety * 100).toFixed(1)}%（${marginOfSafety >= 0 ? "现价低于基准公允价值" : "现价高于基准公允价值"}）`, "");
     }
-    for (const item of valuation.valuation_limitations ?? []) lines.push(`- 估值口径限制：${item}`);
+    for (const item of valuation.valuation_limitations ?? []) lines.push(`- 模型提供的估值限制（原文）：${item}`);
     if ((valuation.valuation_limitations ?? []).length > 0) lines.push("");
   }
   // v24 结构化判断（表格语法：页面渲染、HTML/Word 导出、复制全文三处同一口径）
@@ -328,8 +510,9 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   const resistance = report.levels?.resistance ?? [];
   const watchpoints = report.watchpoints ?? [];
   if (scenarios.length > 0) {
-    // J09（2026-09-18 桌面端路线图）：三档概率同值 = 模型根本没做概率判断（样报 002468 三个「中」）。
+    // J09（2026-09-18 桌面端路线图）：三档倾向同值 = 模型根本没做概率判断（样报 002468 三个「中」）。
     // R04：同值判定收敛到 format.scenarioProbabilityDisplay，与屏显共用同一实现、两处口径一致。
+    // G3（2026-09-27 路线图）：判定从「三档全同」放宽到「存在重复档」（中/中/低 也算没做区分）。
     const { uniform: probabilityUniform, displayOf: probabilityCellOf } = scenarioProbabilityDisplay(scenarios);
     // Q08（2026-09-19 路线图）：列名与屏显同源——未校准的低/中/高只能叫「倾向（未统计校准）」，
     // 写成「概率」会被读者当成上涨概率（页面上「中」二字脱离口径后就是个数字幻觉）。
@@ -354,7 +537,9 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     lines.push("");
     lines.push(`- 概率口径：${probabilityWording.note}`, "");
     if (probabilityUniform) {
-      lines.push("- 概率口径：三档概率同值，按「未给概率」处理——不作排序或建仓依据。", "");
+      // G3（2026-09-27 路线图）：判定已从「三档全同」放宽到「存在重复档」，措辞随之改为
+      // 「存在重复档」——样报 002468 的乐观=中 / 中性=中 / 悲观=低 也会走到这里。
+      lines.push("- 概率口径：情景倾向存在重复档（模型未做区分），按「未给概率」处理——不作排序或建仓依据。", "");
     }
   }
   if (support.length > 0 || resistance.length > 0) {
@@ -367,22 +552,40 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     // J10（2026-09-18 桌面端路线图）：「验证时点」与「到期日」合并为一列。
     // 到期日本就是从可解析的 verify_by 推出来的，能解析时两列逐字相同（样报 98/99 行），
     // 事件锚定行则一个有值一个是「—」——两列并排只让读者猜哪个才是准的。
-    lines.push("## 验证点清单", "", "| 观察信号 | 到期（含来源） | 状态 | 若成立则预期 |", "| --- | --- | --- | --- |");
+    // G2（2026-09-27 路线图）：补「可回填」列——5 条里结构上有 2 条永远无法自动回填，
+    // 此前导出件只写「状态：待复盘」，读者无从知道哪几条点不动。判定与屏显角标、
+    // 复盘队列同源（format.watchpointRefillLabel）。
+    lines.push(
+      "## 验证点清单", "",
+      "| 观察信号 | 到期（含来源） | 状态 | 可回填 | 若成立则预期 |",
+      "| --- | --- | --- | --- | --- |",
+    );
     for (const item of watchpoints) {
       const due = item.due_on && item.due_on !== item.verify_by ? `${item.verify_by} → ${item.due_on}` : item.verify_by;
       lines.push(
         `| ${cell(item.signal)} | ${cell(due)}`
-        + ` | ${item.status === "pending_review" ? "待复盘" : cell(item.status)} | ${cell(item.expected_if_true)} |`,
+        + ` | ${item.status === "pending_review" ? "待复盘" : cell(item.status)}`
+        + ` | ${cell(watchpointRefillLabel(item).text)} | ${cell(item.expected_if_true)} |`,
+      );
+    }
+    const refill = watchpointRefillSummary(watchpoints);
+    if (refill.anchored > 0) {
+      lines.push(
+        "",
+        `- 可回填口径：共 ${refill.total} 条验证点，${refill.refillable} 条带确切日期、已幂等落成可回填判断`
+        + `（结论由人工回填，到期不等于已验证）；${refill.anchored} 条锚定事件无确切日期，`
+        + "而判断必须带到期时间——**不猜日期**，故不自动落库，可在「研究复盘」队列里手工标记已复核。",
       );
     }
     lines.push("");
   }
   // v27 证据质量与 claim 覆盖（系统写入，非模型产出）：导出件必须能自证「哪条结论撑得住」。
+  const evidenceStart = lines.length;
   const evidenceQuality = report.evidence_quality;
   const claims = report.claims ?? report.claim_findings?.claims ?? [];
   const claimFindings = report.claim_findings;
   if (evidenceQuality || claims.length > 0) {
-    lines.push("## 证据质量与结论支撑（系统写入，非模型产出）", "");
+    lines.push("## 证据质量与结论支撑", "");
     if (evidenceQuality) {
       lines.push(
         `- 等级口径：A=公告/财报/交易所原始数据 · B=公司正式说明/二次分发 · C=媒体/数据商摘要 · D=全市场扫描/传闻；`
@@ -391,6 +594,9 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
           .map((tier) => `${tier} 级 ${(evidenceQuality.tiers?.[tier] ?? []).join("/") || "无"}`)
           .join("；")}`,
       );
+      // D1（2026-09-27 路线图）：等级口径的**本次**依据随导出走——「为什么有/没有 A 级」
+      // 是服务端按本次证据包算出来的，导出件离开界面后必须还能自证，不能只留一句静态口径。
+      if (evidenceQuality.note) lines.push(`- 本次 A 级说明：${evidenceQuality.note}`);
     }
     if (claimFindings) {
       // J03（桌面端升级路线图 2026-09-18）：判定阈值化——「有支撑」= 核心判断全数支撑；
@@ -458,9 +664,9 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
       lines.push(
         "",
         jevRan
-          ? "| 核心判断 | 引用 | 需要字段 | 覆盖缺口 | 最高等级 | 结论 | 语义支撑（Jev） | 入核心支撑统计 |"
-          : "| 核心判断 | 引用 | 需要字段 | 覆盖缺口 | 最高等级 | 结论 | 入核心支撑统计 |",
-        jevRan ? "| --- | --- | --- | --- | --- | --- | --- | --- |" : "| --- | --- | --- | --- | --- | --- | --- |",
+          ? "| 编号 | 核心判断 | 引用 | 需要字段 | 覆盖缺口 | 最高等级 | 结论 | 语义支撑（Jev） | 入核心支撑统计 |"
+          : "| 编号 | 核心判断 | 引用 | 需要字段 | 覆盖缺口 | 最高等级 | 结论 | 入核心支撑统计 |",
+        jevRan ? "| --- | --- | --- | --- | --- | --- | --- | --- | --- |" : "| --- | --- | --- | --- | --- | --- | --- | --- |",
       );
       // Q09：判断表要标出哪些进入核心支撑统计，「2/3」才是可回查的分母而不是装饰。
       // 按位置取（coreFlags）：旧档案没有 claim_id 时按编号匹配会把每条都判成「未列入核心」。
@@ -480,7 +686,7 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
       };
       for (const claim of claims) {
         lines.push(
-          `| ${cell(claim.text)} | ${cell(claim.sources.join("/"))} | ${cell(claim.requires.join("、"))}`
+          `| ${cell(claim.claim_id ?? "")} | ${cell(claim.text)} | ${cell(claim.sources.join("/"))} | ${cell(claim.requires.join("、"))}`
           + ` | ${cell(claim.missing_coverage.join("、"))} | ${cell(claim.evidence_quality)}`
           + ` | ${cell(CLAIM_STATUS_LABEL[claim.status] ?? claim.status)}`
           + (jevRan ? ` | ${cell(jevCell(claim))}` : "")
@@ -494,10 +700,12 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   // Q09（2026-09-19 路线图）：来源目录——导出里的 S1…S5 只有编号时，离开界面就查无出处。
   // 缺链接一律如实写「（未提供链接）」，绝不按来源名猜一个看起来合理的 URL。
   pushSourceCatalog(lines, cell, report.source_catalog);
+  // R04/H05：完整校验与来源后置，先读盈利/现金流拆解及使用限制。
+  const evidenceAppendix = lines.splice(evidenceStart);
   // v27 反方检查：ok=false 时如实写入「未完成」，不用空白冒充做过。
   const counterCheck = report.counter_check;
   if (counterCheck) {
-    lines.push("## 反方检查（单次短调用，只指软肋，不改写正文）", "");
+    lines.push("## 反方检查（风险与反证，不改写正文）", "");
     if (!counterCheck.ok) {
       lines.push(`- 本次未完成：${counterCheck.detail || "未返回可解析结果"}`);
     } else {
@@ -537,21 +745,16 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
         lines.push(
           `| ${cell(row.factor_label || row.factor_raw || "未指明因素")} | ${cell(row.effect)}`
           + ` | ${row.contribution_pct == null ? "未给出" : `${row.contribution_pct}%`}`
-          + ` | ${cell(`${row.basis || "—"}（${row.source_note || "无来源"}）`)}${row.note ? ` —— ${cell(row.note)}` : ""} |`,
+          + ` | ${cell(`${row.basis || "—"}（${row.source_note || "无来源"}）`)}${row.note ? ` —— ${cell(earningsNoteDisplay(row.note))}` : ""}；${cell(earningsAnalysisDisplay(row))} |`,
         );
+        if (row.note && earningsNoteDisplay(row.note) !== row.note) {
+          generationMetadata.push(`- 贡献比例校验留痕（${cell(row.factor_label || row.factor_raw || "未指明因素")}）：${cell(row.note)}`);
+        }
       }
       lines.push("");
     }
     if (cashFlow) {
-      const show = (input?: number | string | null) => (
-        input === null || input === undefined || input === "" ? "未取到" : String(input)
-      );
-      lines.push(
-        `**现金流质量**：经营现金流 ${show(cashFlow.operating_cash_flow)}｜归母净利 ${show(cashFlow.net_income)}`
-        + `｜覆盖倍数 ${show(cashFlow.coverage_ratio)}｜折旧摊销 ${show(cashFlow.depreciation_amortization)}`
-        + `｜营运资本变动 ${show(cashFlow.working_capital ?? cashFlow.working_capital_change)}`
-        + `｜资本开支 ${show(cashFlow.capex)}｜自由现金流 ${show(cashFlow.free_cash_flow)}`,
-      );
+      lines.push("**现金流质量**", "", ...cashFlowDisplayLines(cashFlow).map((line) => `- ${line}`));
       lines.push(`- 判定：${cashFlow.verdict || "未判定"} —— ${cashFlow.note || ""}`);
       if (cashFlow.downgrade_note) lines.push(`- 降档说明：${cashFlow.downgrade_note}`);
       lines.push("");
@@ -567,9 +770,10 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
       if (divergence.cycle_note) lines.push(`- 盈利周期位置：${divergence.cycle_note}`);
       if (review) {
         lines.push(
-          `- 可比样本：${review.sample_count ?? 0} 只（${review.comparability_label || "未判定"}）—— ${review.note || ""}`,
+          `- 可比样本：${review.sample_count ?? 0} 只（${review.comparability_label || "未判定"}）—— ${comparableReviewNote(review)}`,
         );
         lines.push(`- 剔除规则：${review.exclusion_rule || "未声明"}`);
+        if (review.note && comparableReviewNote(review) !== review.note) generationMetadata.push(`- 可比样本计算留痕：${cell(review.note)}`);
       }
       lines.push(`- 敏感性口径：${divergence.sensitivity_note || "未说明"}`);
       if (divergence.low_pe_is_not_margin_of_safety) lines.push(`- ${divergence.guardrail}`);
@@ -579,7 +783,7 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   // v39 Q19：研究完成度写在字数告警之前——「长而不全」不能因为字数先出现就被读成研究已完整。
   const completeness = report.research_completeness;
   if ((completeness?.items?.length ?? 0) > 0) {
-    lines.push("## 深研完成度（系统写入，非模型产出）", "");
+    lines.push("## 深研完成度", "");
     lines.push(
       `- 判定：${completeness!.complete ? "四项齐备" : "关键研究项缺失"}`
       + `（${completeness!.done_count ?? 0}/${completeness!.items!.length}）`,
@@ -593,13 +797,15 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     }
     if (completeness!.headline) lines.push("", `- ${cell(completeness!.headline)}`);
     if (completeness!.word_count_note) lines.push(`- ${cell(completeness!.word_count_note)}`);
-    if (completeness!.note) lines.push(`- ${cell(completeness!.note)}`);
+    lines.push(`- ${RESEARCH_COMPLETENESS_READING_NOTE}`);
+    if (completeness!.note) generationMetadata.push(`- 完成度计算留痕：${cell(completeness!.note)}`);
     lines.push("");
   }
   // v39 Q20：反方检查触发的摘要加注——模型原话保留、加了什么标注必须可回查。
+  const reviewStart = lines.length;
   const overreach = report.summary_overreach;
   if (overreach && (overreach.changed || overreach.reviewed === false || (overreach.warnings?.length ?? 0) > 0)) {
-    lines.push("## 摘要修订留痕（反方检查触发，服务端只加注不改写事实句）", "");
+    lines.push("## 摘要修订留痕", "");
     lines.push(`- ${cell(overreach.revision_note || "本次未给出修订说明")}`);
     for (const item of overreach.warnings ?? []) lines.push(`- ${cell(item)}`);
     if (overreach.reviewed === false) {
@@ -615,16 +821,18 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
     lines.push("");
   }
   if (dropped.length > 0 || warnings.length > 0) {
-    lines.push("## 质量校验痕迹（系统写入，非模型产出）");
+    lines.push("## 质量校验记录");
     if (dropped.length > 0) lines.push(`- 已剔除虚假引用（这些来源本次取数失败）：${dropped.join("、")}`);
     for (const item of warnings) lines.push(`- ${item}`);
     lines.push("");
   }
+  const reviewAppendix = lines.splice(reviewStart);
   if (report.limitations.length > 0) {
     lines.push("## 局限与口径声明");
     for (const item of report.limitations) lines.push(`- ${item}`);
     lines.push("");
   }
+  lines.push(...evidenceAppendix, ...reviewAppendix);
   if (report.revision_notes) {
     lines.push("## 修订说明（协同流水线）", report.revision_notes, "");
   }
@@ -644,9 +852,23 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   // v32 §三：追问分析附录随导出走（append-only，原报告不可变；补充材料保留「未独立验证」标签，
   // 颜色退化为文字标签，满足「导出后关键信息仍可识别」的验收口径）。
   // v39 Q02：具体顺序与措辞全部由 pushFollowUpAppendix 承担，与屏显共用同一批判定函数。
+  if (generationMetadata.length > 0) {
+    lines.push("## 生成记录附录", "", ...generationMetadata, "");
+  }
+  const valuationRepairs = valuationRepairDisplayLines(report);
+  if (valuationRepairs.length > 0) {
+    lines.push("## 估值表述校验附录", "", ...valuationRepairs.map((line) => `- ${line}`), "");
+  }
   pushFollowUps(lines, followUps);
   lines.push("> 研究参考，不构成投资建议；关键判断请回链原始来源复核。");
   return lines.join("\n");
+}
+
+/** Single and batch stock exports retain the Markdown metadata exactly once. */
+export function buildStockReportHtml(report: StockReport, followUps: AnalysisTurn[] = []): string {
+  const markdown = buildStockReportMarkdown(report, followUps);
+  return buildHtmlDocument(report.title, [],
+    markdownToHtml(markdown.replace(/^# .*$/m, "").trim(), keyFactHighlights(report)));
 }
 
 /**
@@ -660,19 +882,28 @@ function pushSourceCatalog(
   heading = "## 来源目录（可回查：编号 / 名称 / 链接 / 数据日期 / 获取时间 / 口径限制）",
 ): void {
   if ((rows?.length ?? 0) === 0) return;
-  lines.push(heading, "", "| 编号 | 名称 | 可用链接 | 数据日期 | 获取时间 | 等级 | 引用状态 | 被哪些判断使用 | 口径限制 |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push(heading, "", SOURCE_CATALOG_HEADER, "| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const row of rows!) {
     lines.push(
       `| ${cell(row.source_id)}`
       + ` | ${cell(row.name || "（未提供名称）")}`
-      + ` | ${cell(sourceCatalogUrlText(row))}`
+      // R2：链接列写成 Markdown 链接，导出件里可点击（markdownToHtml 渲染成 <a rel="noopener noreferrer">）。
+      + ` | ${cell(row.documents?.length ? "逐篇链接见下方清单" : sourceCatalogUrlMarkdown(row))}`
       + ` | ${cell(row.data_date || "未标注")}`
-      + ` | ${cell(row.retrieved_at || "未标注")}`
+      // R7：获取时间与「生成时间」同口径（本地时区、秒级），不再打印 UTC 微秒串。
+      + ` | ${cell(formatTimestamp(row.retrieved_at))}`
       + ` | ${cell(row.quality || "—")}`
       + ` | ${row.cited === false ? "可得未引用" : "已引用"}`
       + ` | ${cell((row.used_by ?? []).join("、") || "—")}`
       + ` | ${cell(row.scope_note || "—")} |`,
     );
+  }
+  for (const row of rows!) {
+    if (!row.documents?.length) continue;
+    lines.push("", `**${cell(row.source_id)} · 逐篇来源**`, "");
+    row.documents.forEach((doc, index) => {
+      lines.push(`- ${index + 1}. ${cell(doc.title || "（未提供标题）")} · ${cell(doc.data_date || "日期未标注")} · ${sourceCatalogUrlMarkdown(doc)}`);
+    });
   }
   lines.push("- 链接口径：仅列出来源记录里真实存在的链接；标「（未提供链接）」表示本次没有可访问地址，不代表来源不存在。", "");
 }
@@ -695,7 +926,7 @@ function pushFollowUpAppendix(lines: string[], turn: AnalysisTurn): void {
   lines.push(
     `### 附录 #${turn.turn_index} · ${change.label}`,
     "",
-    `- 时间：${new Date(turn.created_at).toLocaleString()}`,
+    `- 时间：${formatTimestamp(turn.created_at)}`,
     `- 入口：${turn.mode_label || turn.mode || "未标注（旧版记录未区分解读/补充研究）"}`,
     `- 数据来源：${axes.dataBasis.label}`,
     "",
@@ -836,8 +1067,8 @@ function pushFollowUpAppendix(lines: string[], turn: AnalysisTurn): void {
         `- [${item.status === "ok" ? "成功" : "失败"}] ${item.label || item.kind}`
         + `${item.source_name ? ` · 来源 ${item.source_name}` : ""}`
         + `${item.event_date ? ` · 数据日期 ${item.event_date}` : ""}`
-        + `${item.retrieved_at ? ` · 获取 ${item.retrieved_at}` : ""}`
-        + ` · ${sourceCatalogUrlText({ url: item.url, url_note: item.url_note })}`
+        + `${item.retrieved_at ? ` · 获取 ${formatTimestamp(item.retrieved_at)}` : ""}`
+        + ` · ${sourceCatalogUrlMarkdown({ url: item.url, url_note: item.url_note })}`
         + `${(item.supported_claims ?? []).length > 0 ? ` · 支撑 ${item.supported_claims!.join("、")}` : ""}`
         + `${item.trust_label ? ` · ${item.trust_label}` : ""}`,
       );
@@ -896,7 +1127,7 @@ export function buildCompareSynthesisMarkdown(synthesis: CompareSynthesis): stri
   const lines: string[] = [];
   lines.push("# 跨报告综合 · 共识与分歧", "");
   lines.push(`- 综合模型：${synthesis.model}`);
-  lines.push(`- 生成时间：${new Date(synthesis.generated_at).toLocaleString()}`);
+  lines.push(`- 生成时间：${formatTimestamp(synthesis.generated_at)}`);
   lines.push("", "## 综合结论", synthesis.summary, "");
   if (synthesis.consensus.length > 0) {
     lines.push("## 共识点");
@@ -941,7 +1172,7 @@ export function buildDirectionReportMarkdown(report: DirectionReport): string {
   }
   if (report.quality_status_label) lines.push(`- 质量状态：${report.quality_status_label}`);
   if (report.is_draft) lines.push(`- 状态：**草稿（生成不完整，不计入正式报告数量）**`);
-  lines.push(`- 生成时间：${new Date(report.generated_at).toLocaleString()}`);
+  lines.push(`- 生成时间：${formatTimestamp(report.generated_at)}`);
   lines.push("");
   if (report.executive_summary) lines.push("## 执行摘要", report.executive_summary, "");
   lines.push("## 研判正文", (report.report || report.direction_summary || "").trim(), "");
@@ -986,7 +1217,7 @@ export function buildDirectionReportMarkdown(report: DirectionReport): string {
   if ((report.evidence_snapshot?.length ?? 0) > 0) {
     lines.push("## 证据快照（[E#] 可回链）", "");
     for (const item of report.evidence_snapshot!) {
-      lines.push(`- [${item.evidence_id}] ${item.title}（${item.source}）· ${item.content} · 抓取 ${item.retrieved_at.slice(0, 19).replace("T", " ")}`);
+      lines.push(`- [${item.evidence_id}] ${item.title}（${item.source}）· ${item.content} · 抓取 ${formatTimestamp(item.retrieved_at)}`);
     }
     lines.push("");
   }
@@ -1199,11 +1430,7 @@ export function BatchExportBar({ entries, disabled }: { entries: CompareEntry[];
         zip.file(`${seq}-${base}.md`, md);
         zip.file(
           `${seq}-${base}.html`,
-          buildHtmlDocument(
-            report.title,
-            [report.symbol, `模型 ${report.model}`, `置信 ${report.confidence}`, new Date(report.generated_at).toLocaleString()],
-            markdownToHtml(md.replace(/^# .*$/m, "").trim(), keyFactHighlights(report)),
-          ),
+          buildStockReportHtml(report),
         );
         indexLines.push(`- [${seq}] ${report.symbol} ${entry.name} · ${report.model} · 置信 ${report.confidence}（${seq}-${base}.md / .html）`);
       });

@@ -14,15 +14,18 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
 _ANN_URL = "https://np-anotice-stock.eastmoney.com/api/security/ann"
+_ANN_CONTENT_URL = "https://np-cnotice-stock.eastmoney.com/api/content/ann"
 _NEWS_URL = "https://search-api-web.eastmoney.com/search/jsonp"
 _USER_AGENT = "InvestmentSteward/0.1"
 _REQUEST_TIMEOUT = 15
@@ -35,6 +38,31 @@ _FAIL_COOLDOWN_SECONDS = 90.0
 _fail_cache: dict[str, float] = {}
 
 _ARTICLE_URL_TEMPLATE = "https://finance.eastmoney.com/a/{art_code}.html"
+
+# —— D1（研报产出与交付链路路线图 2026-09-27）：公告正文抓取 ——
+#
+# 背景：`/evidence/announcements` 与报告链路此前只拿到公告**标题**，于是
+# `report_quality.SOURCE_PROFILES["S3"]` 只能判 B 级，整条链路拿不到任何 A 级证据；
+# 而 A 股投资者最认的恰恰是交易所披露原文。本段补上「正文」这一层。
+#
+# 取数口径（实测 2026-09-28）：`np-cnotice-stock/api/content/ann?art_code=<code>` 返回
+#   data.notice_content —— 披露原文全文（含「董事会保证…」声明、重要内容提示、落款），
+#   `is_ai_summary=0`，**不是摘要**；`data.attach_url_web` 为原文 PDF 链接；
+#   失败形态是 `{"success":0,"error":…}`（无 data 节点），据此如实判定失败。
+#   page_index 不影响正文（1/2/3 返回同一份），无需翻页。
+#
+# 成本边界：每条正文 1 次请求，因此只对**最近 ANNOUNCEMENT_BODY_LIMIT 条**取正文，
+# 不随公告条数线性放大。单条失败只跳过该条（正文是加分项，不应让整批公告降级）。
+
+ANNOUNCEMENT_BODY_LIMIT = 3
+# 进提示词的单条正文字数上限（超出显式标注截断，不静默截）。
+ANNOUNCEMENT_BODY_CHARS = 2000
+# 源站定位号形状：`AN202608141827994407`（实测列表接口返回）/ `20280820000123`。
+# 形状不符（空串、占位号、测试桩）**不发起请求**——不发无意义请求，也不猜测。
+_ART_CODE_PATTERN = re.compile(r"^(?:AN)?\d{10,}$")
+_CONTENT_CACHE_TTL_SECONDS = 300.0
+_content_cache: dict[str, tuple[float, "AnnouncementBody"]] = {}
+_content_fail_cache: dict[str, float] = {}
 
 
 class NoticeError(RuntimeError):
@@ -49,6 +77,20 @@ class Announcement:
     art_code: str
     ann_type: str
     url: str
+
+
+@dataclass(frozen=True)
+class AnnouncementBody:
+    """一条公告的**披露原文**（D1）。
+
+    `content` 是归一后的全文纯文本（不是摘要）；`attach_url` 是源站给出的原文 PDF 链接，
+    取不到则为 None。本 dataclass 只在正文确实取到时才被构造——空正文一律抛
+    `NoticeError`，不产出空壳。
+    """
+
+    art_code: str
+    content: str
+    attach_url: str | None
 
 
 def _ann_http_get(params: dict[str, object]) -> dict[str, object]:
@@ -195,6 +237,131 @@ def raw_locator_for(api: str, symbol: str, item: Announcement) -> str:
         },
         ensure_ascii=False,
     )
+
+
+# —— D1：公告正文抓取（东财公告正文接口；纯 stdlib，不引新依赖） ——
+
+
+def clean_notice_content(raw: object) -> str:
+    """正文归一：统一换行、压平行内多余空白、最多保留一个空行。
+
+    源站正文用大量空格做排版缩进（含表格列对齐）。直接送进提示词既费 token，也会让模型
+    把「对齐用的空格」当成语义；归一后只保留「行」这一层结构——**不改字、不删句、不截断**。
+    """
+    text = str(raw or "").replace("\r\n", "\n").replace("\r", "\n").replace("\u3000", " ")
+    out: list[str] = []
+    blank = 0
+    for line in text.split("\n"):
+        flat = re.sub(r"[ \t]{2,}", " ", line).strip()
+        if flat:
+            blank = 0
+            out.append(flat)
+        elif blank == 0 and out:
+            blank = 1
+            out.append("")
+    return "\n".join(out).strip()
+
+
+def _ann_content_http_get(art_code: str) -> dict[str, object]:
+    """公告正文接口的原始请求（重试 + 退避），与 `_ann_http_get` 同构。"""
+    query = urllib.parse.urlencode(
+        {"art_code": art_code, "client_source": "web", "page_index": 1}
+    )
+    url = f"{_ANN_CONTENT_URL}?{query}"
+    last_error: Exception | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+            with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT) as response:
+                payload = response.read().decode("utf-8")
+            parsed = json.loads(payload)
+            if not isinstance(parsed, dict):
+                raise NoticeError("东方财富公告正文接口返回结构异常")
+            return parsed
+        except Exception as error:  # noqa: BLE001 - 网络抖动统一重试
+            last_error = error
+            if attempt < _MAX_ATTEMPTS - 1:
+                time.sleep(_BACKOFF_SECONDS * (attempt + 1))
+    raise NoticeError(f"东方财富公告正文请求失败: {last_error}")
+
+
+def fetch_announcement_content(art_code: str) -> AnnouncementBody:
+    """抓取单条公告的披露原文全文（东财公告正文接口）。
+
+    - 正文来自数据商转载的交易所披露原文（含董事会保证声明与落款），**不是摘要**；
+    - 取不到（形状不符 / 结构异常 / `notice_content` 为空）一律抛 `NoticeError`，
+      调用方据此如实降级为「仅标题口径」——**不返回空壳、不用标题拼接充数**；
+    - 模块级 TTL 缓存 + 失败冷却，与列表接口一致（正文不会变，故 TTL 更长）。
+    """
+    key = str(art_code or "")
+    if not _ART_CODE_PATTERN.match(key):
+        raise NoticeError(f"art_code 形状不符（{key!r}），不发起正文请求")
+    now = time.monotonic()
+    cached = _content_cache.get(key)
+    if cached and now - cached[0] < _CONTENT_CACHE_TTL_SECONDS:
+        return cached[1]
+    fail_at = _content_fail_cache.get(key)
+    if fail_at and now - fail_at < _FAIL_COOLDOWN_SECONDS:
+        raise NoticeError(f"{key} 公告正文近期拉取失败，处于冷却期")
+
+    try:
+        data = _ann_content_http_get(key)
+    except NoticeError:
+        _content_fail_cache[key] = time.monotonic()
+        raise
+
+    node = data.get("data")
+    # 失败形态是 {"success": 0, "error": …}——没有 data 节点，据实判失败（不猜原因）。
+    content = clean_notice_content(node.get("notice_content")) if isinstance(node, dict) else ""
+    if not content:
+        _content_fail_cache[key] = time.monotonic()
+        raise NoticeError(f"{key} 公告正文为空（接口未返回 notice_content）")
+
+    attach = ""
+    if isinstance(node, dict):
+        for candidate in (node.get("attach_url_web"), node.get("attach_url")):
+            if isinstance(candidate, str) and candidate.strip():
+                attach = candidate.strip()
+                break
+    body = AnnouncementBody(art_code=key, content=content, attach_url=attach or None)
+    _content_cache[key] = (time.monotonic(), body)
+    return body
+
+
+def announcement_body_targets(
+    items: Sequence[Announcement], limit: int = ANNOUNCEMENT_BODY_LIMIT
+) -> list[Announcement]:
+    """挑出「值得且可以」取正文的公告：最近 `limit` 条 + art_code 形状合格。
+
+    形状预校验放在这里（而不是等 `fetch_announcement_content` 抛），是为了让调用方**事先**
+    知道「打算取几条」，从而把「N 条尝试 / M 条成功」如实写进降级说明，而不是笼统地说
+    「正文没取到」。
+    """
+    targets: list[Announcement] = []
+    for item in items:
+        if len(targets) >= max(0, limit):
+            break
+        if _ART_CODE_PATTERN.match(str(getattr(item, "art_code", "") or "")):
+            targets.append(item)
+    return targets
+
+
+def fetch_announcement_bodies(
+    items: Sequence[Announcement], limit: int = ANNOUNCEMENT_BODY_LIMIT
+) -> dict[str, AnnouncementBody]:
+    """逐条尽力取正文，返回 `{art_code: AnnouncementBody}`（**只含取到的**）。
+
+    单条失败只跳过该条并记日志：正文是加分项，某一条取不到不应让整批公告一起降级，
+    更不应影响报告生成。调用方用 `len(announcement_body_targets(items, limit)) - len(结果)`
+    得到失败条数，据此如实标注（不把「没取到」说成「没有正文」）。
+    """
+    bodies: dict[str, AnnouncementBody] = {}
+    for item in announcement_body_targets(items, limit):
+        try:
+            bodies[item.art_code] = fetch_announcement_content(item.art_code)
+        except NoticeError as error:
+            logger.warning("公告正文抓取失败 art_code=%s: %s", item.art_code, error)
+    return bodies
 
 
 # —— 新闻检索证据（东财搜索 JSONP；对 finance get_news 约定的纯 stdlib 移植） ——

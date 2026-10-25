@@ -360,9 +360,76 @@ export function useResearch(client: CoreClient) {
     return null;
   }
 
+  /** G2（研报产出与交付链路路线图 2026-09-27）：手工标记**锚定事件**型验证点已复核。
+   *
+   * 为什么需要这个入口：锚定事件（「三季报披露后」）没有确切日期，而判断的到期时间是必填
+   * 字段，服务端不猜日期、不落库，于是这 2 条在界面上既不能回填、也没有任何「我人工看过了」
+   * 的出口。本方法走 `POST /ai-research/reports/{report_id}/watchpoints/{index}/review`，
+   * **只追加**复核结论，原研报 payload 一字不改；带确切日期的验证点会被服务端 409 拒绝
+   * （那条走 `verifyJudgment`），避免同一件事两种写法。
+   *
+   * 失败如实返回错误文案（不吞），由调用方展示；成功后刷新队列以带回新结论与闭环计数。 */
+  async function reviewReportWatchpoint(
+    reportId: string,
+    index: number,
+    result: "verified" | "refuted" | "insufficient_data",
+    outcome = "",
+  ): Promise<string | null> {
+    const response = await client.request<{ ok: boolean; review?: { result?: string } }>({
+      method: "POST",
+      path: `/ai-research/reports/${reportId}/watchpoints/${index}/review`,
+      body: { result, outcome: outcome.trim() },
+    });
+    if (response.status >= 400 || !response.data?.ok) {
+      return detailOf(response.data) ?? `手工复核失败（HTTP ${response.status}）`;
+    }
+    await loadResearchReviewQueue();
+    return null;
+  }
+
   async function deleteAiResearchReport(reportId: string): Promise<void> {
     await client.request({ method: "DELETE", path: `/ai-research/reports/${reportId}` });
     void loadAiReports();
+  }
+
+  /**
+   * G1（研报产出与交付链路路线图 2026-09-27）：对**已落库**报告执行一次定向修复。
+   *
+   * 「发现得准、修不了」是交付面的主要短板：闸门精确知道缺什么，却没有任何入口，
+   * 用户只能整份重生成。本调用复用与自动修复**完全相同**的服务端路径
+   * （同一套提示词与验收条件，见 `report_repair.py`），因此手动修复与自动修复
+   * 不会产出不一致的结果。
+   *
+   * 返回 `{report, repair}` 或**错误文案字符串**（不吞错——调用方据此如实提示）。
+   * `repair.repaired=false` 表示本次修复未成功（模型输出为空/未改善/超限），
+   * 此时 `report` 仍是原稿（服务端不伪造成功）。
+   */
+  async function repairAiResearchReport(
+    reportId: string,
+    strategy: string,
+    section = "",
+  ): Promise<{ report: StockReport; repair: { repaired: boolean; detail: string; strategy: string; label: string } } | string> {
+    const response = await client.request<{
+      ok: boolean;
+      item: StockReport;
+      repair?: { repaired?: boolean; detail?: string; strategy?: string; label?: string };
+    }>({
+      method: "POST",
+      path: `/ai-research/reports/${reportId}/repair`,
+      body: { strategy, section },
+    });
+    if (response.status >= 400 || !response.data?.ok) {
+      return detailOf(response.data) ?? `定向修复失败（HTTP ${response.status}）`;
+    }
+    return {
+      report: response.data.item,
+      repair: {
+        repaired: response.data.repair?.repaired === true,
+        detail: response.data.repair?.detail ?? "",
+        strategy: response.data.repair?.strategy ?? strategy,
+        label: response.data.repair?.label ?? "",
+      },
+    };
   }
 
   /** v32 研报追问（2026-09-13 方案 §三）：原报告不可变，结果保存为追加的分析附录。
@@ -414,8 +481,8 @@ export function useResearch(client: CoreClient) {
     aiReports, aiReportsTotal, aiReportFacets, aiReportsLoaded, aiReportsError, researchReviewQueue,
     generateStockReport, generateDirectionReport, synthesizeCompareReports,
     createCollabRun, runNextCollabStage,
-    loadAiReports, loadAiReportDetail, deleteAiResearchReport,
-    loadResearchReviewQueue, verifyJudgment,
+    loadAiReports, loadAiReportDetail, deleteAiResearchReport, repairAiResearchReport,
+    loadResearchReviewQueue, verifyJudgment, reviewReportWatchpoint,
     createFollowUpTurn, loadFollowUpTurns,
   };
 }

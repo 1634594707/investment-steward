@@ -24,7 +24,12 @@ import re
 
 import pytest
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
+from conftest import (  # noqa: F401  确保 fixture 可用
+    SAMPLE_CONCLUSION,
+    SAMPLE_SUMMARY_IN_BAND,
+    client as client_fixture,
+    run_stock_report,
+)
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -112,10 +117,13 @@ def test_evidence_text_carries_no_machine_precision_floats(client, tmp_path, mon
         captured["payload"] = payloads[0]
         return {"choices": [{"message": {"content": json.dumps({
             "title": "甲股：缓涨",
-            "executive_summary": "趋势偏多：技术面缓涨量价配合；基本面营收净利稳健增长；最大反证是估值已不便宜。",
+            # G1：摘要须落在目标区间、结论须非空——否则会多出「重写摘要 / 补写结论」
+            # 两次模型调用，本用例的 `len(payloads) == 2` 与 payloads[1] 断言随之失真。
+            "executive_summary": SAMPLE_SUMMARY_IN_BAND,
             "report": "### 技术面\n股价沿 MA20 缓涨上行，量能温和放大，结构完好 [S1]\n### 消息面\n公司公告中标大单，市场关注度明显上升 [S2]\n### 基本面\n营收净利稳健增长，经营现金流为正 [S4]\n### 综合判断\n趋势向好但估值已不便宜，总体中性看待，跟踪量能确认。",
             "citations": ["S1", "S2", "S4"],
             "confidence": "medium",
+            "conclusion": SAMPLE_CONCLUSION,
         }, ensure_ascii=False)}}]}
 
     monkeypatch.setattr(mc, "_post_json", fake_post)
@@ -217,8 +225,9 @@ def test_quality_warns_on_empty_verify_by_and_missing_watchpoints():
 
 def test_prompt_version_bumped():
     """提示词版本随结构升级递增：v30→2.7（摘要四句/aspects 三层），v32→2.8（驾驶舱/正常化估值），
-    v39→2.9（Q16/Q17/Q18 盈利拆解 / 现金流质量口径 / 估值分化与可比样本）。"""
-    assert prompting.STOCK_REPORT_PROMPT_VERSION == "2.11"
+    v39→2.9（Q16/Q17/Q18 盈利拆解 / 现金流质量口径 / 估值分化与可比样本），
+    D1→2.12（新增公告正文来源 S3A 的角标与出现条件说明）。"""
+    assert prompting.STOCK_REPORT_PROMPT_VERSION == "2.12"
 
 
 def test_prompt_no_longer_leaks_concrete_example_date():

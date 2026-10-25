@@ -185,8 +185,9 @@
 
 .youzi-detail {
   border: 1px solid var(--line, #2a3833);
-  border-radius: 10px;
-  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border-radius: var(--radius-2, 8px);
+  background: var(--panel, #121918);
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-2) * var(--density-scale));
@@ -300,9 +301,10 @@
   flex-wrap: wrap;
   gap: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
   align-items: flex-end;
-  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
   border: 1px solid var(--line, #2a3833);
-  border-radius: 10px;
+  border-radius: var(--radius-2, 8px);
+  background: var(--panel, #121918);
 }
 
 .youzi-page .youzi-form label {
@@ -316,7 +318,7 @@
 .youzi-page .youzi-form input {
   width: 132px;
   padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
-  border-radius: 6px;
+  border-radius: var(--radius-1, 4px);
   border: 1px solid var(--line, #2a3833);
   background: var(--surface-raised, #17211f);
   color: var(--ink, #e7f0ea);
@@ -386,7 +388,7 @@
   width: 100%;
   min-height: 62px;
   padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
-  border-radius: 6px;
+  border-radius: var(--radius-1, 4px);
   border: 1px solid var(--line, #2a3833);
   background: var(--surface-raised, #17211f);
   color: var(--ink, #e7f0ea);

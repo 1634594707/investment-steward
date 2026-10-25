@@ -209,17 +209,15 @@ export function useSteward(client: CoreClient, aiReady: boolean) {
     user_answer: string;
     reflection: string;
   }): Promise<boolean> {
-    // F2-2 乐观更新：目标进度本地先行，失败回滚。
-    const previousGoal = learningGoal;
-    if (learningGoal) {
-      setLearningGoal({ ...learningGoal, completed_count: learningGoal.completed_count + 1, updated_at: new Date().toISOString() });
-    }
     const response = await client.request<LearningActivity>({ method: "POST", path: "/learning/activities", body: input });
     if (response.status >= 400) {
-      if (previousGoal) setLearningGoal(previousGoal);
-      toast.err(`学习活动保存失败，进度已回滚（${classifyCoreError(response.status, detailOf(response.data)).message}）`);
+      toast.err(`学习活动保存失败（${classifyCoreError(response.status, detailOf(response.data)).message}）`);
       return false;
     }
+    setActivities((current) => [response.data, ...current.filter((item) => item.activity_id !== response.data.activity_id)]);
+    const goal = await client.request<LearningGoal>({ method: "GET", path: "/learning/goals/current" });
+    if (goal.status < 400) setLearningGoal(goal.data);
+    else toast.err("学习活动已保存，目标进度暂未同步，请刷新后查看。");
     toast.ok("学习活动已保存；反思进入本机学习档案（学习不改投资原则）。");
     return true;
   }

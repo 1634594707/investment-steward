@@ -122,6 +122,10 @@ def _client(tmp_path):
 
     token = "f03-retry-token"
     app = create_app(CoreSettings(session_token=token, data_dir=tmp_path))
+    # create_app 会把 recorder 装到 feed_health 的**模块级**变量上；前序用例遗留的后台扫描
+    # 线程仍会按「当前 recorder」写取数记录，于是落进本用例的新库。全量跑时本文件因此出现
+    # 额外失败源（单跑不复现），这里切断 recorder，保证断言只看本用例自己写入的行。
+    feed_health.set_feed_attempt_recorder(None)
     return TestClient(app), {"X-Core-Session-Token": token}
 
 
@@ -141,6 +145,11 @@ def test_retry_endpoint_validates_input(tmp_path):
 def test_retry_only_failed_targets_recorded_failures(tmp_path, monkeypatch):
     http, headers = _client(tmp_path)
     db = http.app.state.core.database
+    # 清掉建库窗口内可能被外部线程写入的行，保证断言只筛本用例插入的两条样本。
+    from sqlalchemy import text
+
+    with db._connection() as connection:
+        connection.execute(text("DELETE FROM feed_attempts"))
     db.record_feed_attempt(
         source=feed_health.SOURCE_MACRO_OKX,
         endpoint="https://www.okx.com/api/v5/market/candles",

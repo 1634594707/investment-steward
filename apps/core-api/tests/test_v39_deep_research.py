@@ -175,13 +175,20 @@ def test_q19_long_report_without_key_analysis_is_not_complete():
     earnings = _item(view, "earnings_decomposition")
     assert earnings["state"] == report_quality.COMPLETENESS_PARTIAL
     # 「单价走弱」「上年同期」被探针看见，但业务量/成本效率/非经常性损益确实没拆
-    assert earnings["covered"] == ["价格", "低基数"], earnings["covered"]
+    assert earnings["covered"] == []  # 正文提及不等于已核验证据支持因素分析。
     assert set(earnings["gaps"]) >= {"业务量", "成本效率", "非经常性损益"}
 
 
 def test_q19_short_report_with_four_items_is_complete():
     """验收：一千字出头的报告四项齐备 → complete=True，字数只作辅助提示。"""
-    view = report_quality.research_completeness({**_complete_payload(), "report_mode": "standard"})
+    # 合成服务端核验结果；无贡献百分比仍可完成有证据支持的定性分析。
+    reviewed = [{"factor": key, "effect": effect, "basis": basis, "sources": ["S4"],
+                 "analysis_state": "analyzed"} for key, effect, basis in (
+        ("volume", "业务量增长带动收入", "同口径业务量同比增加"),
+        ("price", "单价下降拖累收入", "同口径单票收入下降"),
+        ("cost_efficiency", "单位成本下降", "同口径单票成本下降"),
+    )]
+    view = report_quality.research_completeness({**_complete_payload(), "report_mode": "standard", "earnings_growth": reviewed})
     assert 600 < view["word_count"] < report_quality.REPORT_MODES["standard"]["min"], view["word_count"]
     assert view["complete"] is True
     assert view["score"] == 1.0
@@ -208,18 +215,18 @@ def test_q19_states_come_from_payload_and_do_not_invent_ratios():
         ],
     }
     item = _item(report_quality.research_completeness(payload), "earnings_decomposition")
-    assert item["state"] == report_quality.COMPLETENESS_DONE            # 三个维度都有结论文字
-    assert item["covered"] == ["业务量", "价格", "成本效率"]
+    assert item["state"] == report_quality.COMPLETENESS_PARTIAL  # 有结论文字，缺少证据核验。
+    assert item["covered"] == []
     assert "低基数" in item["gaps"] and "非经常性损益" in item["gaps"]
     joined = " ".join(item["evidence"])
     assert "无法拆解贡献比例" in joined                                   # 缺什么照实说，不补数
-    assert "无来源支撑的因素：价格" in joined
+    assert "缺少有效证据核验记录" in joined
     # 结构化块为空 → 按缺失处理，不猜模型「大概写了」
     # 路线图书面键名同样可读（完成度不绑定某一份命名）
     alias = _item(report_quality.research_completeness({
         "earnings_decomposition": [{"factor": "low_base", "effect": "正贡献", "basis": "上年同期亏损", "source": "S4"}]
     }), "earnings_decomposition")
-    assert alias["covered"] == ["低基数"]
+    assert alias["covered"] == []
     empty = _item(report_quality.research_completeness({"earnings_growth": []}), "earnings_decomposition")
     assert empty["state"] == report_quality.COMPLETENESS_MISSING
 

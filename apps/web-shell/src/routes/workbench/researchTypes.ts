@@ -135,7 +135,11 @@ export interface EvidenceQuality {
   coverage_vocab: string[];
   /** 能支撑核心结论的最低等级（当前为 B）。 */
   core_support_qualities: string[];
-  /** 如实说明「当前无任何来源达 A 级」及其原因。 */
+  /**
+   * 本次 A 级情况的如实说明（D1）：有 A 级时写清等级依据与渠道边界，
+   * 没有时写清**本次为什么没有**（未取到公告全文 / 该类来源本就拿不到），
+   * 而不是一句静态口号。
+   */
   note?: string;
 }
 
@@ -336,6 +340,22 @@ export interface DecisionPillarRow {
   representative: string;
 }
 
+/**
+ * G1（2026-09-27 路线图）告警对应的定向修复动作（服务端确定性挂载）。
+ *
+ * - `strategy` 与服务端 `repair_strategy_of` 同词表，点击后原样回传，服务端据此执行；
+ * - `enabled=false` 时 `reason` 必填——前端**显式禁用**并展示原因，不给点了没反应的死按钮；
+ * - `section` 仅「重新生成本节」有值（缺哪节补哪节）。
+ */
+export interface ReportRepairAction {
+  strategy: "summary_only" | "conclusion_only" | "section_only" | "full_rerun" | string;
+  label: string;
+  enabled: boolean;
+  reason?: string;
+  section?: string;
+  version?: string;
+}
+
 /** v30 告警四级分组（服务端确定性分组，前端只渲染；handled 恒 false，处理留痕属后续闭环）。 */
 export interface CategorizedWarning {
   category: "blocking" | "evidence" | "computation" | "format" | string;
@@ -344,6 +364,8 @@ export interface CategorizedWarning {
   impact?: string;
   action?: string;
   handled?: boolean;
+  /** G1：这条告警能不能一键修；null/缺失 = 与修复无关，不渲染按钮。 */
+  repair?: ReportRepairAction | null;
 }
 
 /** v30 摘要预算重写留痕：needed=true 表示原摘要超 180 字硬上限；rewritten=false 时保留原文交人工复核。 */
@@ -480,6 +502,21 @@ export interface ReviewQueueItem {
   verification?: ReviewVerification | null;
   /** G01：未落库的原因（仅在 `judgment_id` 为空时有值，如实说明不猜日期）。 */
   materialization_note?: string;
+  /** G2：该验证点在来源报告 `watchpoints[]` 里的下标（手工复核入口按它定位，0 起）。 */
+  watchpoint_index?: number;
+  /** G2：锚定型验证点的**人工复核**回执（`null`/缺失 = 从未复核过，与「复核为无数据」是两件事）。 */
+  manual_review?: ReviewManualReview | null;
+}
+
+/** G2（研报产出与交付链路路线图 2026-09-27）：锚定型验证点的人工复核记录（只追加）。 */
+export interface ReviewManualReview {
+  /** 复用回填三态词表：verified / refuted / insufficient_data。 */
+  result: string;
+  result_label?: string;
+  outcome?: string;
+  reviewed_at?: string;
+  /** 同一验证点累计复核次数（历史全部保留，展示取最近一次）。 */
+  history_count?: number;
 }
 
 export interface ReviewQueue {
@@ -496,8 +533,11 @@ export interface ReviewQueue {
     note?: string;
     auto_monitoring?: boolean;
   } | null;
-  /** G01：闭环进度。分母都是**已落库的判断**（事件锚定点没有日期、不计入分母）。 */
-  closure?: { materialized: number; filled: number; overdue_unfilled: number; not_materialized: number };
+  /** G01：闭环进度。分母都是**已落库的判断**（事件锚定点没有日期、不计入分母）。
+   * G2 增 `manually_reviewed`：其中有多少条锚定事件已由人工复核过。 */
+  closure?: { materialized: number; filled: number; overdue_unfilled: number; not_materialized: number; manually_reviewed?: number };
+  /** G2：手工复核的适用边界（服务端下发，前端与文档共用同一份措辞）。 */
+  manual_review_policy?: Record<string, string>;
   note?: string;
 }
 
@@ -568,6 +608,8 @@ export interface StockReportJobStatus {
  *  job_id，报告经 `GET /evidence/stock-research-report/{job_id}` 取回（见
  *  `StockReportJobStatus`）。 */
 export interface StockReport {
+  /** 估值一致性校验逐句加注记录；旧报告可缺失。 */
+  valuation_language_repairs?: ValuationLanguageRepair[];
   ok: true;
   symbol: string;
   title: string;
@@ -690,7 +732,7 @@ export interface StockReport {
   valuation_divergence?: ValuationDivergence | null;
   /** 单季财务序列（revenue/net_profit/operating_cash_flow，服务端累计差分，缺失报告期 value=null）。 */
   quarterly?: Record<string, QuarterlyPoint[]>;
-  /** 价格量能图数据包（前复权日线 + MA）；空对象 = 取数失败，前端如实显示不可用。 */
+  /** 价格量能图数据包（日线 + MA，复权见 adjust）；空对象 = 取数失败，前端如实显示不可用。 */
   price_chart?: PriceChartPack;
   /** 估值分位数据包（历史分位 + 同业中位，都是取数结果）。 */
   valuation_chart?: ValuationChartPack;
@@ -1083,6 +1125,7 @@ export interface SourceCatalogEntry {
   name: string;
   url: string;
   url_note?: string;
+  documents?: { title: string; data_date: string; url: string }[];
   data_date?: string;
   retrieved_at?: string;
   quality?: string;
@@ -1139,6 +1182,9 @@ export interface FollowupCatalystChain {
 
 /** v39 Q16：盈利增长拆解单因子（贡献比例算不出即为 null，服务端不代填）。 */
 export interface EarningsGrowthRow {
+  analysis_state?: "analyzed" | "insufficient" | "unverified";
+  analysis_note?: string;
+  analysis_model?: string;
   factor: string;
   factor_label?: string;
   factor_raw?: string;
@@ -1155,6 +1201,13 @@ export interface EarningsGrowthRow {
 /** v39 Q17：现金流质量（覆盖倍数 + 折旧摊销/营运资本/资本开支/自由现金流）。 */
 export interface CashFlowQualityBlock {
   version?: string;
+  periods?: CashFlowQualityBlock[];
+  metric_metadata?: Partial<Record<"operating_cash_flow" | "net_income" | "depreciation_amortization" | "working_capital" | "capex" | "free_cash_flow", { period: string; unit: string; sources: string[] }>>;
+  operating_cash_flow_period?: string;
+  capex_period?: string;
+  free_cash_flow_reported?: number | null;
+  free_cash_flow_derived?: boolean;
+  funding_balance_note?: string;
   operating_cash_flow?: number | null;
   net_income?: number | null;
   coverage_ratio?: number | null;
@@ -1259,6 +1312,13 @@ export interface SummaryOverreachTrace {
   [key: string]: unknown;
 }
 
+export interface ValuationLanguageRepair {
+  line: number;
+  sentence: string;
+  notes: string[];
+  rules?: string[];
+}
+
 export interface SummaryOverreach {
   version?: string;
   /** false = 本次没做反方检查，检查未运行要如实说明，不假装已修订。 */
@@ -1270,7 +1330,7 @@ export interface SummaryOverreach {
   revised_summary?: string;
   revision_note?: string;
   revision_trace?: SummaryOverreachTrace[];
-  valuation_language_repairs?: unknown[];
+  valuation_language_repairs?: ValuationLanguageRepair[];
   original_summary_chars?: number;
   revised_summary_chars?: number;
   original_over_target?: boolean;
@@ -1389,6 +1449,7 @@ export interface CollabStage {
 
 /** v23 协同流水线运行视图（后端 collab-engine public_view）。 */
 export interface CollabRunView {
+  source_catalog?: SourceCatalogEntry[];
   run_id: string;
   symbol: string;
   question: string;

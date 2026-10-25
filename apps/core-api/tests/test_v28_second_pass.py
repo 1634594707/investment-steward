@@ -17,7 +17,12 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
+from conftest import (  # noqa: F401  确保 fixture 可用
+    SAMPLE_CONCLUSION,
+    SAMPLE_SUMMARY_IN_BAND,
+    client as client_fixture,
+    run_stock_report,
+)
 
 from test_stock_research_tools import (  # noqa: F401
     _file_client,
@@ -56,13 +61,15 @@ def _signal(tactic_id: str, day: str, direction: str, trigger_price: float | Non
 
 
 def _report_json(**extra) -> str:
+    # G1：摘要须落在目标区间、结论须非空，否则会多出「重写摘要 / 补写结论」两次调用。
     base = {
         "title": "甲股：缓涨",
-        "executive_summary": "结论：技术面缓涨，基本面稳健。",
+        "executive_summary": SAMPLE_SUMMARY_IN_BAND,
         "report": "### 技术面\n股价沿 MA20 缓涨上行，量能温和放大，结构完好 [S1]\n### 消息面\n公司公告中标大单，市场关注度明显上升 [S2]\n### 基本面\n营收净利稳健增长，经营现金流为正 [S4]\n### 综合判断\n趋势向好但估值已不便宜，总体中性看待，跟踪量能确认。",
         "citations": ["S1", "S2", "S4"],
         "confidence": "medium",
         "valuation": {"verdict": "合理"},
+        "conclusion": SAMPLE_CONCLUSION,
     }
     base.update(extra)
     return json.dumps(base, ensure_ascii=False)

@@ -210,6 +210,97 @@ def test_repair_strategy_selection():
     assert rq.repair_strategy_of(missing_sections=["基本面"], summary_missing=True) == rq.REPAIR_STRATEGY_FULL_RERUN
 
 
+def test_g1_repair_strategy_conclusion_only():
+    """G1（2026-09-27 路线图）：一句话结论缺失有独立的低成本修复出口。
+
+    此前 `conclusion.statement` 缺失只落一条 warning，首屏结论卡永远是空的——
+    而首屏结论卡是整份报告信息密度最高的一行。只缺它时应走一次定向补写，不重跑整稿。
+    """
+    # 只缺结论 → 定向补写（成本远低于重跑整稿）
+    assert (
+        rq.repair_strategy_of(missing_sections=[], summary_missing=False, conclusion_missing=True)
+        == rq.REPAIR_STRATEGY_CONCLUSION
+    )
+    # 缺一节 + 缺结论 → 重跑完整 draft（两处缺口，拼接一致性差）
+    assert (
+        rq.repair_strategy_of(missing_sections=["基本面"], summary_missing=False, conclusion_missing=True)
+        == rq.REPAIR_STRATEGY_FULL_RERUN
+    )
+    # 摘要与结论同时缺失 → 重跑完整 draft（非小节字段整体不可靠；保证首屏结论卡非空）
+    assert (
+        rq.repair_strategy_of(missing_sections=[], summary_missing=True, conclusion_missing=True)
+        == rq.REPAIR_STRATEGY_FULL_RERUN
+    )
+    # 只缺摘要时结论缺失不改变既有口径（摘要优先，且此处不应退化为 conclusion_only）
+    assert (
+        rq.repair_strategy_of(missing_sections=[], summary_missing=True, conclusion_missing=False)
+        == rq.REPAIR_STRATEGY_SUMMARY
+    )
+    # 默认入参保持向后兼容（未传 conclusion_missing 时行为与旧版逐字节一致）
+    assert rq.repair_strategy_of(missing_sections=[], summary_missing=False) is None
+    # 标签齐备，供 revision_history / 产品侧按钮直接取用
+    assert rq.REPAIR_STRATEGY_LABELS[rq.REPAIR_STRATEGY_CONCLUSION] == "只补写一句话结论"
+
+
+def test_g1_repair_action_for_warning_messages():
+    """G1：每条可修复告警确定性挂一个动作；不可修复项显式禁用并写明原因。"""
+    # 一句话结论缺失 → 补写结论
+    act = rq.repair_action_for("模型未输出一句话结论（conclusion.statement），首屏结论卡只能留空。")
+    assert act["strategy"] == rq.REPAIR_STRATEGY_CONCLUSION
+    assert act["enabled"] is True and act["label"] == "补写一句话结论"
+
+    # 摘要过短 → 重写摘要
+    act = rq.repair_action_for(
+        "执行摘要 118 字，低于目标区间 150–165 字，可能缺少结论/证据/反证/验证动作四要素之一。"
+    )
+    assert act["strategy"] == rq.REPAIR_STRATEGY_SUMMARY and act["enabled"] is True
+
+    # 摘要超硬上限 → 同一 strategy，文案是「重写」
+    act = rq.repair_action_for(
+        "执行摘要 200/180 字，超过绝对软上限，应只重写摘要（四句：结论/最强基本面证据/最强技术反证/下一验证动作），不重跑全文。"
+    )
+    assert act["strategy"] == rq.REPAIR_STRATEGY_SUMMARY
+    assert act["label"] == rq.REPAIR_ACTION_REWRITE_SUMMARY
+
+    # 缺一节 → 只补这一节，动作里带出小节名
+    act = rq.repair_action_for("缺少必需小节：基本面（未生成，或仅有标题没有实质内容）。")
+    assert act["strategy"] == rq.REPAIR_STRATEGY_SECTION
+    assert act["section"] == "基本面" and act["enabled"] is True
+    assert "基本面" in act["label"]
+
+    # 缺两节 → 逐节补写成本高于重跑，而重跑需要当时的完整证据包 → 如实禁用并指路
+    act = rq.repair_action_for("缺少必需小节：技术面、消息面（未生成，或仅有标题没有实质内容）。")
+    assert act["strategy"] == rq.REPAIR_STRATEGY_FULL_RERUN
+    assert act["enabled"] is False and "重新发起一次完整生成" in act["reason"]
+
+    # 解析不出小节名 → 显式禁用 + 写明原因（不给点了没反应的死按钮）
+    act = rq.repair_action_for("缺少必需小节：（未生成，或仅有标题没有实质内容）。")
+    assert act["enabled"] is False and act["reason"] and "解析" in act["reason"]
+
+    # 与修复无关的告警 → 不渲染按钮
+    assert rq.repair_action_for("局限声明 2 条，少于约定的 3 条下限。") is None
+    assert rq.repair_action_for("") is None
+
+
+def test_g1_categorized_warnings_carry_repair_action():
+    """G1：categorize_warnings 逐条带 repair 字段；无关告警为 None。"""
+    rows = rq.categorize_warnings([
+        "模型未输出一句话结论（conclusion.statement），首屏结论卡只能留空。",
+        "局限声明 2 条，少于约定的 3 条下限。",
+    ])
+    assert rows[0]["repair"]["strategy"] == rq.REPAIR_STRATEGY_CONCLUSION
+    assert rows[1]["repair"] is None
+    # 原有字段一个不少（纯增量，不破坏既有消费方）
+    assert set(rows[0]) >= {"category", "category_label", "message", "impact", "action", "handled"}
+
+
+def test_g1_missing_section_names_from_warning():
+    assert rq.missing_section_names_from_warning(
+        "缺少必需小节：技术面、消息面、基本面（未生成，或仅有标题没有实质内容）。"
+    ) == ["技术面", "消息面", "基本面"]
+    assert rq.missing_section_names_from_warning("局限声明 2 条，少于约定的 3 条下限。") == []
+
+
 def test_merge_section_replaces_heading_only_section():
     report = "### 技术面\n趋势向下运行中。\n### 基本面\n见上文。\n### 综合判断\n总体偏空观望。\n"
     merged = rq.merge_section(report, "基本面", "### 基本面\n营收下滑，现金流为负，利润质量偏弱。[S4]")

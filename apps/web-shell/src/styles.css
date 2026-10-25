@@ -2002,7 +2002,7 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:f
 
 /* 持仓/自选快选行 */
 .wb-quick { margin-top: calc(var(--space-3) * var(--density-scale)); display: flex; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); flex-wrap: wrap; }
-.wb-quick > span { font-size: var(--text-2); color: var(--faint); flex: none; }
+.wb-quick > span { font-size: var(--text-2); color: var(--faint); flex: none; max-width: 100%; }
 .wb-quick .pref-row { margin: 0; }
 
 /* 2026-09-12 协同流水线·队列串行：多只标的逐只生成时展示每只状态（已完成 / 进行中 x/4 / 待执行） */
@@ -2113,6 +2113,8 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:f
 .wb-evidence-legend { margin: calc(var(--space-1) * var(--density-scale)) 0; color: var(--muted); font-size: var(--text-2); line-height: 1.6; }
 .wb-evidence-legend b { color: var(--ink); }
 .wb-evidence-gap { color: var(--amber); }
+/* D1：本次真的拿到 A 级一手来源时的正向标注（与「无 A 级」的 amber 提示成对出现，二者互斥）。 */
+.wb-evidence-ok { color: var(--mint); }
 
 .wb-evidence-sources { list-style: none; margin: calc(var(--space-1) * var(--density-scale)) 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--space-1) * var(--density-scale)); }
 .wb-evidence-sources li {
@@ -2168,6 +2170,12 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:f
 .wb-warn-group summary { cursor: pointer; display: flex; align-items: center; gap: calc(var(--space-1) * var(--density-scale)); }
 .wb-warn-group.cat-blocking { border-left: 2px solid var(--coral); padding-left: calc(var(--space-2) * var(--density-scale)); }
 .wb-warn-meta { display: block; color: var(--muted); opacity: .85; font-size: var(--text-2); }
+
+/* G1（2026-09-27 路线图）：质量告警行内的定向修复动作按钮。
+   「发现得准」之后必须「修得动」；不可修复项一律禁用 + 写明原因，不留死按钮。 */
+.wb-repair-action { display: inline-flex; align-items: center; gap: calc(var(--space-1) * var(--density-scale)); margin-top: calc(var(--space-1) * var(--density-scale)); }
+.wb-repair-btn { font-size: var(--text-2); padding: 2px calc(var(--space-2) * var(--density-scale)); }
+.wb-repair-action .wb-warn-meta { display: inline; margin: 0; }
 
 /* claims 三层拆分展开区 */
 .wb-aspects { margin-top: calc(var(--space-1) * var(--density-scale)); }
@@ -2324,6 +2332,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
    · 重要结论/关键事实 = 蓝（--rpt-ink-hl: var(--blue)）；· 待核验/部分支持 = 琥珀（var(--amber)）；
    · 风险/失效/无来源 = 珊瑚红（var(--coral)）；· 完整/确认 = mint；· 阻断错误 = 深红标签 + 文字。
    每种颜色必须伴随文字标签或 title；灰度打印与色觉差异下仍可识别（§6.2/§八.6）。*/
+/* D3（研报产出与交付链路路线图 2026-09-27）：屏显侧三档色值的定义点。
+   语义色（蓝=关键结论 / 琥珀=待核验 / 珊瑚红=无来源支撑）随主题明暗变化，故走 token；
+   导出件的**固定白底**色值由 `routes/workbench/reportHighlightTones.ts` 单一维护
+   （`reportHighlightCss()` 生成导出 <style> 规则），此处不再与导出各写一份。 */
 :root {
   --rpt-hl-blue: var(--blue);
   --rpt-hl-amber: var(--amber);
@@ -2435,7 +2447,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wb-followup-snapshots p { margin: 0; width: 100%; color: var(--muted); font-size: var(--text-2); }
 .wb-followup-link { color: var(--blue); font-size: var(--text-2); word-break: break-all; }
 /* Q09：来源目录表（研报证据区与追问附录共用）——长 URL 换行而不是撑破表格 */
-.wb-source-catalog { margin-top: calc(var(--space-2) * var(--density-scale)); display: grid; gap: calc(var(--space-1) * var(--density-scale)); }
+.wb-source-catalog { margin-top: calc(var(--space-2) * var(--density-scale)); display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--space-1) * var(--density-scale)); }
 .wb-source-link { color: var(--blue); font-size: var(--text-2); word-break: break-all; }
 /* Q23：宽表在窄容器（480 窗、300px 侧栏）里横向滚动，而不是把「口径限制」压成一列竖排字或被裁掉。
    滚动容器自身的 overflow 使其自动最小宽度归零，故只需包一层，不必给父栅格补 min-width。 */
@@ -2497,8 +2509,10 @@ details.wb-advanced > .wb-quick { padding: 2px calc(var(--space-2) * var(--densi
 /* K02：阅读模式的研报表不再单独放大到 13px——研报表在列表页与阅读模式两处呈现同一 12px（--text-3），
    避免「同一张表两种字号」。阅读模式的正文级（.wb-md 15px/16px）保持展示层裸值不动。 */
 /* 长表格横向滚动（A08/E01），页面主体保持单一纵向滚动 */
-.wb-result-tabpane { min-width: 0; }
+.wb-result-tabpane { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.wb-result-tabpane > * { min-width: 0; }
 .wb-result-tabpane table.wb-judgement-table { display: block; max-width: 100%; overflow-x: auto; }
+.wb-result-tabpane table.wb-evidence-table { display: block; max-width: 100%; overflow-x: auto; }
 .wb-pool-scroll { overflow-x: auto; }
 /* A11：图表独立页签受控高度；财务图宽容器两列、小屏单列；SVG 不随宽度无限拉伸 */
 .wb-chartpack { display: grid; gap: calc(var(--space-3) * var(--density-scale)); }
@@ -3021,4 +3035,81 @@ body[data-density="compact"] .metric { min-height: 64px; padding: var(--space-2)
 }
 .pro-toggle { padding: calc(var(--space-2) * var(--density-scale)); border: 0; background: transparent; border-radius: var(--radius-1); }
 .pro-toggle:hover { background: var(--white-a03); }
+
+/* ============================================================
+   [T05] 金融终端卡片与表格层级精修（2026-10-26）
+   不新增裸色、不改信息密度与交互结构（契约 [D]）：
+   · 统一研究工作台、今日页、复盘页、持仓页的卡片圆角与内嵌边框质感；
+   · 强化表格 hover 行反馈与等宽数字列对齐；
+   · 优化首屏判断边界（.wb-firstscreen-guard）与结论驾驶舱（.wb-cockpit）的视觉分组。
+   ============================================================ */
+.today-page .metric-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+}
+.today-page .action-item {
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border-radius: 0 var(--radius-1) var(--radius-1) 0;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+.today-page .action-item:hover {
+  background: var(--white-a02);
+}
+.evidence-row {
+  padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
+  border-radius: var(--radius-1);
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+.evidence-row:hover {
+  background: var(--white-a02);
+}
+.wb-step, .wb-panel, .wb-result, .wb-history {
+  border-radius: var(--radius-2);
+}
+.wb-tabs {
+  border-radius: var(--radius-1);
+  overflow: hidden;
+}
+.wb-history-list li {
+  border-radius: var(--radius-1);
+  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+.wb-history-list li:hover {
+  border-color: var(--mint-a40);
+  background: var(--white-a02);
+}
+.wb-firstscreen-guard {
+  background: var(--white-a02);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber-a40);
+  border-radius: var(--radius-2);
+}
+.wb-exec-summary {
+  padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--mint-a45);
+  border-radius: var(--radius-2);
+  background: var(--white-a02);
+  margin: calc(var(--space-2) * var(--density-scale)) 0;
+}
+.wb-judgement-table tbody tr:hover td,
+.wb-evidence-table tbody tr:hover td,
+.youzi-table tbody tr:hover td,
+.factor-table tbody tr:hover td,
+.tactics-scan-result table tbody tr:hover td {
+  background: var(--white-a03);
+}
+.holding-item {
+  padding-inline: calc(var(--space-2) * var(--density-scale));
+  border-radius: var(--radius-1);
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+.holding-item:hover {
+  background: var(--white-a02);
+}
+.holding-item.selected {
+  background: var(--mint-a06);
+}
+
 

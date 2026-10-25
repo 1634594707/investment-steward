@@ -241,6 +241,9 @@ def test_endpoint_rewrites_overlong_summary_only(client, tmp_path, monkeypatch):
         "report": "### 技术面\n股价沿 MA20 缓涨上行，量能温和放大，结构完好 [S1]\n### 消息面\n公司公告中标大单，市场关注度明显上升 [S2]\n### 基本面\n营收净利稳健增长，经营现金流为正 [S4]\n### 综合判断\n趋势向好但估值已不便宜，总体中性看待，跟踪量能确认。",
         "citations": ["S1", "S2", "S4"],
         "confidence": "medium",
+        # 一句话结论非空：本用例只测「摘要超限仅重写摘要」，不应再叠一次 G1 的结论补写调用。
+        "conclusion": {"statement": "趋势偏多但估值不便宜，跟踪量能确认。", "direction": "偏多",
+                       "core_conflict": "趋势与估值", "confidence": "medium"},
     }, ensure_ascii=False)
     rewritten_summary = "技术面缓涨，量能配合；基本面稳健。最大风险是行业价格战反复。方向中性偏多。"
 
@@ -285,6 +288,9 @@ def test_endpoint_keeps_summary_when_rewrite_still_over_limit(client, tmp_path, 
         "executive_summary": long_summary,
         "report": "### 技术面\n股价沿 MA20 缓涨上行，量能温和放大 [S1]\n### 消息面\n公司公告中标大单，市场关注度明显上升 [S2]\n### 基本面\n营收净利稳健增长，经营现金流为正 [S4]\n### 综合判断\n趋势向好但估值已不便宜，总体中性看待，跟踪量能确认。",
         "citations": ["S1", "S2", "S4"], "confidence": "low",
+        # 同上：结论非空，避免 G1 的结论补写多算一次调用。
+        "conclusion": {"statement": "趋势偏多但估值不便宜，跟踪量能确认。", "direction": "偏多",
+                       "core_conflict": "趋势与估值", "confidence": "low"},
     }, ensure_ascii=False)
 
     calls: list[dict] = []

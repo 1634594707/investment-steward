@@ -10,7 +10,7 @@
   <img src="docs/assets/demo-preview-en.webp" width="920" alt="AI Investment Steward walkthrough — 55 items of evidence on file, then four possible next steps">
 
   ▶ 6-second loop, autoplaying · real local data, no mock-ups
-  Full 87-second walkthrough: [open in a new tab](https://1634594707.github.io/investment-steward/assets/demo-en.mp4)
+  Full 95-second walkthrough: [open in a new tab](https://1634594707.github.io/investment-steward/assets/demo-en.mp4)
 
 </div>
 
