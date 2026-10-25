@@ -77,11 +77,23 @@ mobile/.env.local
 scripts/relay_bootstrap_token.txt
 scripts/relay-app.tar.gz
 
-# --- 内部过程文档（路线图/设计方案/实施记录/证据归档）仅本地保留 ----------
+# --- 本地备份（database snapshot / 遗留私钥备份）不入库 --------------------
+backups/
+
+# --- 内部过程文档与证据归档（仅本地保留）-----------------------------------
+# docs 下入库的只有：docs/index.html、docs/assets 顶层演示素材、docs/architecture 架构图
 docs/*.md
+docs/**/*.md
 docs/evidence/
+docs/perf/
+# docs/assets 的子目录都是按日期归档的截图证据（history-audit / icon-* 等）
+docs/assets/*/
+# archify 等工具生成的隐藏交付目录
+docs/architecture/.archify-*/
 
 # --- AI 工具目录（本机安装产物）-------------------------------------------
+# 其它 AI 工具的本机忽略清单：仓库只认 .gitignore，别让它入库
+.zcodeignore
 .codebuddy/
 .claude/
 .cursor/
