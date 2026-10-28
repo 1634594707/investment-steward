@@ -1,3 +1,9 @@
+import type { FinancialPeriodBasis } from "@investment-steward/domain-contracts";
+
+export const FINANCIAL_PERIOD_LABELS: Record<FinancialPeriodBasis, string> = {
+  cumulative: "年初至期末累计", single_quarter: "单季", ttm: "滚动十二个月（TTM）", instant: "期末时点", unknown: "未知口径",
+};
+
 export function formatDate(value: string | undefined | null): string {
   if (!value) return "等待数据";
   const date = new Date(value);

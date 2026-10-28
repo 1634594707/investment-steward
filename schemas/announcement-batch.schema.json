@@ -72,6 +72,31 @@
           "default": null,
           "title": "Published At"
         },
+        "financial_period_end": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Financial Period End"
+        },
+        "financial_period_basis": {
+          "default": "unknown",
+          "enum": [
+            "cumulative",
+            "single_quarter",
+            "ttm",
+            "instant",
+            "unknown"
+          ],
+          "title": "Financial Period Basis",
+          "type": "string"
+        },
         "observed_at": {
           "anyOf": [
             {

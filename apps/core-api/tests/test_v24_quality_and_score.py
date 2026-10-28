@@ -268,7 +268,7 @@ def test_stock_report_drops_fabricated_citations(client, tmp_path, monkeypatch):
     assert any("S9" in item for item in body["quality_warnings"])
     # v27：提示词版本随 claims 覆盖声明递增；v28→2.5，v29→2.6，v30 随摘要四句结构/aspects 三层到 2.7。
     # D1（2026-09-27 路线图）：新增公告正文来源 S3A 的角标与出现条件说明 → 2.12。
-    assert body["prompt_policy_version"] == "2.12"
+    assert body["prompt_policy_version"] == "2.15"
 
 
 def test_stock_report_rejects_all_fabricated_citations(client, tmp_path, monkeypatch):

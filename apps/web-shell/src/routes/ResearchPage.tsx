@@ -5,9 +5,10 @@ import { needsConfirmation, type CardAction } from "../state/actionDispatcher";
 import { SectionHeading } from "../components/kit";
 import { EvidenceRow } from "../components/EvidenceRow";
 import { EvidenceRef } from "../components/EvidenceRef";
+import { HistoricalEvidenceRefs } from "../components/HistoricalEvidenceRefs";
 import { ActionModeChip } from "../components/ActionModeChip";
 import { SourceLine } from "../components/SourceLine";
-import { formatDate } from "../state/format";
+import { FINANCIAL_PERIOD_LABELS, formatDate } from "../state/format";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { AppView } from "../shell/nav";
 import { SkeletonLines } from "../components/Skeleton";
@@ -21,7 +22,7 @@ interface Props {
   onNavigate: (view: AppView) => void;
   onOpenEvidence: (evidenceId: string) => void;
   onCardAction: (action: CardAction) => void;
-  onCreateRun: (question: string) => Promise<AgentResponse | null>;
+  onCreateRun: (question: string, scope?: ResearchRun["evidence_scope"]) => Promise<AgentResponse | null>;
   onSelectRun: (runId: string) => Promise<AgentResponse | null>;
   onTransitionRun: (runId: string, target: string) => Promise<boolean>;
   onDeleteRun: (runId: string) => Promise<boolean>;
@@ -70,6 +71,17 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [questionOpen, setQuestionOpen] = useState(false);
   const [questionText, setQuestionText] = useState("");
+  const [scopeSubject, setScopeSubject] = useState("");
+  const [scopeSource, setScopeSource] = useState("");
+  const [scopePeriods, setScopePeriods] = useState("");
+  const [scopeBasis, setScopeBasis] = useState("");
+  const [scopeFrom, setScopeFrom] = useState("");
+  const [scopeTo, setScopeTo] = useState("");
+  function clearScope() {
+    setScopeSubject(""); setScopeSource(""); setScopeFrom(""); setScopeTo("");
+    setScopePeriods("");
+    setScopeBasis("");
+  }
   const [submitBusy, setSubmitBusy] = useState(false);
   const [transitionBusy, setTransitionBusy] = useState(false);
   const [confirmRun, setConfirmRun] = useState<ResearchRun | null>(null);
@@ -157,16 +169,39 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
   async function submitQuestion() {
     const question = questionText.trim();
     if (!question || submitBusy) return;
+    if (scopeFrom && scopeTo && scopeFrom > scopeTo) {
+      setSubmitError("发布日期起点不得晚于终点。");
+      return;
+    }
+    const subjects = scopeSubject.split(/[,，]/).map((value) => value.trim()).filter(Boolean);
+    const sources = scopeSource.split(/[,，]/).map((value) => value.trim()).filter(Boolean);
+    const periods = Array.from(new Set(scopePeriods.split(/[,，]/).map((value) => value.trim()).filter(Boolean)));
+    if (periods.length > 50 || periods.some((value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
+      const parsed = new Date(`${value}T00:00:00Z`);
+      return !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value;
+    })) {
+      setSubmitError("报告期末请填写有效的 YYYY-MM-DD 日期，最多 50 项，以逗号分隔。");
+      return;
+    }
+    const scope = subjects.length || sources.length || scopeFrom || scopeTo || periods.length || scopeBasis ? {
+      subject_refs: subjects, source_names: sources,
+      ...(periods.length ? { financial_period_ends: periods } : {}),
+      ...(scopeBasis ? { financial_period_basis: scopeBasis as keyof typeof FINANCIAL_PERIOD_LABELS } : {}),
+      ...(scopeFrom ? { published_from: `${scopeFrom}T00:00:00Z` } : {}),
+      ...(scopeTo ? { published_to: `${scopeTo}T23:59:59.999Z` } : {}),
+    } : undefined;
     setSubmitBusy(true);
     setSubmitError(null);
     try {
-      const result = await onCreateRun(question);
+      const result = await (scope ? onCreateRun(question, scope) : onCreateRun(question));
       if (!result) throw new Error("Research unavailable");
       ++selectRequest.current;
       setSelectBusy(false);
       setSelectError(null);
       setQuestionOpen(false);
       setQuestionText("");
+      clearScope();
       setSelectedRunId(result.run_id);
     } catch {
       setSubmitError("研究创建失败：未能写入本地 Core 账本（Core 未就绪或网络中断），问题内容已保留，可重试。");
@@ -267,6 +302,12 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
               </button>
             </div>
           )}
+          {selectedRun?.evidence_scope && <p className="probe-note">
+            本次证据范围：标的 {selectedRun.evidence_scope.subject_refs?.join("、") || "不限"}；来源 {selectedRun.evidence_scope.source_names?.join("、") || "不限"}；
+            发布日期（UTC）{selectedRun.evidence_scope.published_from || "不限"} 至 {selectedRun.evidence_scope.published_to || "不限"}；
+            报告期末 {selectedRun.evidence_scope.financial_period_ends?.join("、") || "不限"}；
+            财务口径 {selectedRun.evidence_scope.financial_period_basis ? FINANCIAL_PERIOD_LABELS[selectedRun.evidence_scope.financial_period_basis] : "不限"}。期末相同不代表口径相同。
+          </p>}
           {selectBusy ? <div className="answer-empty" role="status"><strong>正在加载回答…</strong><SkeletonLines lines={3} /></div> : selectError ? (
             <div className="answer-empty" role="alert"><strong>{selectError}</strong><button className="text-button" onClick={() => selectedRun && void selectRun(selectedRun.run_id)}>重试加载</button></div>
           ) : shownResponse ? (
@@ -368,6 +409,21 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
                   placeholder="例如：我的持仓是否出现失效条件即将触发的信号？"
                 />
               </label>
+              <details>
+                <summary>证据范围（可选）</summary>
+                <p className="probe-note">标的与来源精确匹配，多项以逗号分隔。日期按 UTC 发布日筛选，不是财报统计期；限定日期时不采用缺日期证据。</p>
+                <label className="form-field"><span>标的标识</span><input value={scopeSubject} disabled={submitBusy} onChange={(event) => setScopeSubject(event.target.value)} placeholder="如 600001" /></label>
+                <label className="form-field"><span>来源名称</span><input value={scopeSource} disabled={submitBusy} onChange={(event) => setScopeSource(event.target.value)} /></label>
+                <label className="form-field"><span>报告期末（可多项）</span><input value={scopePeriods} disabled={submitBusy} onChange={(event) => setScopePeriods(event.target.value)} placeholder="2026-06-30, 2026-03-31" /></label>
+                <label className="form-field"><span>财务口径</span><select value={scopeBasis} disabled={submitBusy} onChange={(event) => setScopeBasis(event.target.value)}>
+                  <option value="">不限</option>
+                  {Object.entries(FINANCIAL_PERIOD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select></label>
+                <p className="probe-note">报告期末与财务口径分别精确匹配，期末不是发布日期。限定后排除缺期末或不匹配口径的证据，不自动换算。</p>
+                <label className="form-field"><span>发布日起点（UTC）</span><input type="date" value={scopeFrom} disabled={submitBusy} onChange={(event) => setScopeFrom(event.target.value)} /></label>
+                <label className="form-field"><span>发布日终点（UTC）</span><input type="date" value={scopeTo} disabled={submitBusy} onChange={(event) => setScopeTo(event.target.value)} /></label>
+                <button className="text-button" disabled={submitBusy} onClick={clearScope}>清空范围</button>
+              </details>
               {submitError && <p className="form-error" role="alert">{submitError}</p>}
               <footer className="form-foot">
                 <button className="secondary-button" disabled={submitBusy} onClick={() => setQuestionOpen(false)}>取消</button>
@@ -502,6 +558,30 @@ export function AnswerDetail({
         <div className="answer-block-title">相反证据</div>
         {refs(response.contradicting_refs)}
       </section>
+
+      {(response.research_memory ?? []).map((memory) => (
+        <section className="answer-block" key={memory.thesis_id}>
+          <h4 className="answer-block-title">研究记忆 · {memory.instrument}</h4>
+          <p className="answer-muted">回答生成时的用户逻辑快照 · 原逻辑更新于 {formatDate(memory.thesis_updated_at)}</p>
+          <p className="answer-copy">原始判断：{memory.original_statement}</p>
+          <div className="answer-block-title">核心假设</div>
+          {memory.core_assumptions.length ? <ul className="answer-list">
+            {memory.core_assumptions.map((text, index) => <li key={index}>{text}</li>)}
+          </ul> : <p className="answer-muted">未填写</p>}
+          <div className="answer-block-title">失效条件</div>
+          {memory.invalidation_conditions.length ? <ul className="answer-list">
+            {memory.invalidation_conditions.map((text, index) => <li key={index}>{text}</li>)}
+          </ul> : <p className="answer-muted">未填写</p>}
+          <div className="answer-block-title">历史关联证据</div>
+          <HistoricalEvidenceRefs refs={memory.linked_evidence_refs} evidenceOf={evidenceOf} onOpenEvidence={onOpenEvidence} />
+          <p className="answer-muted">历史关联保留供追溯；状态按当前已加载详情显示。</p>
+          <div className="answer-block-title">本轮候选支持证据</div>
+          <HistoricalEvidenceRefs refs={memory.candidate_supporting_refs} evidenceOf={evidenceOf} onOpenEvidence={onOpenEvidence} />
+          <div className="answer-block-title">本轮候选相反证据</div>
+          <HistoricalEvidenceRefs refs={memory.candidate_contradicting_refs} evidenceOf={evidenceOf} onOpenEvidence={onOpenEvidence} />
+          <p className="answer-muted">候选沿用证据原有关系标注，尚未核验与该假设的关系；不代表假设成立或失效，不会自动改写投资逻辑。</p>
+        </section>
+      ))}
 
       <section className="answer-block warn">
         <div className="answer-block-title">缺失信息</div>

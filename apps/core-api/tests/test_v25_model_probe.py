@@ -360,6 +360,7 @@ def _capture_ua(monkeypatch, payload: dict) -> dict:
         return _FakeResponse(payload)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(mc, "_completion_urlopen", fake_urlopen)
     return captured
 
 
@@ -395,6 +396,7 @@ def test_waf_403_is_reported_as_waf_not_auth(use_list, monkeypatch):
         raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", None, io.BytesIO(_CF_403_BODY.encode()))
 
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr(mc, "_completion_urlopen", boom)
     with pytest.raises(mc.ModelUnavailable) as excinfo:
         if use_list:
             mc.list_provider_models("https://svc.example/v1", "sk-" + "f" * 28, 30)

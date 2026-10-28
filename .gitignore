@@ -40,6 +40,7 @@ route-inventory-????????/
 
 # --- 运行期数据、日志与本地工作目录 ---------------------------------------
 .local-data/
+.collab-locks/
 # Core 以 cwd 为基准的相对数据目录（旧版脚本在 apps/core-api 下跑出来的库）
 apps/core-api/.data/
 .runtime-*/

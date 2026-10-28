@@ -150,7 +150,7 @@ def test_post_json_uses_bearer_and_completions_endpoint(monkeypatch):
         captured["method"] = request.get_method()
         return _Resp()
 
-    monkeypatch.setattr(model_client.urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(model_client, "_completion_urlopen", fake_open)
     payload = model_client._post_json("http://127.0.0.1:9999/v1", {"model": "m"}, "sk-token", 1.0)
     assert payload["choices"][0]["message"]["content"] == "ok"
     assert captured["auth"] == "Bearer sk-token"

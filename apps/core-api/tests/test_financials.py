@@ -136,8 +136,12 @@ def test_endpoint_produces_financial_evidence(monkeypatch, client):
     assert body["available"] is True
     by_type = {entry["summary"].split("·")[0]: entry for entry in body["entries"]}
     assert set(by_type) == {"income", "balance", "cash_flow"}
+    assert by_type["balance"]["financial_period_basis"] == "instant"
+    assert by_type["income"]["financial_period_basis"] == "cumulative"
+    assert by_type["cash_flow"]["financial_period_basis"] == "cumulative"
     first = body["entries"][0]
     assert first["evidence_type"] == "financial"
+    assert first["financial_period_end"] == first["summary"].split("·")[1].split("：")[0]
     assert first["license_status"] == "local-personal-use"
     assert first["subject_refs"] == ["instrument:CN:600000"]
     assert first["source_uri"] == "https://data.eastmoney.com/bbsj/"
@@ -146,6 +150,7 @@ def test_endpoint_produces_financial_evidence(monkeypatch, client):
     evidence = test_client.get("/evidence", headers=headers).json()
     ids = {item["evidence_id"] for item in evidence}
     assert all(item["evidence_id"] in ids for item in body["entries"])
+    assert all(item["financial_period_end"] for item in evidence if item["evidence_id"] in ids)
 
 
 def test_endpoint_degrades_when_data_source_fails(monkeypatch, client):

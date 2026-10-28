@@ -1411,35 +1411,69 @@ const MODEL_PURPOSE_LABEL: Record<string, string> = {
   "连通性测试": "连通性测试",
 };
 
-function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) => Promise<{ status: number; data: unknown }> }) {
+interface ModelCallDiagnostic {
+  call_id: string;
+  model: string;
+  returned_model: string | null;
+  purpose: string | null;
+  created_at: string;
+  attempt_count: number | null;
+  outcome: string;
+  error_kind: string | null;
+  http_status: number | null;
+  latency_ms: number;
+  usage_complete: number | null;
+  attempts?: Array<{ index: number; outcome: string; error_kind: string | null; http_status: number | null;
+    latency_ms: number; total_tokens?: number | null; max_tokens: number; thinking_disabled: boolean }> | null;
+}
+
+const MODEL_ERROR_LABEL: Record<string, string> = {
+  protocol: "协议异常", auth: "认证失败", waf: "网关拦截", rate_limit: "限流",
+  upstream: "上游异常", request: "请求参数异常", timeout: "超时", network: "网络异常",
+  empty_content: "正文为空", unavailable: "模型不可用",
+  reasoning_budget: "思考耗尽输出预算",
+};
+
+export function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) => Promise<{ status: number; data: unknown }> }) {
+  const requestVersion = useRef(0);
   const [window, setWindow] = useState<"7d" | "30d">("7d");
   const [summaries, setSummaries] = useState<ModelUsageSummary[] | null>(null);
+  const [recentCalls, setRecentCalls] = useState<ModelCallDiagnostic[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load(nextWindow: "7d" | "30d" = window) {
     if (!coreRequest) return;
+    const version = ++requestVersion.current;
+    if (nextWindow !== window) {
+      setSummaries(null);
+      setRecentCalls([]);
+    }
     setBusy(true);
     setError(null);
     try {
       const result = await callModelUsage(nextWindow);
+      if (version !== requestVersion.current) return;
       setSummaries(result.summaries);
+      setRecentCalls(result.recent_calls ?? []);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       setError(err instanceof Error ? err.message : "模型用量读取失败");
     } finally {
-      setBusy(false);
+      if (version === requestVersion.current) setBusy(false);
     }
   }
 
-  async function callModelUsage(nextWindow: "7d" | "30d"): Promise<{ summaries: ModelUsageSummary[] }> {
+  async function callModelUsage(nextWindow: "7d" | "30d"): Promise<{ summaries: ModelUsageSummary[]; recent_calls?: ModelCallDiagnostic[] }> {
     if (!coreRequest) throw new Error("当前环境没有 Core 请求通道。");
     const { status, data } = await coreRequest({ method: "GET", path: `/model-usage?window=${nextWindow}` });
     if (status >= 400) throw new Error(`Core 返回错误（HTTP ${status}）`);
-    return data as { summaries: ModelUsageSummary[] };
+    return data as { summaries: ModelUsageSummary[]; recent_calls?: ModelCallDiagnostic[] };
   }
 
   useEffect(() => {
     void load();
+    return () => { requestVersion.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1457,7 +1491,8 @@ function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) =
         summaries.length === 0 ? (
           <p className="scheme-empty">窗口内没有模型调用记录。</p>
         ) : (
-          <table className="kv-table">
+          <div style={{ overflowX: "auto" }} role="region" aria-label="模型用量汇总" tabIndex={0}>
+          <table className="kv-table" style={{ minWidth: 760 }}>
             <thead>
               <tr><th>模型</th><th>用途</th><th>调用</th><th>成功/失败/超时</th><th>tokens（入/出/总）</th><th>平均耗时</th></tr>
             </thead>
@@ -1471,16 +1506,48 @@ function ModelUsageSection({ coreRequest }: { coreRequest?: (req: CoreRequest) =
                   <td>{row.ok_calls}/{row.errors}/{row.timeouts}</td>
                   <td>
                     {row.usage_missing > 0 && row.total_tokens === 0
-                      ? "—（未返回用量）"
+                      ? "—（用量不完整）"
                       : `${row.prompt_tokens.toLocaleString()} / ${row.completion_tokens.toLocaleString()} / ${row.total_tokens.toLocaleString()}`}
-                    {row.usage_missing > 0 && row.total_tokens > 0 ? `（${row.usage_missing} 次未返回）` : ""}
+                    {row.usage_missing > 0 && row.total_tokens > 0 ? `（已知用量；${row.usage_missing} 次记录不完整）` : ""}
                   </td>
                   <td>{(row.avg_latency_ms / 1000).toFixed(1)}s（峰值 {(row.max_latency_ms / 1000).toFixed(1)}s）</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )
+      )}
+      {recentCalls.length > 0 && (
+        <details>
+          <summary>最近调用诊断（最多 20 条）</summary>
+          <p className="field-hint">返回模型为网关声明；失败请求也可能计费。未记录表示该元数据未知。</p>
+          <div style={{ overflowX: "auto" }} role="region" aria-label="最近模型调用" tabIndex={0}>
+            <table className="kv-table" style={{ minWidth: 940 }}>
+              <thead><tr><th>时间</th><th>请求模型</th><th>返回模型</th><th>用途</th><th>请求次数</th><th>结果</th><th>用量</th></tr></thead>
+              <tbody>{recentCalls.map((row) => (
+                <tr key={row.call_id}>
+                  <td>{new Date(row.created_at).toLocaleString()}</td>
+                  <td>{row.model}</td><td>{row.returned_model ?? "未记录"}</td>
+                  <td>{MODEL_PURPOSE_LABEL[row.purpose ?? ""] ?? row.purpose ?? "未记录"}</td>
+                  <td>{row.attempt_count ?? "未记录"}
+                    {row.attempts && row.attempts.length > 0 && <details>
+                      <summary>请求明细</summary>
+                      <ol>{row.attempts.map((attempt) => <li key={attempt.index}>
+                        第 {attempt.index} 次：{attempt.error_kind ? MODEL_ERROR_LABEL[attempt.error_kind] ?? attempt.error_kind : attempt.outcome === "ok" ? "成功" : "失败"}
+                        {attempt.http_status !== null ? ` · HTTP ${attempt.http_status}` : ""}
+                        {` · ${(attempt.latency_ms / 1000).toFixed(1)}s · 已知总 token ${attempt.total_tokens ?? "未返回"} · 输出上限 ${attempt.max_tokens}`}
+                        {attempt.thinking_disabled ? " · 已请求关闭思考" : ""}
+                      </li>)}</ol>
+                    </details>}
+                  </td>
+                  <td>{row.error_kind ? MODEL_ERROR_LABEL[row.error_kind] ?? row.error_kind : row.outcome === "ok" ? "成功" : row.outcome === "timeout" ? "超时" : "失败"}{row.http_status !== null ? ` · HTTP ${row.http_status}` : ""} · {(row.latency_ms / 1000).toFixed(1)}s</td>
+                  <td>{row.usage_complete === null ? "未记录" : row.usage_complete ? "完整" : "用量不完整"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </details>
       )}
     </div>
   );

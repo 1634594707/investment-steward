@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -85,6 +85,9 @@ class EvidenceStatus(StrEnum):
     RETRACTED = "retracted"
 
 
+FinancialPeriodBasis = Literal["cumulative", "single_quarter", "ttm", "instant", "unknown"]
+
+
 class Evidence(SchemaModel):
     evidence_id: UUID
     tenant_id: UUID
@@ -95,6 +98,8 @@ class Evidence(SchemaModel):
     license_status: str = "unknown"
     source_trust_note: str | None = None
     published_at: datetime | None = None
+    financial_period_end: date | None = None
+    financial_period_basis: FinancialPeriodBasis = "unknown"
     observed_at: datetime | None = None
     collected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     valid_until: datetime | None = None
@@ -624,6 +629,20 @@ class JevRouteDecision(SchemaModel):
     schema_version: str = "1.0"
 
 
+class ResearchMemoryMatch(SchemaModel):
+    """用户投资逻辑快照；证据关系沿用原标注，未判定该假设成立或失效。"""
+
+    thesis_id: UUID
+    instrument: str
+    original_statement: str
+    core_assumptions: list[str] = Field(default_factory=list)
+    invalidation_conditions: list[str] = Field(default_factory=list)
+    thesis_updated_at: datetime
+    linked_evidence_refs: list[UUID] = Field(default_factory=list)
+    candidate_supporting_refs: list[UUID] = Field(default_factory=list)
+    candidate_contradicting_refs: list[UUID] = Field(default_factory=list)
+
+
 class AgentResponse(SchemaModel):
     response_id: UUID
     run_id: UUID
@@ -631,6 +650,7 @@ class AgentResponse(SchemaModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     user_question: str = Field(min_length=1, max_length=10000)
     context_snapshot_refs: list[str] = Field(default_factory=list)
+    research_memory: list[ResearchMemoryMatch] = Field(default_factory=list)
     summary: str = Field(min_length=1, max_length=10000)
     reasoning_outline: list[str] = Field(default_factory=list)
     confidence_description: str = Field(min_length=1, max_length=2000)
@@ -780,6 +800,29 @@ class RunStatus(StrEnum):
     STALE = "stale"
 
 
+class EvidenceSearchScope(SchemaModel):
+    """显式检索范围；published为发布日期，financial_period_ends为报告期末，不推断累计/单季。"""
+
+    subject_refs: list[str] = Field(default_factory=list, max_length=50)
+    source_names: list[str] = Field(default_factory=list, max_length=50)
+    published_from: datetime | None = None
+    published_to: datetime | None = None
+    financial_period_ends: list[date] = Field(default_factory=list, max_length=50)
+    financial_period_basis: FinancialPeriodBasis | None = None
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        if any(not value.strip() for value in self.subject_refs + self.source_names):
+            raise ValueError("标的及来源筛选不能包含空值")
+        for name in ("published_from", "published_to"):
+            value = getattr(self, name)
+            if value is not None and value.tzinfo is None:
+                raise ValueError("发布日期范围必须携带时区")
+        if self.published_from and self.published_to and self.published_from > self.published_to:
+            raise ValueError("发布日期起点不得晚于终点")
+        return self
+
+
 class ResearchRun(SchemaModel):
     """研究链路运行记录：问题 → 证据收集 → 有据回答，状态机与 agent-worker 的 AgentRun 对齐。"""
 
@@ -787,6 +830,7 @@ class ResearchRun(SchemaModel):
     user_id: UUID
     status: RunStatus = RunStatus.CREATED
     user_question: str = Field(min_length=1, max_length=10000)
+    evidence_scope: EvidenceSearchScope | None = None
     evidence_refs: list[UUID] = Field(default_factory=list)
     supporting_refs: list[UUID] = Field(default_factory=list)
     contradicting_refs: list[UUID] = Field(default_factory=list)
@@ -858,6 +902,7 @@ class Thesis(SchemaModel):
     supporting_conditions: list[str] = Field(default_factory=list)
     invalidation_conditions: list[str] = Field(default_factory=list)
     observation_metrics: list[str] = Field(default_factory=list)
+    evidence_refs: list[UUID] = Field(default_factory=list, max_length=100)
     status: ThesisStatus = ThesisStatus.ACTIVE
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

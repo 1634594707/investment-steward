@@ -210,6 +210,8 @@ def _canned_report() -> dict[str, Any]:
     payload["report"] = str(payload.get("report", "")) + "\n盈利质量较好，现金流覆盖充足。"
     payload["cash_flow_quality"] = {"operating_cash_flow": 51.23, "net_income": 19.5,
                                   "metric_metadata": _cash_metadata()}
+    for metadata in payload["cash_flow_quality"]["metric_metadata"].values():
+        metadata["currency"] = "CNY"
     payload["earnings_growth"] = [
         {"factor": "volume", "effect": "业务量上升", "basis": "8 月业务量 +18%", "sources": ["S2"]},
         {"factor": "low_base", "effect": "低基数", "contribution_pct": 40, "sources": ["S4"]},

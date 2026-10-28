@@ -44,6 +44,7 @@ export const BRIDGE_MANIFEST: { version: number; routes: BridgeRoute[] } = {
   { method: "POST", path: "/evidence", pattern: "^/evidence$" },
   { method: "GET", path: "/evidence/{evidence_id}", pattern: "^/evidence/[^/]+$" },
   { method: "GET", path: "/evidence/announcements/{symbol:path}", pattern: "^/evidence/announcements/.+$" },
+  { method: "POST", path: "/evidence/collab-cancel", pattern: "^/evidence/collab-cancel$" },
   { method: "POST", path: "/evidence/collab-next", pattern: "^/evidence/collab-next$" },
   { method: "POST", path: "/evidence/collab-run", pattern: "^/evidence/collab-run$" },
   { method: "GET", path: "/evidence/collab-state", pattern: "^/evidence/collab-state$" },

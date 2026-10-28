@@ -171,8 +171,8 @@ def normalize_gate_payload(
         "supporting_refs": kept_supporting,
         "contradicting_refs": kept_contradicting,
         "missing_information": missing_bits,
-        "freshness_warning": _str_list(obj.get("freshness_warning", [])),
-        "limitations": _str_list(obj.get("limitations", [])),
+        "freshness_warning": _warning_list(obj.get("freshness_warning"), "freshness_warning"),
+        "limitations": _warning_list(obj.get("limitations"), "limitations"),
         "action_mode": action_mode,
         "supported_actions": supported_actions,
         "model_provider": obj.get("model_provider"),
@@ -202,6 +202,17 @@ def _str_list(value: Any) -> list[str]:
         if isinstance(item, str) and item.strip():
             out.append(item.strip())
     return out
+
+
+def _warning_list(value: Any, field: str) -> list[str]:
+    """仅兼容警告的单段文本；非法结构拒绝，避免静默丢失边界说明。"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ResponseGateError(f"{field} 必须是文本或文本数组")
+    return _str_list(value)
 
 
 def _require_text(obj: dict[str, Any], key: str, message: str) -> str:

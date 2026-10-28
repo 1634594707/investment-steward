@@ -108,7 +108,7 @@ export function useSteward(client: CoreClient, aiReady: boolean) {
     return true;
   }
 
-  async function createThesis(input: { instrument: string; original_statement: string; core_assumptions: string[]; supporting_conditions: string[]; invalidation_conditions: string[]; observation_metrics: string[] }): Promise<boolean> {
+  async function createThesis(input: { instrument: string; original_statement: string; core_assumptions: string[]; supporting_conditions: string[]; invalidation_conditions: string[]; observation_metrics: string[]; evidence_refs?: string[] }): Promise<boolean> {
     const response = await client.request<Thesis>({ method: "POST", path: "/thesis", body: input });
     if (response.status >= 400) {
       toast.err("投资逻辑创建失败，请稍后重试。");
@@ -222,12 +222,12 @@ export function useSteward(client: CoreClient, aiReady: boolean) {
     return true;
   }
 
-  async function createResearchRun(question: string): Promise<AgentResponse | null> {
+  async function createResearchRun(question: string, scope?: ResearchRun["evidence_scope"]): Promise<AgentResponse | null> {
     if (!aiReady) {
       toast.err("AI 未接通：请先在 设置 → 模型配置 添加方案、粘贴密钥并设为「使用中」。");
       return null;
     }
-    const runRes = await client.request<ResearchRun>({ method: "POST", path: "/research/runs", body: { user_question: question } });
+    const runRes = await client.request<ResearchRun>({ method: "POST", path: "/research/runs", body: { user_question: question, ...(scope ? { evidence_scope: scope } : {}) } });
     if (runRes.status >= 400) {
       toast.err(`研究创建失败（${classifyCoreError(runRes.status, detailOf(runRes.data)).message}）`);
       return null;

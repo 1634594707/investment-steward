@@ -1,6 +1,6 @@
 """模型调用器（阶段 A）：读「使用中」的模型方案 → 解析凭据 → OpenAI 兼容 chat/completions。
 
-- 纯 stdlib（urllib.request），零新增依赖，对齐 `market_feed.py` / `financial_evidence.py` 风格。
+- 生成请求使用可取消的 httpx；模型列表沿用 urllib。
 - `model_access` 能力出网一律经当前「使用中」方案代理（G3-3 既定原则）。
 - 密钥原文永不落日志、不进审计 payload、不进插件进程环境、不回传前端；
   失败时只暴露无密钥误差类，不暴露密钥/请求正文。
@@ -9,13 +9,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.response
 from dataclasses import dataclass
 from typing import Any
+
+import httpx
 
 from investment_steward_core.domain import ModelProfile
 
@@ -71,6 +76,13 @@ _WAF_BLOCK_HINT = (
 class ModelUnavailable(Exception):
     """模型调用不可用：未配置激活方案 / 凭据缺失 / 超时 / 网络 / 非 2xx / 响应畸形。"""
 
+    def __init__(self, message: str, *, error_kind: str = "unavailable", http_status: int | None = None,
+                 retry_after: float | None = None):
+        super().__init__(message)
+        self.error_kind = error_kind
+        self.http_status = http_status
+        self.retry_after = retry_after
+
 
 class ReasoningBudgetExhausted(ModelUnavailable):
     """推理模型的思考耗尽了 max_tokens 预算（content 为空、finish_reason=length）。
@@ -86,12 +98,14 @@ class ModelReply:
     provider: str
     latency_ms: int
     # F01（桌面端升级路线图 2026-09-18）：用量与调用元数据——payload["usage"] 缺失记 null
-    #（不按字数反推）；retried 标记 thinking-disabled 重试（该次调用实际发生了两次计费请求）。
+    #（不按字数反推）；retried 表示发生过第二次请求，不能视为只计费一次。
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
     retried: bool = False
     purpose: str | None = None
+    returned_model: str | None = None
+    usage_complete: bool | None = None
 
 
 def resolve_credential(store: Any, credential_ref: str) -> str:
@@ -146,7 +160,8 @@ def resolve_probe_api_key(store: Any, credential_ref: str) -> str:
 
 
 def _chat_completion_payload(
-    messages: list[dict[str, str]], model: str, timeout: float, *, thinking_disabled: bool = False
+    messages: list[dict[str, str]], model: str, timeout: float, *, thinking_disabled: bool = False,
+    max_tokens: int = 16000,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -154,7 +169,7 @@ def _chat_completion_payload(
         # 推理模型（如 deepseek-v4-flash）先烧 token 生成 reasoning_content 再出正文；
         # 预算太小（初版 1200 → 8000 仍被长链路思考耗尽）会导致 content 为空、finish_reason=length。
         # 16000 实测（含证据输入的研报提示）finish=stop、正文完整。
-        "max_tokens": 16000,
+        "max_tokens": max_tokens,
         "temperature": 0.2,
         "stream": False,
     }
@@ -162,6 +177,29 @@ def _chat_completion_payload(
         # DeepSeek v4 混合推理开关（实测生效：reasoning_tokens=None，耗时大幅下降）。
         payload["thinking"] = {"type": "disabled"}
     return payload
+
+
+def _completion_urlopen(request: urllib.request.Request, timeout: float) -> Any:
+    """适配既有响应处理；取消时由 AsyncClient 关闭连接，不遗留生成线程。"""
+    async def send() -> httpx.Response:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+            return await client.request(request.get_method(), request.full_url,
+                                        headers=dict(request.header_items()), content=request.data)
+
+    async def bounded() -> httpx.Response:
+        return await asyncio.wait_for(send(), timeout=timeout)
+
+    try:
+        response = asyncio.run(bounded())
+    except httpx.TimeoutException as exc:
+        raise TimeoutError from exc
+    except httpx.RequestError as exc:
+        raise urllib.error.URLError("network failure") from exc
+    if response.is_error:
+        raise urllib.error.HTTPError(request.full_url, response.status_code, "request failed",
+                                     response.headers, io.BytesIO(response.content[:2000]))
+    return urllib.response.addinfourl(io.BytesIO(response.content), response.headers,
+                                     request.full_url, response.status_code)
 
 
 def _post_json(
@@ -179,21 +217,42 @@ def _post_json(
     body = json.dumps(json_payload).encode("utf-8")
     request = urllib.request.Request(url, data=body, method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
+        with _completion_urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", "replace")
+            status = getattr(response, "status", None)
+            response_headers = getattr(response, "headers", {})
+            # 仅展示白名单媒体类型，避免任意服务端头携带敏感材料。
+            media_type = response_headers.get("Content-Type", "").split(";", 1)[0].lower()
+            content_type = media_type if media_type in {"application/json", "text/html", "text/event-stream", "text/plain"} else "未知类型"
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             if _is_waf_block(exc.code, _read_error_body(exc)):
-                raise ModelUnavailable(_WAF_BLOCK_HINT) from exc
+                raise ModelUnavailable(_WAF_BLOCK_HINT, error_kind="waf", http_status=exc.code) from exc
             host = urllib.parse.urlparse(url).hostname or ""
             gateway_note = ""
             if api_key and api_key.startswith("sk_") and "deepseek" in host:
                 gateway_note = "；检测到密钥为 sk_ 开头（One API/new-api 网关 key 格式），与 DeepSeek 官方端点不匹配——请改 base_url 为网关地址，或换成官方 sk- 密钥"
             raise ModelUnavailable(
-                f"服务端返回 {exc.code}（认证被拒绝）：请确认密钥与 base_url 匹配（官方 key 与网关 key 不可混用）、密钥未失效且未欠费{gateway_note}"
+                f"服务端返回 {exc.code}（认证被拒绝）：请确认密钥与 base_url 匹配（官方 key 与网关 key 不可混用）、密钥未失效且未欠费{gateway_note}",
+                error_kind="auth", http_status=exc.code,
             ) from exc
-        raise
-    parsed = json.loads(raw)
+        kind = "rate_limit" if exc.code == 429 else "upstream" if exc.code >= 500 else "request"
+        delay = 1.0
+        retry_header = (exc.headers or {}).get("Retry-After")
+        if retry_header is not None:
+            try:
+                delay = float(retry_header)
+            except ValueError:
+                delay = -1.0  # 日期或无法识别的等待要求交由用户稍后重试。
+        raise ModelUnavailable(_probe_http_error_detail(exc.code), error_kind=kind, http_status=exc.code,
+                               retry_after=delay) from exc
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ModelUnavailable(
+            f"响应不是合法 JSON（HTTP {status}，{content_type}）：请确认网关按 stream=false 返回完整 JSON；流式事件或错误页面无法作为正文",
+            error_kind="protocol", http_status=status,
+        ) from exc
     if not isinstance(parsed, dict):
         raise ModelUnavailable("模型返回结构异常（非 JSON 对象）")
     return parsed
@@ -206,7 +265,7 @@ def _extract_usage(payload: dict[str, Any]) -> tuple[int | None, int | None, int
         return None, None, None
 
     def _int(value: Any) -> int | None:
-        return int(value) if isinstance(value, int) else None
+        return value if type(value) is int and value >= 0 else None
 
     return _int(usage.get("prompt_tokens")), _int(usage.get("completion_tokens")), _int(usage.get("total_tokens"))
 
@@ -251,6 +310,11 @@ def _extract_content(payload: dict[str, Any]) -> str:
         raise ModelUnavailable("模型返回 choices 项结构异常")
     message = first.get("message")
     content = message.get("content") if isinstance(message, dict) else None
+    if first.get("finish_reason") == "length" and isinstance(content, str) and content.strip():
+        raise ModelUnavailable(
+            "模型输出达到预算上限，正文已截断（finish_reason=length），未作为完整结果交付；请调整输出范围后手动重试",
+            error_kind="output_truncated",
+        )
     if not isinstance(content, str) or not content.strip():
         finish = first.get("finish_reason")
         if finish == "length":
@@ -262,10 +326,7 @@ def _extract_content(payload: dict[str, Any]) -> str:
             # DeepSeek 推理模型偶发把最终答案整个写进 reasoning_content（content 空、finish=stop）。
             # finish=stop 表示模型认为已答完，此时 reasoning_content 即答案，直接采用。
             return reasoning
-        # 兜底诊断：仍为空则带回原始结构定位（仅模型输出，无密钥）。
-        raise ModelUnavailable(
-            f"模型返回空内容（finish_reason={finish}）raw={json.dumps(first, ensure_ascii=False)[:600]}"
-        )
+        raise ModelUnavailable("模型返回空内容，请检查模型输出预算与网关响应协议", error_kind="empty_content")
     return content
 
 
@@ -284,7 +345,7 @@ def call_active_model(
     超时优先级：显式传入 > 方案配置 timeout_secs > 内置默认 _MODEL_REQUEST_TIMEOUT。
     F01（桌面端升级路线图 2026-09-18）：解析 payload["usage"]（缺失记 null），每次调用
     （成功或失败）经模块级 recorder 落 model_calls 表；retried=True 表示发生过
-    thinking-disabled 重试（两次计费请求，token 三项为两次之和）。
+    第二次请求（token 三项累加已返回的用量；失败请求也可能计费）。
     """
     effective_timeout = float(timeout or getattr(profile, "timeout_secs", None) or _MODEL_REQUEST_TIMEOUT)
     api_key = resolve_credential(credential_store, profile.credential_ref)
@@ -293,10 +354,22 @@ def call_active_model(
     completion_tokens: int | None = None
     total_tokens: int | None = None
     retried = False
+    returned_model: str | None = None
+    attempt_count = 0
+    complete_usage_count = 0
+    attempts: list[dict[str, Any]] = []
+
+    def _attempt() -> None:
+        nonlocal attempt_count
+        attempt_count += 1
 
     def _accumulate_usage(payload: dict[str, Any]) -> None:
-        nonlocal prompt_tokens, completion_tokens, total_tokens
+        nonlocal prompt_tokens, completion_tokens, total_tokens, returned_model, complete_usage_count
+        reported = payload.get("model")
+        returned_model = reported if isinstance(reported, str) and reported.strip() else None
         attempt_prompt, attempt_completion, attempt_total = _extract_usage(payload)
+        if all(value is not None for value in (attempt_prompt, attempt_completion, attempt_total)):
+            complete_usage_count += 1
         # 两次计费请求（重试）token 相加；任一侧缺失时以另一侧为准（缺失侧保持 None 的语义
         # 由 total/prompt 的 None 传播体现——缺失记 null，不猜 0）。
         if attempt_prompt is not None:
@@ -306,7 +379,7 @@ def call_active_model(
         if attempt_total is not None:
             total_tokens = attempt_total if total_tokens is None else total_tokens + attempt_total
 
-    def _record(outcome: str) -> None:
+    def _record(outcome: str, error_kind: str | None = None, http_status: int | None = None) -> None:
         _emit_model_call_record({
             "profile_id": getattr(profile, "profile_id", None),
             "model": profile.model,
@@ -317,22 +390,20 @@ def call_active_model(
             "latency_ms": int((time.monotonic() - started) * 1000),
             "retried": retried,
             "outcome": outcome,
+            "returned_model": returned_model,
+            "attempt_count": attempt_count,
+            "error_kind": error_kind,
+            "http_status": http_status,
+            "usage_complete": complete_usage_count == attempt_count if attempt_count else None,
+            "attempts": attempts,
         })
 
     try:
         if not api_key:
-            _record("error")
             raise ModelUnavailable(f"模型方案 {profile.name} 关联的凭据 {profile.credential_ref} 未配置")
-        try:
-            payload = _post_json(profile.base_url, _chat_completion_payload(messages, profile.model, effective_timeout), api_key, effective_timeout)
-            _accumulate_usage(payload)
-            content = _extract_content(payload)
-        except ReasoningBudgetExhausted:
-            # 推理模型思考把预算烧光（content 为空）→ 关闭思考重试一次，保证出结果。
-            retried = True
-            retry_payload = _post_json(profile.base_url, _chat_completion_payload(messages, profile.model, effective_timeout, thinking_disabled=True), api_key, effective_timeout)
-            _accumulate_usage(retry_payload)
-            content = _extract_content(retry_payload)
+        budget = 512 if purpose == "连通性测试" else 8192 if purpose in {"追问", "战法复核"} else 16000
+        content, retried = _complete(profile.base_url, profile.model, api_key, messages,
+                                    effective_timeout, budget, _accumulate_usage, _attempt, attempts)
         latency_ms = int((time.monotonic() - started) * 1000)
         _record("ok")
         return ModelReply(
@@ -345,13 +416,12 @@ def call_active_model(
             total_tokens=total_tokens,
             retried=retried,
             purpose=purpose,
+            returned_model=returned_model,
+            usage_complete=complete_usage_count == attempt_count if attempt_count else None,
         )
     except ModelUnavailable as exc:
-        # 首次请求本身的结构/内容错误（非重试路径）：在重试前也会走到这里——如实记 error。
-        if not retried:
-            _record("error")
-        else:
-            _record("error")
+        retried = getattr(exc, "retried", retried)
+        _record("timeout" if exc.error_kind == "timeout" else "error", exc.error_kind, exc.http_status)
         exc.latency_ms = int((time.monotonic() - started) * 1000)  # type: ignore[attr-defined]
         exc.retried = retried  # type: ignore[attr-defined]
         raise
@@ -378,6 +448,78 @@ def call_active_model(
 
 _PROBE_SYSTEM = "你是投资管家用于连通性测试的小助手，只回复一个词：ok。"
 _PROBE_USER = "连通性测试"
+
+
+def _complete(base_url: str, model: str, api_key: str | None, messages: list[dict[str, str]],
+              timeout: float, max_tokens: int, on_payload: Any = None, on_attempt: Any = None,
+              attempts: list[dict[str, Any]] | None = None) -> tuple[str, bool]:
+    """至多两次请求，共享剩余超时；不自动重发结果未知的网络失败。"""
+    started = time.monotonic()
+    thinking_disabled = False
+    request_count = 0
+    for attempt in range(2):
+        detail: dict[str, Any] | None = None
+        attempt_started = time.monotonic()
+        try:
+            remaining = timeout - (time.monotonic() - started)
+            if remaining <= 0:
+                raise TimeoutError
+            request_count += 1
+            if on_attempt is not None:
+                on_attempt()
+            detail = {"index": attempt + 1, "thinking_disabled": thinking_disabled, "max_tokens": max_tokens,
+                      "outcome": "error", "error_kind": None, "http_status": None}
+            payload = _post_json(base_url, _chat_completion_payload(
+                messages, model, remaining, thinking_disabled=thinking_disabled, max_tokens=max_tokens,
+            ), api_key, remaining)
+            prompt, completion, total = _extract_usage(payload)
+            detail.update(prompt_tokens=prompt, completion_tokens=completion, total_tokens=total)
+            choices = payload.get("choices")
+            first = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
+            finish = first.get("finish_reason")
+            # 终止原因属于有限诊断值，未知文本不进入普通日志。
+            detail["finish_reason"] = finish if finish in ("stop", "length", "content_filter", "tool_calls", "function_call") else None
+            if on_payload is not None:
+                on_payload(payload)
+            if time.monotonic() - started >= timeout:
+                raise TimeoutError
+            content = _extract_content(payload)
+            detail["outcome"] = "ok"
+            return content, request_count > 1
+        except ModelUnavailable as exc:
+            if detail is not None:
+                detail.update(error_kind="reasoning_budget" if isinstance(exc, ReasoningBudgetExhausted) else exc.error_kind,
+                              http_status=exc.http_status, latency_ms=int((time.monotonic() - attempt_started) * 1000))
+            exc.retried = request_count > 1
+            if attempt:
+                raise
+            if isinstance(exc, ReasoningBudgetExhausted):
+                thinking_disabled = True
+                continue
+            delay = exc.retry_after
+            if (exc.http_status in {429, 502, 503, 504} and delay is not None and 0 <= delay <= 5
+                    and timeout - (time.monotonic() - started) > delay):
+                time.sleep(delay)
+                continue
+            raise
+        except urllib.error.HTTPError:
+            raise
+        except Exception as exc:
+            is_timeout = isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError)
+            message = (f"模型调用超时（方案超时 {int(timeout)} 秒）：可在设置中调大方案超时；"
+                       "远端结果未知，请确认后再重试") if is_timeout else "模型调用失败，请检查网络、端点和协议配置"
+            failure = ModelUnavailable(message, error_kind="timeout" if is_timeout else "network")
+            if isinstance(exc, urllib.error.URLError) and not is_timeout:
+                failure = ModelUnavailable("无法连接端点：请检查网络、base_url、代理设置", error_kind="network")
+            failure.retried = request_count > 1
+            if detail is not None:
+                detail.update(outcome="timeout" if is_timeout else "error", error_kind=failure.error_kind)
+            raise failure from exc
+        finally:
+            if detail is not None and attempts is not None:
+                detail.setdefault("latency_ms", int((time.monotonic() - attempt_started) * 1000))
+                attempts.append(detail)
+    raise AssertionError("unreachable")
 
 
 def list_provider_models(base_url: str, api_key: str, timeout: float) -> list[str]:
@@ -435,19 +577,7 @@ def probe_completion(base_url: str, model: str, api_key: str, *, timeout: float)
     started = time.monotonic()
     messages = format_messages(_PROBE_SYSTEM, _PROBE_USER)
     try:
-        payload = _post_json(
-            base_url, _chat_completion_payload(messages, model, timeout), api_key or None, timeout
-        )
-        content = _extract_content(payload)
-    except ReasoningBudgetExhausted:
-        # 推理模型思考把预算烧光 → 关闭思考重试一次，与主链路同口径。
-        payload = _post_json(
-            base_url,
-            _chat_completion_payload(messages, model, timeout, thinking_disabled=True),
-            api_key or None,
-            timeout,
-        )
-        content = _extract_content(payload)
+        content, retried = _complete(base_url, model, api_key or None, messages, timeout, 512)
     except urllib.error.HTTPError as exc:
         # 认证/协议类错误对用户最有诊断价值，按状态码如实转述（不回传 body，避免泄漏）。
         raise ModelUnavailable(_probe_http_error_detail(exc.code)) from exc
@@ -459,7 +589,7 @@ def probe_completion(base_url: str, model: str, api_key: str, *, timeout: float)
             f"连通性测试失败（{latency_ms}ms）：{_probe_exception_detail(exc)}"
         ) from exc
     latency_ms = int((time.monotonic() - started) * 1000)
-    return ModelReply(content=content, model=model, provider=base_url, latency_ms=latency_ms)
+    return ModelReply(content=content, model=model, provider=base_url, latency_ms=latency_ms, retried=retried)
 
 
 def _probe_http_error_detail(status_code: int) -> str:
@@ -471,6 +601,8 @@ def _probe_http_error_detail(status_code: int) -> str:
         )
     if status_code == 404:
         return "服务端返回 404：路径不存在，请确认 base_url 是否已带 /v1（如 https://host/v1）"
+    if status_code == 400:
+        return "服务端返回 400：请求参数或模型协议不兼容，请核对模型名及网关支持的参数"
     if status_code == 429:
         return "服务端返回 429（触发限流）：稍后重试或改用更小的模型"
     if status_code >= 500:

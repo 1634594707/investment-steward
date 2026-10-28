@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CoreRequest } from "../state/coreClient";
 import { detailOf } from "../state/coreClient";
 import "./settings.css";
@@ -91,6 +91,9 @@ export function FeedHealthSection({ coreRequest }: { coreRequest?: (req: CoreReq
   const [retryResults, setRetryResults] = useState<FeedRetryResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"load" | "retry" | null>(null);
+  const loadSequence = useRef(0);
+  const [snapshotReadAt, setSnapshotReadAt] = useState<string | null>(null);
+  const [snapshotVerified, setSnapshotVerified] = useState(false);
 
   async function call<T>(req: CoreRequest): Promise<T> {
     if (!coreRequest) throw new Error("当前环境没有 Core 请求通道。");
@@ -101,19 +104,25 @@ export function FeedHealthSection({ coreRequest }: { coreRequest?: (req: CoreReq
 
   async function load(nextWindow: "7d" | "30d" = window) {
     if (!coreRequest) return;
+    const sequence = ++loadSequence.current;
     setBusy("load");
+    setSnapshotVerified(false);
     setError(null);
     try {
       const [quality, failureList] = await Promise.all([
         call<FeedQualityReport>({ method: "GET", path: `/data-source/quality?window=${nextWindow}` }),
         call<{ failures: FeedFailureRow[] }>({ method: "GET", path: `/data-source/failures?window=${nextWindow}&limit=20` }),
       ]);
+      if (sequence !== loadSequence.current) return;
       setReport(quality);
       setFailures(failureList.failures ?? []);
+      setSnapshotReadAt(new Date().toISOString());
+      setSnapshotVerified(true);
     } catch (err) {
+      if (sequence !== loadSequence.current) return;
       setError(err instanceof Error ? err.message : "取数健康读取失败");
     } finally {
-      setBusy(null);
+      if (sequence === loadSequence.current) setBusy(null);
     }
   }
 
@@ -138,6 +147,7 @@ export function FeedHealthSection({ coreRequest }: { coreRequest?: (req: CoreReq
 
   useEffect(() => {
     void load();
+    return () => { loadSequence.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,12 +163,12 @@ export function FeedHealthSection({ coreRequest }: { coreRequest?: (req: CoreReq
         样本为 0 时显示「—（无样本）」——这与「全都失败」是两件事。缓存命中的调用不发请求，因而不产生样本。
       </p>
       <div className="filter-row">
-        <button className={`tag-button ${window === "7d" ? "active" : ""}`} onClick={() => { setWindow("7d"); void load("7d"); }}>最近 7 天</button>
-        <button className={`tag-button ${window === "30d" ? "active" : ""}`} onClick={() => { setWindow("30d"); void load("30d"); }}>最近 30 天</button>
+        <button className={`tag-button ${window === "7d" ? "active" : ""}`} disabled={busy === "retry"} onClick={() => { setWindow("7d"); setRetryResults(null); void load("7d"); }}>最近 7 天</button>
+        <button className={`tag-button ${window === "30d" ? "active" : ""}`} disabled={busy === "retry"} onClick={() => { setWindow("30d"); setRetryResults(null); void load("30d"); }}>最近 30 天</button>
         <button className="ghost-btn" disabled={busy !== null} onClick={() => void load()}>刷新</button>
         <button
           className="ghost-btn"
-          disabled={busy !== null || failures.length === 0}
+          disabled={busy !== null || !snapshotVerified || report?.window !== window || failures.length === 0}
           onClick={() => void retryFailed()}
           title={failures.length === 0 ? "窗口内没有失败记录" : "只对失败过的来源各发一次真实请求，不对健康的源重复打上游"}
         >
@@ -166,6 +176,13 @@ export function FeedHealthSection({ coreRequest }: { coreRequest?: (req: CoreReq
         </button>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
+      {report && snapshotReadAt && (
+        <p className="form-note">
+          快照窗口：最近 {report.window === "30d" ? "30" : "7"} 天 · 统计读取时间：{new Date(snapshotReadAt).toLocaleString()}。
+          读取时间不代表来源数据更新时间，缓存年龄未知。
+          {!snapshotVerified && " 显示上次成功读取的旧快照，当前状态尚未确认；请刷新后再重试来源。"}
+        </p>
+      )}
       {report !== null && (
         report.sources.length === 0 ? (
           <p className="scheme-empty">窗口内既没有取数日志也没有证据记录。</p>

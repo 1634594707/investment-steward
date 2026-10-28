@@ -682,6 +682,7 @@ export interface StockReport {
   decision_card?: ReportDecisionCard;
   /** 各来源最新数据日期（S1–S5 → ISO 前缀）；时效判定的依据快照。 */
   source_asof?: Record<string, string>;
+  source_health?: ReportSourceHealth;
   /* —— v29 三次升级（§2 字数预算 / §3 图表数据包 / §4 来源元数据） —— */
   /** 研报模式（quick/standard/deep）：本篇按哪档字数预算做软告警。 */
   report_mode?: string;
@@ -779,6 +780,22 @@ export interface ValuationChartPack {
 export interface SourceMetaEntry {
   provider?: string;
   retrieved_at?: string;
+}
+
+export interface ReportSourceHealth {
+  checked_on: string;
+  note: string;
+  sources: Array<{
+    source_id: string;
+    state: "failed" | "stale" | "unknown_date" | "within_threshold";
+    data_date: string | null;
+    age_days: number | null;
+    max_age_days: number;
+    provider: string | null;
+    retrieved_at: string | null;
+    cache_age_days: number | null;
+    error: string | null;
+  }>;
 }
 
 /** v21 AI 方向研判（POST /evidence/direction-research）；v33（2026-09-14 路线图 B 组）升级契约。
@@ -1202,7 +1219,7 @@ export interface EarningsGrowthRow {
 export interface CashFlowQualityBlock {
   version?: string;
   periods?: CashFlowQualityBlock[];
-  metric_metadata?: Partial<Record<"operating_cash_flow" | "net_income" | "depreciation_amortization" | "working_capital" | "capex" | "free_cash_flow", { period: string; unit: string; sources: string[] }>>;
+  metric_metadata?: Partial<Record<"operating_cash_flow" | "net_income" | "depreciation_amortization" | "working_capital" | "capex" | "free_cash_flow", { period: string; unit: string; currency?: string; sources: string[] }>>;
   operating_cash_flow_period?: string;
   capex_period?: string;
   free_cash_flow_reported?: number | null;
@@ -1416,7 +1433,7 @@ export interface AnalysisTurn {
 export interface CollabStage {
   stage: string;
   label: string;
-  status: "pending" | "running" | "done" | "failed";
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
   result: Record<string, unknown> | null;
   error: string | null;
   latency_ms: number | null;
@@ -1448,7 +1465,15 @@ export interface CollabStage {
 }
 
 /** v23 协同流水线运行视图（后端 collab-engine public_view）。 */
+export type SavedCollabRun = Pick<CollabRunView, "run_id" | "symbol" | "question" | "model" | "created_at" | "next_index" | "done" | "cancelled_at"> & {
+  recovery_state?: "pending" | "failed" | "running_or_interrupted" | "cancelled" | "archive_pending";
+  stage?: string | null;
+  stage_label?: string | null;
+};
+
 export interface CollabRunView {
+  source_health?: ReportSourceHealth;
+  cancelled_at?: string | null;
   source_catalog?: SourceCatalogEntry[];
   run_id: string;
   symbol: string;

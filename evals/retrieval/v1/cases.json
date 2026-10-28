@@ -1,0 +1,255 @@
+{
+  "version": "retrieval-eval-v1",
+  "as_of": "2026-10-26T00:00:00+00:00",
+  "evidence": [
+    {
+      "id": "support",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-01T00:00:00Z",
+      "summary": "Operating cash flow changed",
+      "relation": "supporting"
+    },
+    {
+      "id": "oppose",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-30T00:00:00Z",
+      "summary": "Operating cash flow declined after customer cancellations",
+      "relation": "contradicting"
+    },
+    {
+      "id": "other",
+      "subject_refs": [
+        "600002"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "Operating cash flow changed"
+    },
+    {
+      "id": "news",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "news",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "Operating cash flow changed"
+    },
+    {
+      "id": "early",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-05-01T00:00:00Z",
+      "summary": "Operating cash flow changed"
+    },
+    {
+      "id": "unknown",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": null,
+      "summary": "Operating cash flow changed"
+    },
+    {
+      "id": "expired",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "Operating cash flow changed",
+      "valid_until": "2026-10-25T00:00:00Z"
+    },
+    {
+      "id": "withdrawn",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "Operating cash flow changed",
+      "status": "retracted"
+    },
+    {
+      "id": "boundary",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "Operating cash flow changed",
+      "valid_until": "2026-10-26T00:00:00Z"
+    },
+    {
+      "id": "unrelated",
+      "subject_refs": [
+        "600001"
+      ],
+      "source_name": "filing",
+      "published_at": "2026-06-15T00:00:00Z",
+      "summary": "A new factory opened overseas"
+    }
+  ],
+  "cases": [
+    {
+      "id": "unscoped",
+      "question": "operating cash flow",
+      "scope": null,
+      "expected_ids": [
+        "support",
+        "oppose",
+        "other",
+        "news",
+        "early",
+        "unknown",
+        "boundary"
+      ]
+    },
+    {
+      "id": "subject",
+      "question": "operating cash flow",
+      "scope": {
+        "subject_refs": [
+          "600001"
+        ]
+      },
+      "expected_ids": [
+        "support",
+        "oppose",
+        "news",
+        "early",
+        "unknown",
+        "boundary"
+      ]
+    },
+    {
+      "id": "source",
+      "question": "operating cash flow",
+      "scope": {
+        "source_names": [
+          "filing"
+        ]
+      },
+      "expected_ids": [
+        "support",
+        "oppose",
+        "other",
+        "early",
+        "unknown",
+        "boundary"
+      ]
+    },
+    {
+      "id": "combined",
+      "question": "operating cash flow",
+      "scope": {
+        "subject_refs": [
+          "600001"
+        ],
+        "source_names": [
+          "filing"
+        ],
+        "published_from": "2026-06-01T00:00:00Z",
+        "published_to": "2026-06-30T00:00:00Z"
+      },
+      "expected_ids": [
+        "support",
+        "oppose",
+        "boundary"
+      ]
+    },
+    {
+      "id": "from_boundary",
+      "question": "operating cash flow",
+      "scope": {
+        "source_names": [
+          "filing"
+        ],
+        "published_from": "2026-06-01T00:00:00Z",
+        "published_to": "2026-06-01T00:00:00Z"
+      },
+      "expected_ids": [
+        "support"
+      ]
+    },
+    {
+      "id": "to_boundary",
+      "question": "operating cash flow",
+      "scope": {
+        "source_names": [
+          "filing"
+        ],
+        "published_from": "2026-06-30T00:00:00Z",
+        "published_to": "2026-06-30T00:00:00Z"
+      },
+      "expected_ids": [
+        "oppose"
+      ]
+    },
+    {
+      "id": "other_subject",
+      "question": "operating cash flow",
+      "scope": {
+        "subject_refs": [
+          "600002"
+        ]
+      },
+      "expected_ids": [
+        "other"
+      ]
+    },
+    {
+      "id": "exact_subject",
+      "question": "operating cash flow",
+      "scope": {
+        "subject_refs": [
+          "60000"
+        ]
+      },
+      "expected_ids": []
+    },
+    {
+      "id": "exclude_unknown_date",
+      "question": "operating cash flow",
+      "scope": {
+        "published_from": "2026-06-01T00:00:00Z",
+        "published_to": "2026-06-30T00:00:00Z"
+      },
+      "expected_ids": [
+        "support",
+        "oppose",
+        "other",
+        "news",
+        "boundary"
+      ]
+    },
+    {
+      "id": "counter_evidence",
+      "question": "customer cancellations",
+      "scope": null,
+      "expected_ids": [
+        "oppose"
+      ]
+    },
+    {
+      "id": "no_merged_compound",
+      "question": "cashflow",
+      "scope": null,
+      "expected_ids": []
+    },
+    {
+      "id": "blank",
+      "question": " ",
+      "scope": null,
+      "expected_ids": []
+    }
+  ]
+}

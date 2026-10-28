@@ -965,6 +965,11 @@ _VALUATION_CONTRAST_WORDS: tuple[str, ...] = (
 VALUATION_CONTRAST_LOOKBEHIND = 6
 _VALUATION_TURN_WORDS: tuple[str, ...] = ("但是", "但", "然而", "不过", "却", "反而")
 VALUATION_DENIAL_WINDOW = 24
+# 只覆盖被明确撤回的估值标签枚举，不能吞掉同句后面的独立判断。
+_WITHHELD_VALUATION_JUDGEMENT_RE = re.compile(
+    r'不给(?:出)?[「“"]?(?:偏贵|合理|偏便宜)'
+    r'(?:\s*[／/、或]\s*(?:偏贵|合理|偏便宜))*[」”"]?(?:的)?(?:估值)?判断'
+)
 
 
 def _ban_matches(text: str) -> list[tuple[int, str]]:
@@ -1000,6 +1005,8 @@ def undoubted_ban_phrases(text: str) -> list[str]:
 
 def _denial_covers(text: str, pos: int) -> bool:
     """`text[pos:]` 处的禁词是否被否认（对比否定紧邻，或落在某个否定窗口内）。"""
+    if any(match.start() <= pos < match.end() for match in _WITHHELD_VALUATION_JUDGEMENT_RE.finditer(text)):
+        return True
     head = text[max(0, pos - VALUATION_CONTRAST_LOOKBEHIND) : pos]
     if any(head.endswith(word) for word in _VALUATION_CONTRAST_WORDS):
         return True
@@ -2062,6 +2069,35 @@ def _age_days(as_of: str, today: date) -> int | None:
         return (today - date(int(text[0:4]), int(text[5:7]), int(text[8:10]))).days
     except ValueError:
         return None
+
+
+def report_source_health(report: Mapping[str, Any], *, today: date) -> dict[str, Any]:
+    """查看时重查冻结来源；只比较观测日期，不推测缓存生成时间或缺省来源。"""
+    asofs = report.get("source_asof") or {}
+    metadata = report.get("source_meta") or {}
+    errors = report.get("source_errors") or {}
+    source_ids = set(report.get("source_keys") or []) | set(asofs) | set(metadata) | set(errors)
+    rows = []
+    for sid in sorted(source_ids):
+        asof = str(asofs.get(sid) or "")
+        age = _age_days(asof, today)
+        limit = STALENESS_MAX_AGE_DAYS.get(sid, DEFAULT_STALENESS_MAX_AGE_DAYS)
+        if errors.get(sid):
+            state = "failed"
+        elif age is None or age < 0:
+            state = "unknown_date"
+        else:
+            state = "stale" if age > limit else "within_threshold"
+        meta = metadata.get(sid) or {}
+        rows.append({
+            "source_id": sid, "state": state, "data_date": asof or None,
+            "age_days": age if age is not None and age >= 0 else None,
+            "max_age_days": limit, "provider": meta.get("provider"),
+            "retrieved_at": meta.get("retrieved_at"), "cache_age_days": None,
+            "error": errors.get(sid),
+        })
+    return {"checked_on": today.isoformat(), "sources": rows,
+            "note": "仅检查冻结来源的观测日期；阈值内不代表实时或内容已核实，缓存年龄未知。"}
 
 
 def claim_conflict_signals(cited: list[str], *, requires: list[str]) -> list[dict[str, Any]]:
@@ -3210,6 +3246,7 @@ def cash_flow_quality(
     metric_metadata: Any = None,
     allowed_sources: Iterable[str] = (),
     periods: Any = None,
+    require_currency: bool = False,
 ) -> dict[str, Any]:
     """现金流质量（Q17）：覆盖倍数只是入口，结论强度由补到的口径数量决定。
 
@@ -3235,6 +3272,13 @@ def cash_flow_quality(
             "unit": str(raw.get("unit") or "").strip(),
             "sources": [sid for sid in sources if isinstance(sid, str) and sid in allowed] if isinstance(sources, list) else [],
         }
+        if raw.get("currency"):
+            metadata[key]["currency"] = str(raw["currency"]).strip()
+
+    def currencies_match(left: str, right: str) -> bool:
+        a = metadata.get(left, {}).get("currency", "")
+        b = metadata.get(right, {}).get("currency", "")
+        return bool(a) and a == b if require_currency else a == b
     ocf = _as_float_or_none(operating_cash_flow)
     profit = _as_float_or_none(net_income)
     d_a = _as_float_or_none(depreciation_amortization)
@@ -3247,6 +3291,7 @@ def cash_flow_quality(
     coverage_comparable = bool(
         ocf_meta.get("period") and ocf_meta.get("period") == profit_meta.get("period")
         and ocf_meta.get("unit") and ocf_meta.get("unit") == profit_meta.get("unit")
+        and currencies_match("operating_cash_flow", "net_income")
     )
     ocf_period = str(operating_cash_flow_period or "").strip()
     ocf_period_conflict = bool(ocf_meta.get("period") and ocf_period and ocf_meta["period"] != ocf_period)
@@ -3263,6 +3308,7 @@ def cash_flow_quality(
         metadata.get("operating_cash_flow", {}).get("unit")
         and metadata.get("operating_cash_flow", {}).get("unit") == metadata.get("capex", {}).get("unit")
     )
+    currencies_comparable = currencies_match("operating_cash_flow", "capex")
     # Q17 修订（v39 真机缺陷）：资本开支与自由现金流**不能**和折旧摊销、营运资本并列算「解释项」。
     # 自由现金流 = 经营现金流 − 资本开支，是从覆盖倍数那一侧算术派生出来的，它不解释
     # 「为什么经营现金流是净利的 2.63 倍」——能解释这件事的只有非现金费用（折旧摊销）
@@ -3270,7 +3316,7 @@ def cash_flow_quality(
     derived_fcf_note = ""
     fcf_period_note = ""
     if ocf is not None and capex_value is not None:
-        if periods_comparable and units_comparable and not period_conflict:
+        if periods_comparable and units_comparable and currencies_comparable and not period_conflict:
             fcf = round(ocf - capex_value, 2)
             metadata["free_cash_flow"] = {
                 "period": ocf_period,
@@ -3279,6 +3325,8 @@ def cash_flow_quality(
                     ocf_meta.get("sources", []) + metadata.get("capex", {}).get("sources", [])
                 )),
             }
+            if ocf_meta.get("currency"):
+                metadata["free_cash_flow"]["currency"] = ocf_meta["currency"]
             derived_fcf_note = f"（{ocf_period}：经营现金流－资本开支，服务端复算）"
             if reported_fcf is not None and round(reported_fcf, 2) != fcf:
                 fcf_period_note = f"模型提供的自由现金流 {reported_fcf} 与同期间输入复算值 {fcf} 不一致，采用复算值，原值仅作留痕。"
@@ -3290,6 +3338,8 @@ def cash_flow_quality(
             ) if not periods_comparable else "自由现金流未计算："
             if not units_comparable:
                 fcf_period_note += " 金额单位缺失或不一致，模型原值不参与判定。"
+            if not currencies_comparable:
+                fcf_period_note += " 币种缺失或不一致，停止计算，不自动换汇。"
             if period_conflict:
                 fcf_period_note += " 逐项期间与原期间声明冲突，模型原值不参与判定。"
     elif reported_fcf is not None:
@@ -3298,8 +3348,9 @@ def cash_flow_quality(
         ("depreciation_amortization", "折旧摊销", d_a), ("working_capital", "营运资本变动", wc)
     ) if value is not None and not ocf_period_conflict
         and ocf_meta.get("period") and metadata.get(key, {}).get("period") == ocf_meta["period"]
-        and ocf_meta.get("unit") and metadata.get(key, {}).get("unit") == ocf_meta["unit"]]
-    comparable_capex = capex_value if periods_comparable and units_comparable and not period_conflict else None
+        and ocf_meta.get("unit") and metadata.get(key, {}).get("unit") == ocf_meta["unit"]
+        and currencies_match("operating_cash_flow", key)]
+    comparable_capex = capex_value if periods_comparable and units_comparable and currencies_comparable and not period_conflict else None
     derived = [label for label, value in (("资本开支", capex_value), ("自由现金流", fcf)) if value is not None]
     derived = [f"{label}{derived_fcf_note}" if label == "自由现金流" and derived_fcf_note else label for label in derived]
     extras = explanatory + (derived if comparable_capex is not None else [])
@@ -3309,7 +3360,7 @@ def cash_flow_quality(
         note = "未取得经营现金流或归母净利润：本轮不对盈利质量作判断。"
     elif coverage is None:
         verdict = CASH_FLOW_VERDICT_INSUFFICIENT
-        note = "覆盖倍数未计算：经营现金流与归母净利润的期间或单位缺失、不一致，或期间声明冲突，原值保留，不对盈利质量作判断。"
+        note = "覆盖倍数未计算：经营现金流与归母净利润的期间、单位或币种缺失、不一致，或期间声明冲突，原值保留，不对盈利质量作判断。"
     elif explanatory and len(extras) >= 2:
         verdict = CASH_FLOW_VERDICT_STRONG
         note = f"覆盖倍数 {coverage}，并已交叉核对 {'、'.join(extras)}。"
@@ -3356,6 +3407,7 @@ def cash_flow_quality(
             free_cash_flow=row.get("free_cash_flow"), metric_metadata=row.get("metric_metadata"),
             operating_cash_flow_period=str(row.get("operating_cash_flow_period") or ""),
             capex_period=str(row.get("capex_period") or ""), allowed_sources=allowed,
+            require_currency=require_currency,
         ))
     if period_blocks and all(value is None for value in (ocf, profit, d_a, wc, capex_value, reported_fcf)):
         verdict = "分期列示"
@@ -3365,6 +3417,7 @@ def cash_flow_quality(
     return {
         "version": "v1",
         "metric_metadata": metadata,
+        "currency_policy": "required" if require_currency else "legacy_unverified",
         "periods": period_blocks,
         "operating_cash_flow": ocf,
         "net_income": profit,
@@ -3663,6 +3716,24 @@ def _earnings_completeness(payload: dict[str, Any], prose: str) -> dict[str, Any
 def _cash_flow_completeness(payload: dict[str, Any], prose: str) -> dict[str, Any]:
     """现金流与资本开支：覆盖倍数之外是否补到**解释项**（折旧摊销 / 营运资本变动）。"""
     block = payload.get("cash_flow_quality")
+    normalized = isinstance(block, dict) and block.get("currency_policy") in {"required", "legacy_unverified"}
+    if normalized and block.get("periods"):
+        groups = [row for row in block["periods"] if isinstance(row, dict)]
+        if _block_fields_present(block, _CASH_FLOW_BLOCK_KEYS):
+            groups.insert(0, {key: value for key, value in block.items() if key != "periods"})
+        items = [_cash_flow_completeness({"cash_flow_quality": group}, "") for group in groups]
+        if items:
+            state = (COMPLETENESS_DONE if all(row["state"] == COMPLETENESS_DONE for row in items)
+                     else COMPLETENESS_PARTIAL if any(row["state"] != COMPLETENESS_MISSING for row in items)
+                     else COMPLETENESS_MISSING)
+            return _completeness_item(
+                "cash_flow_and_capex", state,
+                covered=list(dict.fromkeys(label for row in items for label in row["covered"])),
+                gaps=list(dict.fromkeys(label for row in items for label in row["gaps"])),
+                evidence=[f"现金流分期 {index + 1}：{row['state_label']}；{'；'.join(row['evidence'])}"
+                          for index, row in enumerate(items)],
+                note="各分期独立校验，全部分期满足要求才计完成，不跨期拼凑解释项。",
+            )
     covered, mentioned = _covered_with_block_authority(
         block=block,
         block_probes=_CASH_FLOW_BLOCK_KEYS,
@@ -3673,6 +3744,17 @@ def _cash_flow_completeness(payload: dict[str, Any], prose: str) -> dict[str, An
     hits = _block_fields_present(block, _CASH_FLOW_BLOCK_KEYS)
     declared_missing = _block_declares(block, _CASH_FLOW_BLOCK_KEYS)
     prose_hits = _prose_hits(prose, _CASH_FLOW_PROBES)
+    rejected_present: list[str] = []
+    if normalized:
+        eligible = {"operating_cash_flow"} | {
+            key for key in (*_CASH_FLOW_EXPLANATORY, *_CASH_FLOW_DERIVED)
+            if any(str(label).startswith(_CASH_FLOW_LABELS[key]) for label in block.get("extras_present", []))
+        }
+        rejected = set(_CASH_FLOW_BLOCK_KEYS) - eligible
+        rejected_present = [_CASH_FLOW_LABELS[key] for key in hits if key in rejected]
+        hits = [key for key in hits if key in eligible]
+        declared_missing = set(declared_missing) | rejected
+        covered = [label for label in covered if label not in {_CASH_FLOW_LABELS[key] for key in rejected}]
 
     def seen(key: str) -> bool:
         # 块里有值 → 看见；块声明了但没值 → 没看见（正文再怎么说也不算）；整块没这个字段 → 退回正文探针。
@@ -3684,6 +3766,8 @@ def _cash_flow_completeness(payload: dict[str, Any], prose: str) -> dict[str, An
     ocf_seen = seen("operating_cash_flow")
     gaps = [_CASH_FLOW_LABELS[key] for key in _CASH_FLOW_PROBES if _CASH_FLOW_LABELS[key] not in covered]
     evidence: list[str] = []
+    if rejected_present:
+        evidence.append("未通过期间、单位或币种校验，原值仅留痕、不计完成度：" + "、".join(rejected_present))
     if isinstance(block, dict):
         verdict = str(block.get("verdict") or "").strip()
         if verdict:
@@ -3706,7 +3790,7 @@ def _cash_flow_completeness(payload: dict[str, Any], prose: str) -> dict[str, An
         )
     if not ocf_seen:
         state = COMPLETENESS_MISSING
-    elif explanatory and len(extras) >= 2:
+    elif explanatory and len(extras) >= 2 and (not normalized or block.get("coverage_ratio") is not None):
         state = COMPLETENESS_DONE
     else:
         state = COMPLETENESS_PARTIAL

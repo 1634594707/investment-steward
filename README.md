@@ -7,6 +7,8 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+[2026-10-28 update notes and validation status (中文)](UPDATES-2026-10-28.md)
+
   <img src="docs/assets/demo-preview-en.webp" width="920" alt="AI Investment Steward walkthrough — 55 items of evidence on file, then four possible next steps">
 
   ▶ 6-second loop, autoplaying · real local data, no mock-ups

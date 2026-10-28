@@ -1,10 +1,62 @@
 /**
  * B3：协同流水线结果块（v23，四角色进度 + 各角色产出），自 ResearchWorkbenchPage 原样搬出。
  */
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollabRunView, CollabStage, StockReport, ReportScenario, ReportLevel, ReportWatchpoint, ReportValuation, ClaimFinding, ReportConclusion, CategorizedWarning } from "./researchTypes";
 import { MarkdownishText, renderInline, DecisionCardPanel, ReportResultTabs, ReportFirstScreen, keyFactHighlights } from "./panels";
 import { ExportBar, buildStockReportMarkdown, buildHtmlDocument, markdownToHtml } from "./export";
+import type { SavedCollabRun } from "./researchTypes";
+
+export function CollabRecovery({ load, restore, disabled, active }: {
+  load: () => Promise<SavedCollabRun[]>; restore: (id: string) => Promise<void>; disabled: boolean;
+  active?: boolean;
+}) {
+  const [items, setItems] = useState<SavedCollabRun[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const sequence = useRef(0);
+  async function refresh() {
+    const current = ++sequence.current;
+    setBusy(true); setError(null);
+    try {
+      const result = await load();
+      if (current === sequence.current) setItems(result);
+    } catch (err) {
+      if (current === sequence.current) setError(err instanceof Error ? err.message : "任务读取失败");
+    } finally { if (current === sequence.current) setBusy(false); }
+  }
+  useEffect(() => {
+    if (active) void refresh();
+    return () => { sequence.current += 1; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+  useEffect(() => {
+    if (!disabled && items !== null) void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled]);
+  async function perform(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try { await action(); await refresh(); } catch (err) { setError(err instanceof Error ? err.message : "任务读取失败"); }
+    finally { setBusy(false); }
+  }
+  return <section aria-label="恢复协同任务">
+    <button className="ghost-btn" disabled={disabled || busy} onClick={() => void refresh()}>查看可恢复任务</button>
+    <p className="report-meta">查看不调用模型；恢复查看后，手动继续才会推进研究。沿用原证据快照，请留意采集时间。</p>
+    {error && <p role="alert">{error}</p>}
+    {items && (error || busy || disabled) && <p>显示上次读取的任务快照，当前状态尚未确认。</p>}
+    {active !== undefined && <p className="report-meta">仅列最近 20 个未归档协同任务，包含取消和待补存任务。</p>}
+    {items?.length === 0 && <p>没有待恢复任务。</p>}
+    {items && <ul>{items.map((item) => <li key={item.run_id}>
+      {item.symbol} · {item.question} · {item.model} · {new Date(item.created_at).toLocaleString()} · {item.next_index}/4
+      {item.cancelled_at ? " · 已本地取消" : item.done ? " · 待补存归档" : ""}
+      {item.recovery_state === "failed" && <span className="report-meta amber"> · 阶段失败：{item.stage_label || item.stage || "未知阶段"}</span>}
+      {item.recovery_state === "pending" && <span> · 待继续</span>}
+      {item.recovery_state === "running_or_interrupted" && <span className="report-meta amber"> · 执行中或已中断，恢复查看后确认状态</span>}
+      <button className="ghost-btn" disabled={disabled || busy} onClick={() => void perform(() => restore(item.run_id))}>恢复查看</button>
+    </li>)}</ul>}
+  </section>;
+}
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -48,15 +100,20 @@ export function CollabResultBlock({
   busy,
   onResume,
   titlePrefix,
+  onCancel,
+  stopping,
 }: {
   run: CollabRunView;
   busy: boolean;
   onResume: () => void;
   titlePrefix?: string;
+  onCancel?: () => void;
+  stopping?: boolean;
 }) {
   const statusText = (status: string, latencyMs: number | null): string => {
     if (status === "done") return `完成${latencyMs ? `（${(latencyMs / 1000).toFixed(1)}s）` : ""}`;
     if (status === "failed") return "失败";
+    if (status === "cancelled") return "已取消";
     if (status === "running") return "执行中…";
     return "等待";
   };
@@ -119,7 +176,7 @@ export function CollabResultBlock({
             角色分配 {Object.entries(run.stage_models).map(([stageKey, modelName]) => `${stageKey}=${modelName}`).join(" / ")}
           </span>
         )}
-        <span className="soft-tag">{run.done ? "已完成" : "进行中"}</span>
+        <span className="soft-tag">{run.cancelled_at ? "已本地取消" : run.done ? "已完成" : "进行中"}</span>
         <span className="report-meta">{new Date(run.created_at).toLocaleString()}</span>
       </div>
       {run.source_errors && Object.keys(run.source_errors).length > 0 && (
@@ -141,12 +198,14 @@ export function CollabResultBlock({
           </button>
         ))}
       </div>
-      {!run.done && !busy && (
+      {run.cancelled_at && <p role="status">已本地取消，已有阶段结果保留，迟到结果不发布。远端请求可能已计费；如需研究，请重新创建任务。</p>}
+      {!run.done && !run.cancelled_at && onCancel && <button className="ghost-btn" disabled={stopping} onClick={onCancel}>{stopping ? "正在停止…" : "停止协同任务"}</button>}
+      {!run.done && !run.cancelled_at && !busy && (
         <div className="wb-actions">
-          <button className="ghost-btn" onClick={onResume}>继续执行（含失败阶段重试）</button>
+          <button className="ghost-btn" disabled={stopping} onClick={onResume}>继续执行（含失败阶段重试）</button>
         </div>
       )}
-      {busy && <p className="report-meta">当前角色执行中…（单次模型调用受方案超时约束，请勿关闭）</p>}
+      {busy && !run.cancelled_at && <p className="report-meta">当前角色执行中…（单次模型调用受方案超时约束，可停止后续执行；远端可能已计费）</p>}
       {run.stages.some((stage) => stage.status === "failed") && (
         <p className="form-error" role="alert">
           {run.stages.filter((stage) => stage.status === "failed").map((stage) => `${stage.label}：${stage.error ?? "原因未知"}`).join("；")}

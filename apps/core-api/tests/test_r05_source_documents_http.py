@@ -21,7 +21,8 @@ from investment_steward_core import lhb_feed
 def test_report_job_and_detail_preserve_each_document_identity(scan_http, monkeypatch, missing_news_url, collab):
     http, headers, database = scan_http
     _mock_sources(monkeypatch)
-    profile = SimpleNamespace(profile_id=uuid4(), model="test-model", status=ModelProfileStatus.ACTIVE)
+    profile = SimpleNamespace(profile_id=uuid4(), model="test-model", status=ModelProfileStatus.ACTIVE,
+                              base_url="https://example.invalid", credential_ref="synthetic")
     monkeypatch.setattr(database, "list_model_profiles", lambda: [profile])
     monkeypatch.setattr(app_module.model_client, "call_active_model", lambda *args, **kwargs:
                         ModelReply(content=json.dumps(_good_payload()), model="test-model", provider="test", latency_ms=0))

@@ -7,6 +7,7 @@ dependencies = [
   "alembic>=1.14,<2",
   "cryptography>=43,<47",
   "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
   "pydantic>=2.10,<3",
   "sqlalchemy>=2,<3",
   "uvicorn[standard]>=0.34,<1"
@@ -19,7 +20,6 @@ financials = ["akshare>=1.14,<2"]
 
 [dependency-groups]
 dev = [
-  "httpx>=0.27,<1",
   "pytest>=8.3,<9",
   "ruff>=0.9,<1"
 ]

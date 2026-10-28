@@ -227,7 +227,7 @@ def test_prompt_version_bumped():
     """提示词版本随结构升级递增：v30→2.7（摘要四句/aspects 三层），v32→2.8（驾驶舱/正常化估值），
     v39→2.9（Q16/Q17/Q18 盈利拆解 / 现金流质量口径 / 估值分化与可比样本），
     D1→2.12（新增公告正文来源 S3A 的角标与出现条件说明）。"""
-    assert prompting.STOCK_REPORT_PROMPT_VERSION == "2.12"
+    assert prompting.STOCK_REPORT_PROMPT_VERSION == "2.15"
 
 
 def test_prompt_no_longer_leaks_concrete_example_date():

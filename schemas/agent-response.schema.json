@@ -90,6 +90,76 @@
       },
       "title": "JevRouteDecision",
       "type": "object"
+    },
+    "ResearchMemoryMatch": {
+      "additionalProperties": false,
+      "description": "用户投资逻辑快照；证据关系沿用原标注，未判定该假设成立或失效。",
+      "properties": {
+        "thesis_id": {
+          "format": "uuid",
+          "title": "Thesis Id",
+          "type": "string"
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "original_statement": {
+          "title": "Original Statement",
+          "type": "string"
+        },
+        "core_assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Core Assumptions",
+          "type": "array"
+        },
+        "invalidation_conditions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Invalidation Conditions",
+          "type": "array"
+        },
+        "thesis_updated_at": {
+          "format": "date-time",
+          "title": "Thesis Updated At",
+          "type": "string"
+        },
+        "linked_evidence_refs": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Linked Evidence Refs",
+          "type": "array"
+        },
+        "candidate_supporting_refs": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Candidate Supporting Refs",
+          "type": "array"
+        },
+        "candidate_contradicting_refs": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Candidate Contradicting Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "thesis_id",
+        "instrument",
+        "original_statement",
+        "thesis_updated_at"
+      ],
+      "title": "ResearchMemoryMatch",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -125,6 +195,13 @@
         "type": "string"
       },
       "title": "Context Snapshot Refs",
+      "type": "array"
+    },
+    "research_memory": {
+      "items": {
+        "$ref": "#/$defs/ResearchMemoryMatch"
+      },
+      "title": "Research Memory",
       "type": "array"
     },
     "summary": {

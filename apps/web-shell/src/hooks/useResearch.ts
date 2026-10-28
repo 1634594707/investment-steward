@@ -10,6 +10,7 @@ import type {
   DirectionReport,
   CompareSynthesis,
   CollabRunView,
+  SavedCollabRun,
   ReviewQueue,
   AnalysisTurn,
 } from "../routes/workbench/researchTypes";
@@ -256,6 +257,26 @@ export function useResearch(client: CoreClient) {
     return response.data;
   }
 
+  async function loadSavedCollabRuns(): Promise<SavedCollabRun[]> {
+    const response = await client.request<{ ok: boolean; items: SavedCollabRun[] }>({ method: "GET", path: "/evidence/collab-state" });
+    if (response.status >= 400 || !response.data?.ok) throw new Error(detailOf(response.data) ?? "任务列表读取失败");
+    return response.data.items;
+  }
+
+  async function loadCollabRun(runId: string): Promise<CollabRunView> {
+    const response = await client.request<{ ok: boolean; run: CollabRunView }>({ method: "GET", path: `/evidence/collab-state?run_id=${encodeURIComponent(runId)}` });
+    if (response.status >= 400 || !response.data?.ok) throw new Error(detailOf(response.data) ?? "任务恢复失败");
+    return response.data.run;
+  }
+
+  async function cancelCollabRun(runId: string): Promise<CollabRunView> {
+    const response = await client.request<{ ok: boolean; run: CollabRunView }>({
+      method: "POST", path: "/evidence/collab-cancel", body: { run_id: runId },
+    });
+    if (response.status >= 400 || !response.data?.ok) throw new Error(detailOf(response.data) ?? "取消未确认，请稍后重试");
+    return response.data.run;
+  }
+
   /** v23 协同流水线：创建运行（定稿证据包，角色随后逐个推进；stageProfiles=角色→方案 id）。 */
   async function createCollabRun(symbol: string, question: string, barsLimit: number, stageProfiles?: Record<string, string> | null): Promise<CollabRunView | null> {
     const response = await client.request<{ ok: boolean; run: CollabRunView }>({
@@ -271,14 +292,14 @@ export function useResearch(client: CoreClient) {
    * executedStatus="failed" 时调用方必须停止循环并把失败原因交给用户（2026-09-10 真机教训：
    * 失败后继续自动重试会把 collabBusy 永久锁死，用户连手动重试都点不了）。
    * collabReportId = 修订稿完成落库后的报告 id（v32：追问附录入口需要）。 */
-  async function runNextCollabStage(runId: string): Promise<{ done: boolean; run: CollabRunView; executedStage: string; executedStatus: string; collabReportId?: string } | null> {
-    const response = await client.request<{ ok: boolean; done: boolean; executed_stage: string; executed_status: string; run: CollabRunView; collab_report_id?: string }>({
+  async function runNextCollabStage(runId: string): Promise<{ done: boolean; run: CollabRunView; executedStage: string; executedStatus: string; collabReportId?: string; persisted?: boolean } | null> {
+    const response = await client.request<{ ok: boolean; done: boolean; executed_stage: string; executed_status: string; run: CollabRunView; collab_report_id?: string; persisted?: boolean }>({
       method: "POST",
       path: "/evidence/collab-next",
       body: { run_id: runId },
     });
     if (response.status >= 400 || !response.data || !response.data.ok) return null;
-    return { done: response.data.done, run: response.data.run, executedStage: response.data.executed_stage, executedStatus: response.data.executed_status, collabReportId: response.data.collab_report_id };
+    return { done: response.data.done, run: response.data.run, executedStage: response.data.executed_stage, executedStatus: response.data.executed_status, collabReportId: response.data.collab_report_id, persisted: response.data.persisted };
   }
 
   // v22 AI 研究产出持久化：列表 / 详情查看走落库 payload，删除即物理删除（仅本机）。
@@ -480,7 +501,7 @@ export function useResearch(client: CoreClient) {
   return {
     aiReports, aiReportsTotal, aiReportFacets, aiReportsLoaded, aiReportsError, researchReviewQueue,
     generateStockReport, generateDirectionReport, synthesizeCompareReports,
-    createCollabRun, runNextCollabStage,
+    createCollabRun, runNextCollabStage, loadSavedCollabRuns, loadCollabRun, cancelCollabRun,
     loadAiReports, loadAiReportDetail, deleteAiResearchReport, repairAiResearchReport,
     loadResearchReviewQueue, verifyJudgment, reviewReportWatchpoint,
     createFollowUpTurn, loadFollowUpTurns,

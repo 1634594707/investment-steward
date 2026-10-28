@@ -39,6 +39,7 @@ import {
 } from "./format";
 import { REPORT_MODE_LABEL, reportDepthLabel, keyFactHighlights } from "./panels";
 import { reportHighlightCss } from "./reportHighlightTones";
+import { SOURCE_HEALTH_LABELS, SOURCE_HEALTH_UNAVAILABLE, sourceHealthDetails } from "./sourceHealth";
 import {
   EFFECT_META,
   CONCLUSION_CHANGE_META,
@@ -700,6 +701,19 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
   // Q09（2026-09-19 路线图）：来源目录——导出里的 S1…S5 只有编号时，离开界面就查无出处。
   // 缺链接一律如实写「（未提供链接）」，绝不按来源名猜一个看起来合理的 URL。
   pushSourceCatalog(lines, cell, report.source_catalog);
+  lines.push("", "## 来源数据健康", "");
+  const health = report.source_health;
+  if (!health || health.sources.length === 0) {
+    lines.push(SOURCE_HEALTH_UNAVAILABLE);
+  } else {
+    lines.push(`检查日期：${cell(health.checked_on)}。${cell(health.note)}`, "");
+    for (const row of health.sources) {
+      lines.push(`- ${cell(row.source_id)} · ${SOURCE_HEALTH_LABELS[row.state]}${row.provider ? ` · ${cell(row.provider)}` : ""}`);
+      lines.push(`  - ${cell(sourceHealthDetails(row))}`);
+      if (row.error) lines.push(`  - 失败原因：${cell(row.error)}`);
+    }
+  }
+  lines.push("");
   // R04/H05：完整校验与来源后置，先读盈利/现金流拆解及使用限制。
   const evidenceAppendix = lines.splice(evidenceStart);
   // v27 反方检查：ok=false 时如实写入「未完成」，不用空白冒充做过。
@@ -794,6 +808,7 @@ export function buildStockReportMarkdown(report: StockReport, followUps: Analysi
         + `${(item.covered?.length ?? 0) > 0 ? `（已覆盖 ${item.covered!.join("、")}）` : ""}`
         + `${(item.gaps?.length ?? 0) > 0 ? ` 缺：${item.gaps!.join("、")}` : ""}`,
       );
+      for (const evidence of item.evidence ?? []) lines.push(`  - 判定依据：${cell(evidence)}`);
     }
     if (completeness!.headline) lines.push("", `- ${cell(completeness!.headline)}`);
     if (completeness!.word_count_note) lines.push(`- ${cell(completeness!.word_count_note)}`);

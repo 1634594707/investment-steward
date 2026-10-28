@@ -94,6 +94,49 @@ function stubFetch(overrides: { retry?: unknown } = {}) {
 }
 
 describe("F02/F03 今日取数健康", () => {
+  it("断连保留并标注旧快照，恢复读取后才允许重试来源", async () => {
+    const coreRequest = stubFetch();
+    render(<FeedHealthSection coreRequest={coreRequest as never} />);
+    await screen.findByText("50%");
+    coreRequest.mockRejectedValue(new Error("连接中断"));
+    fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText(/显示上次成功读取的旧快照/)).toBeTruthy();
+    expect(screen.getByText("50%")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "仅重试失败项" }) as HTMLButtonElement).disabled).toBe(true);
+    coreRequest.mockImplementation(stubFetch());
+    fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+    await waitFor(() => expect(screen.queryByText(/显示上次成功读取的旧快照/)).toBeNull());
+    expect((screen.getByRole("button", { name: "仅重试失败项" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("部分接口失败时不混合新统计和旧失败记录，并披露实际快照窗口", async () => {
+    const coreRequest = stubFetch();
+    render(<FeedHealthSection coreRequest={coreRequest as never} />);
+    await screen.findByText("50%");
+    coreRequest.mockImplementation(async (req) => req.path.startsWith("/data-source/quality")
+      ? { status: 200, data: { ...QUALITY, window: "30d", sources: [] } }
+      : { status: 503, data: { detail: "失败记录暂不可用" } });
+    fireEvent.click(screen.getByRole("button", { name: "最近 30 天" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getByText(/快照窗口：最近 7 天/)).toBeTruthy();
+    expect(screen.getByText(/显示上次成功读取的旧快照/)).toBeTruthy();
+  });
+
+  it("切换窗口后迟到的请求不能覆盖当前快照或解除当前加载状态", async () => {
+    const pending: Array<{ path: string; resolve: (value: { status: number; data: unknown }) => void }> = [];
+    const coreRequest = vi.fn((req: { path: string }) => new Promise<{ status: number; data: unknown }>((resolve) => pending.push({ path: req.path, resolve })));
+    render(<FeedHealthSection coreRequest={coreRequest as never} />);
+    fireEvent.click(screen.getByRole("button", { name: "最近 30 天" }));
+    for (const item of pending.slice(0, 2)) item.resolve({ status: 200, data: item.path.includes("quality") ? QUALITY : FAILURES });
+    await waitFor(() => expect((screen.getByRole("button", { name: "刷新" }) as HTMLButtonElement).disabled).toBe(true));
+    expect(screen.queryByText("50%")).toBeNull();
+    for (const item of pending.slice(2)) item.resolve({ status: 200, data: item.path.includes("quality") ? { ...QUALITY, window: "30d", sources: [] } : { failures: [] } });
+    await screen.findByText(/快照窗口：最近 30 天/);
+    expect(screen.queryByText("50%")).toBeNull();
+  });
+
   beforeEach(() => {
     vi.unstubAllGlobals();
   });

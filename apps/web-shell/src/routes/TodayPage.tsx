@@ -8,8 +8,16 @@ import type { AppView } from "../shell/nav";
 import { IconRefresh } from "../shell/icons";
 import { DemoNotice } from "../components/DemoNotice";
 import type { BriefNavigation } from "../components/BriefContext";
+import { TodayReportHealth } from "./TodayReportHealth";
+import type { CoreRequest } from "../state/coreClient";
+import { CollabRecovery } from "./workbench/collab";
+import type { SavedCollabRun } from "./workbench/researchTypes";
 
 interface Props {
+  active?: boolean;
+  coreRequest?: (req: CoreRequest) => Promise<{ status: number; data: unknown }>;
+  onOpenReport?: (id: string) => void;
+  onOpenCollab?: (id: string) => void;
   counts: { evidence: number; open: number; learning: number };
   evidence: Evidence[];
   brief: TodayBrief | null;
@@ -56,7 +64,7 @@ const BRIEF_ACTION: Record<string, { label: string; view: BriefNavigation["targe
 
 const EMPTY_LEARNING_DRAFT = { answer: "", reflection: "", saved: false, submitting: false };
 
-export function TodayPage({ counts, evidence, brief, notifications, learningUnit, learningGoal, isDemo, onNavigate, onOpenBriefItem, onOpenEvidence, onMarkNotificationRead, onEvaluateNotifications, onSubmitLearning, onGenerateBrief, onboarding }: Props) {
+export function TodayPage({ counts, evidence, brief, notifications, learningUnit, learningGoal, isDemo, onNavigate, onOpenBriefItem, onOpenEvidence, onMarkNotificationRead, onEvaluateNotifications, onSubmitLearning, onGenerateBrief, onboarding, active = true, coreRequest, onOpenReport, onOpenCollab }: Props) {
   const hasBrief = Boolean(brief && brief.has_personalization);
   // 上手三步：把散落在三个页面的空态入口收成一条进度引导（全部完成即隐藏）
   const steps = [
@@ -146,6 +154,15 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
         <Metric label="新证据" value={counts.evidence} note="最近 24 小时" tone="mint" />
         <Metric label="学习进度" value={goalProgress} note={learningGoal ? `本周目标 ${learningGoal.completed_count}/${learningGoal.target_count}` : "本周目标 --"} tone="blue" />
       </section>
+      {coreRequest && onOpenReport && <TodayReportHealth coreRequest={coreRequest} active={active} onOpenReport={onOpenReport} />}
+      {coreRequest && onOpenCollab && <section className="section-block" aria-label="待处理研究任务"><h3>待处理研究任务</h3>
+        <CollabRecovery active={active} disabled={false} load={async () => {
+          const response = await coreRequest({ method: "GET", path: "/evidence/collab-state" });
+          const data = response.data as { ok?: boolean; items?: SavedCollabRun[] };
+          if (response.status >= 400 || !data?.ok || !Array.isArray(data.items)) throw new Error("任务列表读取失败，请重试。");
+          return data.items;
+        }} restore={async (id) => onOpenCollab(id)} />
+      </section>}
       <section className="content-grid">
         <div className="section-block">
           <SectionHeading eyebrow="需要你的判断" title="优先处理" action={hasBrief ? "查看全部" : undefined} onClick={() => onNavigate("research")} />

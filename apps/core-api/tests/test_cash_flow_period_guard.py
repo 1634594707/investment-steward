@@ -5,8 +5,31 @@ import json
 from pathlib import Path
 
 import pytest
-
 from investment_steward_core.report_quality import cash_flow_quality
+
+
+@pytest.mark.parametrize("other_currency", ["USD", ""])
+def test_declared_currency_conflict_or_partial_metadata_blocks_arithmetic(other_currency):
+    metadata = {key: {"period": "2026H1", "unit": "百万", "sources": ["S4"], "currency": currency}
+                for key, currency in (("operating_cash_flow", "CNY"), ("net_income", other_currency),
+                                      ("capex", other_currency), ("depreciation_amortization", other_currency))}
+    result = cash_flow_quality(operating_cash_flow=100, net_income=80, capex=60,
+                               depreciation_amortization=20, free_cash_flow=40,
+                               metric_metadata=metadata, allowed_sources={"S4"})
+    assert result["coverage_ratio"] is None, "同数值单位不代表同币种，不能计算覆盖倍数"
+    assert result["free_cash_flow"] is None and not result["free_cash_flow_derived"]
+    assert result["free_cash_flow_reported"] == 40
+    assert result["explanatory_present"] == []
+    assert "币种" in result["note"]
+    assert result["metric_metadata"]["operating_cash_flow"]["currency"] == "CNY"
+
+
+def test_same_declared_currency_allows_existing_period_and_unit_checks():
+    result = cash_flow_quality(operating_cash_flow=100, net_income=80, capex=60,
+        metric_metadata={key: {"period": "2026H1", "unit": "百万", "currency": "CNY", "sources": ["S4"]}
+                         for key in ("operating_cash_flow", "net_income", "capex")}, allowed_sources={"S4"})
+    assert result["coverage_ratio"] == 1.25 and result["free_cash_flow"] == 40
+    assert result["metric_metadata"]["free_cash_flow"]["currency"] == "CNY"
 
 
 def test_original_user_report_never_reuses_mixed_period_quality_as_verified_analysis():

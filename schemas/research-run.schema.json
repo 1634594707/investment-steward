@@ -1,5 +1,83 @@
 {
   "$defs": {
+    "EvidenceSearchScope": {
+      "additionalProperties": false,
+      "description": "显式检索范围；published为发布日期，financial_period_ends为报告期末，不推断累计/单季。",
+      "properties": {
+        "subject_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Subject Refs",
+          "type": "array"
+        },
+        "source_names": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Source Names",
+          "type": "array"
+        },
+        "published_from": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published From"
+        },
+        "published_to": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published To"
+        },
+        "financial_period_ends": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Financial Period Ends",
+          "type": "array"
+        },
+        "financial_period_basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "cumulative",
+                "single_quarter",
+                "ttm",
+                "instant",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Financial Period Basis"
+        }
+      },
+      "title": "EvidenceSearchScope",
+      "type": "object"
+    },
     "RunStatus": {
       "enum": [
         "created",
@@ -39,6 +117,17 @@
       "minLength": 1,
       "title": "User Question",
       "type": "string"
+    },
+    "evidence_scope": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvidenceSearchScope"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "evidence_refs": {
       "items": {

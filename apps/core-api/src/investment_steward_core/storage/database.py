@@ -42,7 +42,7 @@ from investment_steward_core.domain import (
 )
 from investment_steward_core.instruments import canonical_key
 
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 40
 
 # S2（用户视角路线图 2026-09-26）：后台任务心跳超时阈值。
 # 旧实现把 30 分钟硬编码在 `get_scan_job` 内，且只在**返回值**上把超时的 running 改写成
@@ -63,6 +63,7 @@ EXPORT_PAYLOAD_TABLES: tuple[str, ...] = (
     "ai_analysis_turns",
     "ai_research_reports",
     "books",
+    "collab_runs",
     "investor_profiles",
     "judgment_verifications",
     "learning_goals",
@@ -113,7 +114,11 @@ class Database:
             cursor.execute("PRAGMA busy_timeout = 5000")
             cursor.close()
 
-        self._migrate()
+        try:
+            self._migrate()
+        except BaseException:
+            self.close()
+            raise
 
     @contextmanager
     def _connection(self) -> Iterator[Connection]:
@@ -661,6 +666,19 @@ class Database:
                 )
                 self._archive_scan_jobs(connection)
                 connection.exec_driver_sql("PRAGMA user_version = 36")
+            if current < 37:
+                for definition in ("returned_model TEXT", "attempt_count INTEGER", "error_kind TEXT", "http_status INTEGER"):
+                    connection.exec_driver_sql(f"ALTER TABLE model_calls ADD COLUMN {definition}")
+                connection.exec_driver_sql("PRAGMA user_version = 37")
+            if current < 38:
+                connection.exec_driver_sql("ALTER TABLE model_calls ADD COLUMN usage_complete INTEGER")
+                connection.exec_driver_sql("PRAGMA user_version = 38")
+            if current < 39:
+                connection.exec_driver_sql("ALTER TABLE model_calls ADD COLUMN attempts TEXT")
+                connection.exec_driver_sql("PRAGMA user_version = 39")
+            if current < 40:
+                connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS collab_runs (run_id TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT NOT NULL)")
+                connection.exec_driver_sql("PRAGMA user_version = 40")
             if current > SCHEMA_VERSION:
                 raise RuntimeError(f"database schema {current} is newer than Core {SCHEMA_VERSION}")
 
@@ -3534,6 +3552,12 @@ class Database:
         latency_ms: int,
         retried: bool,
         outcome: str,
+        returned_model: str | None = None,
+        attempt_count: int | None = None,
+        error_kind: str | None = None,
+        http_status: int | None = None,
+        usage_complete: bool | None = None,
+        attempts: list[dict[str, Any]] | None = None,
     ) -> None:
         """F01：落一条模型调用记录（usage 缺失的 token 记 null，不按字数反推）。失败静默。"""
         try:
@@ -3542,8 +3566,8 @@ class Database:
             with self._connection() as connection:
                 connection.execute(
                     text(
-                        "INSERT INTO model_calls (call_id, profile_id, model, purpose, prompt_tokens, completion_tokens, total_tokens, latency_ms, retried, outcome, created_at) "
-                        "VALUES (:call_id, :profile_id, :model, :purpose, :prompt_tokens, :completion_tokens, :total_tokens, :latency_ms, :retried, :outcome, :created_at)"
+                        "INSERT INTO model_calls (call_id, profile_id, model, purpose, prompt_tokens, completion_tokens, total_tokens, latency_ms, retried, outcome, created_at, returned_model, attempt_count, error_kind, http_status, usage_complete, attempts) "
+                        "VALUES (:call_id, :profile_id, :model, :purpose, :prompt_tokens, :completion_tokens, :total_tokens, :latency_ms, :retried, :outcome, :created_at, :returned_model, :attempt_count, :error_kind, :http_status, :usage_complete, :attempts)"
                     ),
                     {
                         "call_id": str(uuid4()),
@@ -3557,6 +3581,12 @@ class Database:
                         "latency_ms": int(latency_ms),
                         "retried": 1 if retried else 0,
                         "outcome": outcome,
+                        "returned_model": returned_model,
+                        "attempt_count": attempt_count,
+                        "error_kind": error_kind,
+                        "http_status": http_status,
+                        "usage_complete": int(usage_complete) if usage_complete is not None else None,
+                        "attempts": json.dumps(attempts) if attempts is not None else None,
                         "created_at": datetime.now(UTC).isoformat(),
                     },
                 )
@@ -3596,7 +3626,7 @@ class Database:
                         "SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens, "
                         "SUM(COALESCE(completion_tokens, 0)) AS completion_tokens, "
                         "SUM(COALESCE(total_tokens, 0)) AS total_tokens, "
-                        "SUM(CASE WHEN prompt_tokens IS NULL THEN 1 ELSE 0 END) AS usage_missing, "
+                        "SUM(CASE WHEN prompt_tokens IS NULL OR usage_complete = 0 THEN 1 ELSE 0 END) AS usage_missing, "
                         "AVG(latency_ms) AS avg_latency_ms, MAX(latency_ms) AS max_latency_ms "
                         "FROM model_calls WHERE created_at >= :since "
                         "GROUP BY profile_id, model, COALESCE(purpose, '') "
@@ -3609,6 +3639,54 @@ class Database:
                 .all()
             )
         return [dict(row) for row in rows]
+
+    def save_collab_run(self, run: dict[str, Any]) -> None:
+        with self._connection() as connection:
+            connection.execute(text(
+                "INSERT INTO collab_runs (run_id, payload, updated_at) VALUES (:run_id, :payload, :updated_at) "
+                "ON CONFLICT(run_id) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at "
+                "WHERE json_extract(collab_runs.payload, '$.cancelled_at') IS NULL"
+            ), {"run_id": run["run_id"], "payload": self._json(run), "updated_at": datetime.now(UTC).isoformat()})
+
+    def cancel_collab_run(self, run_id: str) -> dict[str, Any] | None:
+        """单次原子更新，取消无需等待模型持有的执行锁，迟到保存不能覆盖。"""
+        now = datetime.now(UTC).isoformat()
+        with self._connection() as connection:
+            connection.execute(text(
+                "UPDATE collab_runs SET payload=json_set(payload, '$.cancelled_at', :now, "
+                "'$.stages[' || json_extract(payload, '$.next_index') || '].status', 'cancelled', "
+                "'$.stages[' || json_extract(payload, '$.next_index') || '].result', NULL, "
+                "'$.stages[' || json_extract(payload, '$.next_index') || '].error', :reason), updated_at=:now "
+                "WHERE run_id=:run_id AND json_extract(payload, '$.next_index') < 4 "
+                "AND json_extract(payload, '$.cancelled_at') IS NULL"
+            ), {"run_id": run_id, "now": now,
+                "reason": "已本地取消，迟到结果不发布；远端请求可能已计费"})
+        return self.get_collab_run(run_id)
+
+    def get_collab_run(self, run_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            payload = connection.execute(text("SELECT payload FROM collab_runs WHERE run_id=:run_id"),
+                                         {"run_id": run_id}).scalar_one_or_none()
+        return self._load(payload) if payload is not None else None
+
+    def list_recoverable_collab_runs(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(text(
+                "SELECT payload FROM collab_runs WHERE NOT EXISTS "
+                "(SELECT 1 FROM ai_research_reports WHERE report_id=collab_runs.run_id) "
+                "ORDER BY updated_at DESC, run_id DESC LIMIT 20"
+            )).scalars().all()
+        return [self._load(payload) for payload in rows]
+
+    def list_recent_model_calls(self, window_days: int) -> list[dict[str, Any]]:
+        since = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
+        with self._connection() as connection:
+            rows = connection.execute(text(
+                "SELECT call_id, model, returned_model, purpose, created_at, attempt_count, "
+                "outcome, error_kind, http_status, latency_ms, usage_complete, attempts FROM model_calls "
+                "WHERE created_at >= :since ORDER BY created_at DESC, rowid DESC LIMIT 20"
+            ), {"since": since}).mappings().all()
+        return [{**row, "attempts": json.loads(row["attempts"]) if row["attempts"] is not None else None} for row in rows]
 
     # —— F02/F03：三方取数尝试日志 ——
     def record_feed_attempt(
@@ -3765,6 +3843,11 @@ class Database:
                     raise ValueError(f"table not in export whitelist: {table}")
                 rows = connection.execute(text(f"SELECT * FROM {table}")).mappings().all()
                 out[table] = [dict(row) for row in rows]
+                if table == "collab_runs":
+                    for row in out[table]:
+                        run = self._load(row["payload"])
+                        run.pop("_database_path", None)
+                        row["payload"] = self._json(run)
         return out
 
     def list_ai_analysis_turns(self, parent_report_id: str, limit: int = 100) -> list[dict[str, Any]]:

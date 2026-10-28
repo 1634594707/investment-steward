@@ -10,6 +10,7 @@ import { cashFlowDisplayLines, formatPrice, formatProbability, formatTimestamp, 
 import { readChartThemeColors, readMarketColors } from "../../cards/chartTheme";
 import { earningsAnalysisDisplay, earningsNoteDisplay, comparableReviewNote, valuationEvidenceReadingNote, reportReadingSummary, valuationRepairDisplayLines, RESEARCH_COMPLETENESS_READING_NOTE } from "./format";
 import { useUiPrefs } from "../../shell/uiprefs";
+import { SourceHealthPanel } from "./SourceHealthPanel";
 
 /* —— v31 质量恢复（2026-09-13 方案 §2.2/§4.1/§4.2）：三态质量状态 + 首屏状态行 + 正文目录锚点 —— */
 
@@ -381,6 +382,10 @@ export function ResearchCompletenessCard({
             {(item.covered?.length ?? 0) > 0 && <span className="report-meta"> · 已覆盖 {item.covered!.join("、")}</span>}
             {(item.gaps?.length ?? 0) > 0 && <span className="report-meta amber"> · 缺 {item.gaps!.join("、")}</span>}
             {item.note && <p className="report-meta">{item.note}</p>}
+            {!!item.evidence?.length && <details>
+              <summary>完成度判定依据</summary>
+              <ul>{item.evidence.map((text, index) => <li key={index}>{text}</li>)}</ul>
+            </details>}
           </li>
         ))}
       </ul>
@@ -1303,6 +1308,8 @@ export function ReportResultTabs({
   followup,
   followupCount = 0,
   followupActive = false,
+  onPrepareSupplement,
+  supplementBusy = false,
   onRepair,
   repairingKey = null,
 }: {
@@ -1317,6 +1324,8 @@ export function ReportResultTabs({
   followupCount?: number;
   /** 追问正在提交/载入时给页签挂动态态。 */
   followupActive?: boolean;
+  onPrepareSupplement?: (question: string) => void;
+  supplementBusy?: boolean;
   /** G1：证据页签里「质量校验痕迹」的动作按钮回调（未提供 → 按钮禁用并说明原因）。 */
   onRepair?: (action: ReportRepairAction) => void;
   /** 正在修复的动作键。 */
@@ -1390,6 +1399,10 @@ export function ReportResultTabs({
       {tab === "overview" && (
         <div className="wb-result-tabpane wb-reading" role="tabpanel">
           {/* A05：长结论卡 / 执行摘要 / 最大支持与反证归入概览；报告导航（页签）先于这些内容出现。 */}
+          <SourceHealthPanel report={report} busy={supplementBusy} onSupplement={followup === undefined || !onPrepareSupplement ? undefined : (question) => {
+            onPrepareSupplement(question);
+            setTab("followup");
+          }} />
           <DecisionCardPanel report={report} />
           {report.executive_summary && (
             <div className="wb-exec-summary">

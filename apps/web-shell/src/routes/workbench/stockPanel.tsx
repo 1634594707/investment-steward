@@ -17,7 +17,8 @@ import { DirectionResultTabs, THEME_INPUT_HINT, THEME_TOPIC_PLACEHOLDER } from "
 import { ReportSourceBar } from "./sourceBar";
 import { WorkbenchTab, StockReport, DirectionReport, AnalysisTurn, CollabRunView, CompareSynthesis, CompareEntry, type ReportRepairAction } from "./researchTypes";
 import { AppView } from "../../shell/nav";
-import { CollabResultBlock, Field, type CollabCheckResult, type CollabReportResult, type CollabRiskResult } from "./collab";
+import { CollabRecovery, CollabResultBlock, Field, type CollabCheckResult, type CollabReportResult, type CollabRiskResult } from "./collab";
+import type { SavedCollabRun } from "./researchTypes";
 
 const DIRECTION_STYLE_WORDS = [
   "低估", "高估", "破净", "低市盈率", "高市盈率",
@@ -169,12 +170,17 @@ export function StockReportPanel({
   onSynthesizeCompare,
   onCreateCollabRun,
   onNextCollabStage,
+  onLoadSavedCollabRuns,
+  onLoadCollabRun,
+  collabViewRequest,
+  onCancelCollabRun,
   onCollabFinished,
   onRefreshReports,
   onCreateFollowUp,
   onLoadFollowUps,
   onRepairReport,
 }: {
+  collabViewRequest?: { requestId: string; runId: string } | null;
   candidates: { instrument: string; label: string }[];
   aiReady: boolean;
   tab: WorkbenchTab;
@@ -224,7 +230,10 @@ export function StockReportPanel({
   /** v23 协同流水线：创建运行（定稿证据包，角色由 onNextCollabStage 依次推进；stageProfiles=角色→方案 id，角色级模型分配）。 */
   onCreateCollabRun: (symbol: string, question: string, barsLimit: number, stageProfiles?: Record<string, string> | null) => Promise<CollabRunView | null>;
   /** v23 协同流水线：执行下一个角色（严格串行：一次调一个；失败阶段再次调用即重试）。 */
-  onNextCollabStage: (runId: string) => Promise<{ done: boolean; run: CollabRunView; executedStage: string; executedStatus: string; collabReportId?: string } | null>;
+  onNextCollabStage: (runId: string) => Promise<{ done: boolean; run: CollabRunView; executedStage: string; executedStatus: string; collabReportId?: string; persisted?: boolean } | null>;
+  onLoadSavedCollabRuns?: () => Promise<SavedCollabRun[]>;
+  onLoadCollabRun?: (runId: string) => Promise<CollabRunView>;
+  onCancelCollabRun?: (runId: string) => Promise<CollabRunView>;
   /** v23：协同完成后刷新历史产出列表（修订稿已落库）。 */
   onRefreshReports: () => void;
   /** v23 多模型协同：某模型的修订稿完成 → 交给页面追加进对比结果区（可对比/综合/批量导出）。 */
@@ -267,6 +276,31 @@ export function StockReportPanel({
   const [collabRuns, setCollabRuns] = useState<CollabRunView[]>([]);
   const [collabBusy, setCollabBusy] = useState(false);
   const [collabError, setCollabError] = useState<string | null>(null);
+  const [restoreArchive, setRestoreArchive] = useState(false);
+  const collabExecution = useRef(0);
+  useEffect(() => () => { collabExecution.current += 1; }, []);
+  const [collabStopping, setCollabStopping] = useState(false);
+
+  async function stopCollabRun(runId: string): Promise<void> {
+    if (!onCancelCollabRun || collabStopping) return;
+    const execution = ++collabExecution.current;
+    setCollabStopping(true);
+    try {
+      const cancelled = await onCancelCollabRun(runId);
+      if (execution !== collabExecution.current) return;
+      setCollabRuns([cancelled]);
+      setRestoreArchive(false);
+      setCollabError(null);
+    } catch (err) {
+      if (execution !== collabExecution.current) return;
+      setCollabError(`${err instanceof Error ? err.message : "取消未确认"}。本页已停止自动推进；远端状态未确认，可再次停止或刷新查看。`);
+    } finally {
+      if (execution === collabExecution.current) {
+        setCollabStopping(false);
+        setCollabBusy(false);
+      }
+    }
+  }
   const [collabStageModels, setCollabStageModels] = useState<Record<string, string>>({ check: "", draft: "", risk: "", revise: "" });
   // 2026-09-12 用户追加：协同流水线支持**队列串行批量**——一只完整走完四角色并落库后，再按队列顺序生成下一只。
   // collabTargets 保存本批待生成标的（保持不动，供「继续执行」从断点恢复）；collabIndex 是当前标的在队列中的下标。
@@ -320,7 +354,7 @@ export function StockReportPanel({
   // v32 研报追问（2026-09-13 方案 §三）：当前查看报告的追问附录（append-only）与提交状态。
   const [followupTurns, setFollowupTurns] = useState<AnalysisTurn[]>([]);
   const [followupLoading, setFollowupLoading] = useState(false);
-  const [followupBusy, setFollowupBusy] = useState(false);
+  const [followupPending, setFollowupPending] = useState<Record<string, boolean>>({});
   const [followupError, setFollowupError] = useState<string | null>(null);
   // v33 A14：追问草稿按报告 id 保存（切页签/切报告/提交失败都不丢），报告身份变化时读取对应草稿。
   const [followupDrafts, setFollowupDrafts] = useState<Record<string, FollowUpDraft>>({});
@@ -328,6 +362,7 @@ export function StockReportPanel({
   const activeReportIdRef = useRef<string | null>(null);
   // 当前展示的报告（单份/对比/协同/历史回看都走 compareResults），其 id 变化时重新载入追问附录。
   const activeReportId = compareResults?.[Math.min(activeCompare, (compareResults?.length ?? 1) - 1)]?.report?.report_id ?? null;
+  const followupBusy = !!(activeReportId && followupPending[activeReportId]);
   const followupDraft = (activeReportId && followupDrafts[activeReportId]) || EMPTY_FOLLOWUP_DRAFT;
   const setFollowupDraft = (next: FollowUpDraft): void => {
     if (!activeReportId) return;
@@ -392,8 +427,8 @@ export function StockReportPanel({
    * v39 Q10：`mode` 随请求送出（解读本报告 / 补充研究），面板上选哪个入口就按哪个口径记录数据来源。 */
   async function submitFollowUp(question: string, supplements: FollowUpSupplementInput[], mode: string): Promise<boolean> {
     const submittedFor = activeReportId;
-    if (!submittedFor) return false;
-    setFollowupBusy(true);
+    if (!submittedFor || followupPending[submittedFor]) return false;
+    setFollowupPending((current) => ({ ...current, [submittedFor]: true }));
     setFollowupError(null);
     try {
       const outcome = await onCreateFollowUp(submittedFor, question, supplements, mode);
@@ -412,7 +447,7 @@ export function StockReportPanel({
       if (activeReportIdRef.current === submittedFor) setFollowupError("追问请求失败，请重试。");
       return false;
     } finally {
-      if (activeReportIdRef.current === submittedFor) setFollowupBusy(false);
+      setFollowupPending((current) => ({ ...current, [submittedFor]: false }));
     }
   }
 
@@ -502,6 +537,7 @@ export function StockReportPanel({
       report_mode: current.report_mode ?? "standard",
       source_meta: current.evidence_meta?.source_meta,
       source_asof: current.evidence_meta?.source_asof,
+      source_health: current.source_health,
       price_chart: current.evidence_meta?.price_chart,
       quarterly: current.evidence_meta?.quarterly,
       valuation_chart: current.evidence_meta?.valuation_chart,
@@ -513,11 +549,12 @@ export function StockReportPanel({
    * `existing` 非空表示从断点恢复：复用已有运行、不重建证据包（证据同源，已完成角色不重跑）。
    * 返回 "done" = 该只已跑完并交付；"stopped" = 已停在原阶段（原因写入 collabError，等用户点「继续执行」）。
    * 2026-09-10 真机教训：阶段失败必须立刻停下，绝不能在失败阶段上无限自动重试——那会把整个工作台锁死。 */
-  async function advanceCollabSymbol(target: string, q: string, bars: number, existing: CollabRunView | null): Promise<"done" | "stopped"> {
+  async function advanceCollabSymbol(target: string, q: string, bars: number, existing: CollabRunView | null, execution: number): Promise<"done" | "stopped"> {
     let current = existing;
     if (!current) {
       const stageProfiles = Object.fromEntries(Object.entries(collabStageModels).filter(([, value]) => value));
       const created = await onCreateCollabRun(target, q, bars, stageProfiles);
+      if (execution !== collabExecution.current) return "stopped";
       if (!created) {
         setCollabError(`「${target}」协同运行创建失败：证据包构建未通过（全部来源取数失败）或模型配置不可用。本批已停下，可换方案后点「继续执行」。`);
         return "stopped";
@@ -526,8 +563,12 @@ export function StockReportPanel({
       setCollabRuns([current]);
     }
     let reportId: string | null = null;
-    while (!current.done) {
+    let archivePending = current.done;
+    while (!current.done || archivePending) {
+      if (execution !== collabExecution.current || current.cancelled_at) return "stopped";
+      archivePending = false;
       const step = await onNextCollabStage(current.run_id);
+      if (execution !== collabExecution.current) return "stopped";
       if (!step) {
         setCollabError(`「${current.symbol}」阶段执行请求失败，可点「继续执行」恢复（已完成角色不重跑）。`);
         return "stopped";
@@ -535,6 +576,12 @@ export function StockReportPanel({
       current = step.run;
       reportId = step.collabReportId ?? reportId;
       setCollabRuns([current]);
+      if (current.cancelled_at || step.executedStatus === "cancelled") return "stopped";
+      if (step.done && step.persisted === false) {
+        setRestoreArchive(true);
+        setCollabError("修订稿已完成但未能保存，请点「补存归档」重试保存，已完成角色不会重跑。");
+        return "stopped";
+      }
       if (step.executedStatus === "failed") {
         const failedStage = current.stages[current.next_index];
         setCollabError(
@@ -557,6 +604,9 @@ export function StockReportPanel({
    * 全程共用同一套角色级模型设置（即「按协同流水线的模型设置接着生成下一份」）。
    * 任一只失败即整批停下并保留断点，等用户点「继续执行」从该只重试，绝不无限自动重试。 */
   async function runCollabPipeline(targets: string[], q: string, bars: number): Promise<void> {
+    if (collabBusy || collabStopping) return;
+    const execution = ++collabExecution.current;
+    setRestoreArchive(false);
     setCollabBusy(true);
     setCollabError(null);
     setCollabRuns([]);
@@ -566,23 +616,26 @@ export function StockReportPanel({
     try {
       for (let index = 0; index < targets.length; index += 1) {
         setCollabIndex(index);
-        const status = await advanceCollabSymbol(targets[index]!, q, bars, null);
-        if (status !== "done") return;
+        const status = await advanceCollabSymbol(targets[index]!, q, bars, null, execution);
+        if (status !== "done" || execution !== collabExecution.current) return;
         setCollabFinishedCount(index + 1);
       }
       onRefreshReports();
+    } catch (err) {
+      if (execution === collabExecution.current) setCollabError(err instanceof Error ? err.message : "协同请求失败，请刷新查看任务状态");
     } finally {
-      setCollabBusy(false);
+      if (execution === collabExecution.current) setCollabBusy(false);
     }
   }
 
   /** 从断点继续：先把当前标的那个未完成的运行跑完，再按队列顺序接着跑剩下的标的。 */
   async function resumeCollabPipeline(): Promise<void> {
-    if (collabBusy || collabTargets.length === 0) return;
+    if (collabBusy || collabStopping || collabTargets.length === 0 || collabRuns.some((run) => run.cancelled_at)) return;
+    const execution = ++collabExecution.current;
     setCollabBusy(true);
     setCollabError(null);
     try {
-      const pendingRun = collabRuns.find((run) => !run.done) ?? null;
+      const pendingRun = collabRuns.find((run) => !run.done) ?? (restoreArchive ? collabRuns[0] ?? null : null);
       for (let index = collabIndex; index < collabTargets.length; index += 1) {
         setCollabIndex(index);
         const status = await advanceCollabSymbol(
@@ -590,13 +643,17 @@ export function StockReportPanel({
           question.trim(),
           klineRange,
           index === collabIndex ? pendingRun : null,
+          execution,
         );
-        if (status !== "done") return;
+        if (status !== "done" || execution !== collabExecution.current) return;
         setCollabFinishedCount(index + 1);
       }
       onRefreshReports();
+      setRestoreArchive(false);
+    } catch (err) {
+      if (execution === collabExecution.current) setCollabError(err instanceof Error ? err.message : "协同请求失败，请刷新查看任务状态");
     } finally {
-      setCollabBusy(false);
+      if (execution === collabExecution.current) setCollabBusy(false);
     }
   }
 
@@ -628,6 +685,27 @@ export function StockReportPanel({
   }
   // v33 D06/D07/D08：报告交接按唯一 requestId 消费——同股重复跳转有效，迟到旧请求不覆盖新请求。
   // 进入明确的单股上下文：批量队列暂存（可一键恢复），生成目标=交接标的；研究问题随交接预填。
+  function applySavedRun(saved: CollabRunView) {
+    setCollabRuns([saved]); setCollabTargets([saved.symbol]); setCollabIndex(0);
+    setCollabFinishedCount(0); setRestoreArchive(saved.done); setCollabError(null);
+    setCollabMode(true); setSymbol(saved.symbol); setQuestion(saved.question);
+  }
+  const handledCollabView = useRef<string | null>(null);
+  useEffect(() => {
+    if (!collabViewRequest || !onLoadCollabRun || collabBusy || collabStopping || busy
+      || handledCollabView.current === collabViewRequest.requestId) return;
+    let cancelled = false;
+    const execution = ++collabExecution.current;
+    void onLoadCollabRun(collabViewRequest.runId).then((saved) => {
+      if (cancelled || execution !== collabExecution.current) return;
+      handledCollabView.current = collabViewRequest.requestId;
+      applySavedRun(saved);
+    }).catch((err) => {
+      if (!cancelled && execution === collabExecution.current) setCollabError(err instanceof Error ? err.message : "任务恢复失败");
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collabViewRequest?.requestId, collabBusy, collabStopping, busy]);
   useEffect(() => {
     if (!reportHandoff) return;
     if (queue.length > 0 && !queue.includes(reportHandoff.symbol)) {
@@ -872,7 +950,7 @@ export function StockReportPanel({
                 <button
                   className="primary-btn"
                   disabled={
-                    !aiReady || busy || compareBusy || collabBusy ||
+                    !aiReady || busy || compareBusy || collabBusy || collabStopping ||
                     (queue.length === 0 && symbol.trim().length < 2) ||
                     (!collabMode && selectedProfileIds.length === 0)
                   }
@@ -1105,6 +1183,14 @@ export function StockReportPanel({
               />
             </div>
           )}
+          {onLoadSavedCollabRuns && onLoadCollabRun && <CollabRecovery
+            load={onLoadSavedCollabRuns} disabled={collabBusy || collabStopping || busy}
+            restore={async (runId) => {
+              const saved = await onLoadCollabRun(runId);
+              applySavedRun(saved);
+            }}
+          />}
+          {restoreArchive && !collabBusy && <button className="ghost-btn" onClick={() => void resumeCollabPipeline()}>补存归档</button>}
           {collabError && (
             <p className="form-error" role="alert">{collabError}</p>
           )}
@@ -1115,6 +1201,8 @@ export function StockReportPanel({
               busy={collabBusy && !run.done}
               titlePrefix={collabRuns.length > 1 ? `（模型 ${runIndex + 1}/${collabRuns.length}）` : ""}
               onResume={() => void resumeCollabPipeline()}
+              onCancel={onCancelCollabRun ? () => void stopCollabRun(run.run_id) : undefined}
+              stopping={collabStopping}
             />
           ))}
           {(() => {
@@ -1208,6 +1296,12 @@ export function StockReportPanel({
               <ReportResultTabs
                 report={report}
                 onRepair={(action) => void handleRepair(report, action)}
+                onPrepareSupplement={(question) => setFollowupDraft({
+                  ...followupDraft,
+                  question: [followupDraft.question.trim(), question].filter(Boolean).join("\n\n"),
+                  mode: "supplement_research",
+                })}
+                supplementBusy={followupBusy || followupLoading}
                 repairingKey={repairingKey}
                 followup={report.report_id ? (
                   <FollowUpPanel

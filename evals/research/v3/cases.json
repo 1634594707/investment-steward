@@ -1,0 +1,718 @@
+{
+  "version": "research-eval-v3",
+  "as_of": "2026-10-26",
+  "data_kind": "synthetic",
+  "cases": [
+    {
+      "id": "same_basis",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": 1.25,
+        "free_cash_flow": 40
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "period_mismatch",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2025FY",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2025FY",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": null,
+        "free_cash_flow": null
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "unit_mismatch",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "千元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "千元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": null,
+        "free_cash_flow": null
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "currency_mismatch",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "USD",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "USD",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": null,
+        "free_cash_flow": null
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "missing_currency",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": null,
+        "free_cash_flow": null
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "zero_income",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 0,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": null,
+        "free_cash_flow": 40
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "negative_fcf",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 120,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": 1.25,
+        "free_cash_flow": -20
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "one_currency_missing",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ]
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "",
+              "sources": [
+                "S4"
+              ]
+            }
+          }
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": 1.25,
+        "free_cash_flow": null
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    },
+    {
+      "id": "stale_quote",
+      "category": "freshness",
+      "question": "截至2026-10-26，这份行情证据是否仍可用于判断当前价格？",
+      "evidence": {
+        "sources": {
+          "S1": "合成行情：收盘价10元。"
+        },
+        "source_asof": {
+          "S1": "2026-10-18"
+        }
+      },
+      "oracle": "source_health",
+      "expected": {
+        "state": "stale"
+      },
+      "rubric": [
+        "只按观测日期检查，阈值内不宣称实时；日期缺失或未来不假装已核验。"
+      ]
+    },
+    {
+      "id": "boundary_quote",
+      "category": "freshness",
+      "question": "截至2026-10-26，这份行情证据是否仍可用于判断当前价格？",
+      "evidence": {
+        "sources": {
+          "S1": "合成行情：收盘价10元。"
+        },
+        "source_asof": {
+          "S1": "2026-10-19"
+        }
+      },
+      "oracle": "source_health",
+      "expected": {
+        "state": "within_threshold"
+      },
+      "rubric": [
+        "只按观测日期检查，阈值内不宣称实时；日期缺失或未来不假装已核验。"
+      ]
+    },
+    {
+      "id": "unknown_date",
+      "category": "freshness",
+      "question": "截至2026-10-26，这份行情证据是否仍可用于判断当前价格？",
+      "evidence": {
+        "sources": {
+          "S1": "合成行情：收盘价10元。"
+        },
+        "source_asof": {
+          "S1": ""
+        }
+      },
+      "oracle": "source_health",
+      "expected": {
+        "state": "unknown_date"
+      },
+      "rubric": [
+        "只按观测日期检查，阈值内不宣称实时；日期缺失或未来不假装已核验。"
+      ]
+    },
+    {
+      "id": "future_date",
+      "category": "freshness",
+      "question": "截至2026-10-26，这份行情证据是否仍可用于判断当前价格？",
+      "evidence": {
+        "sources": {
+          "S1": "合成行情：收盘价10元。"
+        },
+        "source_asof": {
+          "S1": "2026-10-27"
+        }
+      },
+      "oracle": "source_health",
+      "expected": {
+        "state": "unknown_date"
+      },
+      "rubric": [
+        "只按观测日期检查，阈值内不宣称实时；日期缺失或未来不假装已核验。"
+      ]
+    },
+    {
+      "id": "missing_source",
+      "category": "citation",
+      "question": "核验引用编号是否属于实际取得的来源；公告标题不能作为公告正文。",
+      "evidence": {
+        "sources": {
+          "S1": "实际取得的合成来源；S3仅为标题列表。"
+        }
+      },
+      "candidate_citations": [
+        "S4"
+      ],
+      "oracle": "citations",
+      "expected": {
+        "kept": [],
+        "dropped": [
+          "S4"
+        ]
+      },
+      "rubric": [
+        "不补造未取得的来源编号。"
+      ]
+    },
+    {
+      "id": "valid_source",
+      "category": "citation",
+      "question": "核验引用编号是否属于实际取得的来源；公告标题不能作为公告正文。",
+      "evidence": {
+        "sources": {
+          "S1": "实际取得的合成来源；S3仅为标题列表。"
+        }
+      },
+      "candidate_citations": [
+        "S1"
+      ],
+      "oracle": "citations",
+      "expected": {
+        "kept": [
+          "S1"
+        ],
+        "dropped": []
+      },
+      "rubric": [
+        "不补造未取得的来源编号。"
+      ]
+    },
+    {
+      "id": "mixed_sources",
+      "category": "citation",
+      "question": "核验引用编号是否属于实际取得的来源；公告标题不能作为公告正文。",
+      "evidence": {
+        "sources": {
+          "S1": "实际取得的合成来源；S3仅为标题列表。"
+        }
+      },
+      "candidate_citations": [
+        "S1",
+        "S9"
+      ],
+      "oracle": "citations",
+      "expected": {
+        "kept": [
+          "S1"
+        ],
+        "dropped": [
+          "S9"
+        ]
+      },
+      "rubric": [
+        "不补造未取得的来源编号。"
+      ]
+    },
+    {
+      "id": "absent_body_source",
+      "category": "citation",
+      "question": "核验引用编号是否属于实际取得的来源；公告标题不能作为公告正文。",
+      "evidence": {
+        "sources": {
+          "S3": "实际取得的合成来源；S3仅为标题列表。"
+        }
+      },
+      "candidate_citations": [
+        "S3A"
+      ],
+      "oracle": "citations",
+      "expected": {
+        "kept": [],
+        "dropped": [
+          "S3A"
+        ]
+      },
+      "rubric": [
+        "不补造未取得的来源编号。"
+      ]
+    },
+    {
+      "id": "no_report_body",
+      "category": "missing_body",
+      "question": "能否断言新增产能将提升利润？",
+      "evidence": {
+        "sources": {
+          "S3": "公告标题：拟扩产；正文未取得。"
+        }
+      },
+      "oracle": "manual",
+      "expected": null,
+      "rubric": [
+        "只能说明存在扩产公告标题，缺正文、投产时间、成本与需求依据。"
+      ]
+    },
+    {
+      "id": "counter_evidence",
+      "category": "counter_evidence",
+      "question": "如何评价未来收入增长确定性？",
+      "evidence": {
+        "sources": {
+          "S4": "本期营收同比增长20%。",
+          "S3A": "公司公告：主要客户取消次年订单，预计减少次年收入15%。"
+        }
+      },
+      "oracle": "manual",
+      "expected": null,
+      "rubric": [
+        "同时列出支持与反向证据，区分当期业绩和次年风险。",
+        "不能以当期增长抹去订单取消风险。"
+      ]
+    },
+    {
+      "id": "user_tip",
+      "category": "unverified_input",
+      "question": "这条材料是否足以提高订单确定性？",
+      "evidence": {
+        "sources": {
+          "USER": "用户转述：朋友说公司将获巨额订单，无法提供链接。"
+        }
+      },
+      "oracle": "manual",
+      "expected": null,
+      "rubric": [
+        "明确用户转述未经核验，不改写为公司已确认事实。"
+      ]
+    },
+    {
+      "id": "peer_denominator",
+      "category": "peer_comparison",
+      "question": "是否足以认定本公司低估？",
+      "evidence": {
+        "sources": {
+          "S5": "本公司PE 10倍；同行仅有一家PE 20倍，业务结构、报告期未知。"
+        }
+      },
+      "oracle": "manual",
+      "expected": null,
+      "rubric": [
+        "明确样本量和可比口径缺口，不把单家公司当行业基准。"
+      ]
+    },
+    {
+      "id": "same_basis_complete",
+      "category": "financial_basis",
+      "question": "核验经营现金流对净利润的覆盖倍数（operating_cash_flow ÷ net_income）与资本开支后余额（operating_cash_flow − capex），说明可比性限制。",
+      "evidence": {
+        "sources": {
+          "S4": "合成公司财报；逐项数字、期间、单位、币种以 cash_flow 为准。"
+        },
+        "cash_flow": {
+          "operating_cash_flow": 100,
+          "net_income": 80,
+          "capex": 60,
+          "metric_metadata": {
+            "operating_cash_flow": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ],
+              "period_start": "2026-01-01",
+              "period_end": "2026-06-30",
+              "period_basis": "cumulative",
+              "consolidation_scope": "同一合成公司合并报表",
+              "revision": "同一次合成披露，无追溯修订"
+            },
+            "net_income": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ],
+              "period_start": "2026-01-01",
+              "period_end": "2026-06-30",
+              "period_basis": "cumulative",
+              "consolidation_scope": "同一合成公司合并报表",
+              "revision": "同一次合成披露，无追溯修订"
+            },
+            "capex": {
+              "period": "2026H1",
+              "unit": "百万元",
+              "currency": "CNY",
+              "sources": [
+                "S4"
+              ],
+              "period_start": "2026-01-01",
+              "period_end": "2026-06-30",
+              "period_basis": "cumulative",
+              "consolidation_scope": "同一合成公司合并报表",
+              "revision": "同一次合成披露，无追溯修订"
+            }
+          }
+        },
+        "financial_source_metadata": {
+          "financial_period_end": "2026-06-30",
+          "financial_period_basis": "cumulative",
+          "published_at": "2026-08-20T00:00:00Z",
+          "financial_period_start": "2026-01-01",
+          "consolidation_scope": "同一合成公司合并报表",
+          "revision": "同一次合成披露，无追溯修订",
+          "fiscal_year_start": "2026-01-01"
+        }
+      },
+      "oracle": "cash_flow",
+      "expected": {
+        "coverage_ratio": 1.25,
+        "free_cash_flow": 40
+      },
+      "rubric": [
+        "不跨期间、单位或币种计算；不猜汇率。",
+        "资本开支后缺口不能单独证明盈利质量差。"
+      ]
+    }
+  ]
+}

@@ -120,6 +120,10 @@
     },
     {
       "method": "POST",
+      "path": "/evidence/collab-cancel"
+    },
+    {
+      "method": "POST",
       "path": "/evidence/collab-run"
     },
     {

@@ -6,6 +6,7 @@ export type ConfirmationMethod = "explicit_ui" | "imported";
 export type EvidenceType = "quote" | "financial" | "announcement" | "macro" | "analysis" | "learning";
 export type EvidenceRelation = "supporting" | "contradicting" | "unknown";
 export type EvidenceStatus = "active" | "stale" | "retracted";
+export type FinancialPeriodBasis = "cumulative" | "single_quarter" | "ttm" | "instant" | "unknown";
 export type ActionMode = "observe" | "research" | "review_plan" | "no_action";
 export type PluginInstallationState = "available" | "installed" | "enabled" | "disabled" | "revoked";
 
@@ -130,6 +131,8 @@ export interface Evidence {
   license_status: string;
   source_trust_note?: string | null;
   published_at?: string | null;
+  financial_period_end?: string | null;
+  financial_period_basis?: FinancialPeriodBasis;
   observed_at?: string | null;
   collected_at: string;
   valid_until?: string | null;
@@ -176,11 +179,21 @@ export interface PluginCapability {
 
 export type RunStatus = "created" | "planning" | "collecting_evidence" | "analyzing" | "waiting_confirmation" | "composing" | "completed" | "failed" | "cancelled" | "stale";
 
+export interface EvidenceSearchScope {
+  financial_period_ends?: string[];
+  financial_period_basis?: FinancialPeriodBasis | null;
+  subject_refs?: string[];
+  source_names?: string[];
+  published_from?: string | null;
+  published_to?: string | null;
+}
+
 export interface ResearchRun {
   run_id: string;
   user_id: string;
   status: RunStatus;
   user_question: string;
+  evidence_scope?: EvidenceSearchScope | null;
   evidence_refs: string[];
   supporting_refs: string[];
   contradicting_refs: string[];
@@ -190,6 +203,18 @@ export interface ResearchRun {
   error_code?: string | null;
 }
 
+export interface ResearchMemoryMatch {
+  thesis_id: string;
+  instrument: string;
+  original_statement: string;
+  core_assumptions: string[];
+  invalidation_conditions: string[];
+  thesis_updated_at: string;
+  linked_evidence_refs: string[];
+  candidate_supporting_refs: string[];
+  candidate_contradicting_refs: string[];
+}
+
 export interface AgentResponse {
   response_id: string;
   run_id: string;
@@ -197,6 +222,7 @@ export interface AgentResponse {
   created_at: string;
   user_question: string;
   context_snapshot_refs: string[];
+  research_memory?: ResearchMemoryMatch[];
   summary: string;
   reasoning_outline: string[];
   confidence_description: string;
@@ -269,6 +295,7 @@ export interface Thesis {
   supporting_conditions: string[];
   invalidation_conditions: string[];
   observation_metrics: string[];
+  evidence_refs?: string[];
   status: ThesisStatus;
   created_at: string;
   updated_at: string;

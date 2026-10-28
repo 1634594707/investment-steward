@@ -115,7 +115,7 @@ export function cashFlowDisplayLines(cash: CashFlowQualityBlock): string[] {
   const show = (value?: number | null) => value == null ? "未取到" : String(value);
   const context = (key: keyof NonNullable<CashFlowQualityBlock["metric_metadata"]>, fallback = "") => {
     const meta = cash.metric_metadata?.[key];
-    return `统计期：${meta?.period || fallback || "未标注"}；单位：${meta?.unit || "未标注"}；模型标注来源：${meta?.sources.length ? meta.sources.join("、") : "未标注"}`;
+      return `统计期：${meta?.period || fallback || "未标注"}；单位：${meta?.unit || "未标注"}；模型标注来源：${meta?.sources.length ? meta.sources.join("、") : "未标注"}${meta?.currency ? `；币种：${meta.currency}` : ""}`;
   };
   return [
     `经营现金流 ${show(cash.operating_cash_flow)}（${context("operating_cash_flow", cash.operating_cash_flow_period)}）`,
@@ -125,7 +125,7 @@ export function cashFlowDisplayLines(cash: CashFlowQualityBlock): string[] {
     ...(cash.funding_balance_note ? [`资本开支后资金余缺：${cash.funding_balance_note}`] : []),
     `折旧摊销 ${show(cash.depreciation_amortization)}（${context("depreciation_amortization")}）`,
     `营运资本变动 ${show(cash.working_capital ?? cash.working_capital_change)}（${context("working_capital")}）`,
-    "金额须同期间、同单位才能相减或比较；缺失口径请回查原始来源。",
+      "金额须同期间、同单位、同币种才能相减或比较；未标注币种不代表已核验，缺失口径请回查原始来源。",
     ...(cash.free_cash_flow_reported != null ? [`模型提供的自由现金流 ${cash.free_cash_flow_reported}（原值留痕，不代表核验通过）`] : []),
   ];
 }

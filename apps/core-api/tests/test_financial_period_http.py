@@ -46,15 +46,17 @@ def test_legacy_cash_flow_is_rechecked_without_rewriting_the_historical_record(s
     assert source.read_bytes() == original_bytes
 
 
-@pytest.mark.parametrize("capex_period,unit,expected", [
-    ("2026H1", "亿元", -2.63), ("TTM-2026H1", "亿元", None), ("2026H1", "", None),
+@pytest.mark.parametrize("capex_period,unit,currency,expected", [
+    ("2026H1", "亿元", "CNY", -2.63), ("TTM-2026H1", "亿元", "CNY", None), ("2026H1", "", "CNY", None),
+    ("2026H1", "亿元", "USD", None), ("2026H1", "亿元", "", None), ("2026H1", "亿元", "all_missing", None),
 ])
 @pytest.mark.parametrize("collab", [False, True])
 @pytest.mark.parametrize("review_enabled", [False, True])
-def test_report_preserves_financial_period_rules_and_unverified_analysis(scan_http, monkeypatch, capex_period, unit, expected, collab, review_enabled):
+def test_report_preserves_financial_period_rules_and_unverified_analysis(scan_http, monkeypatch, capex_period, unit, currency, expected, collab, review_enabled):
     http, headers, database = scan_http
     _mock_sources(monkeypatch)
-    profile = SimpleNamespace(profile_id=uuid4(), model="period-test", status=ModelProfileStatus.ACTIVE)
+    profile = SimpleNamespace(profile_id=uuid4(), model="period-test", status=ModelProfileStatus.ACTIVE,
+                              base_url="https://model.invalid", credential_ref="period-test-key")
     monkeypatch.setattr(database, "list_model_profiles", lambda: [profile])
     monkeypatch.setattr(lhb_feed, "fetch_billboard", lambda *args, **kwargs: [])
     monkeypatch.setattr(lhb_feed, "fetch_seats", lambda *args, **kwargs: [])
@@ -83,24 +85,35 @@ def test_report_preserves_financial_period_rules_and_unverified_analysis(scan_ht
              "metric_metadata": {key: {"period": "TTM-2026H1", "unit": "亿元", "sources": ["S4"]}
                                  for key in ("operating_cash_flow", "net_income")}},
             {"operating_cash_flow": 3.43, "net_income": 3.73, "capex": 6.06, "free_cash_flow": 99,
+             "depreciation_amortization": 1.0,
              "metric_metadata": {
                  "operating_cash_flow": {"period": "2026H1", "unit": "亿元", "sources": ["S4"]},
                  "net_income": {"period": "2026H1", "unit": "亿元", "sources": ["S4"]},
                  "capex": {"period": capex_period, "unit": unit, "sources": ["S4", "S99"]},
+                 "depreciation_amortization": {"period": capex_period, "unit": unit, "sources": ["S4"]},
              }},
         ],
     }
+    for index, period in enumerate(payload["cash_flow_quality"]["periods"]):
+        for key, metadata in period["metric_metadata"].items():
+            if currency != "all_missing":
+                metadata["currency"] = "CNY" if index == 0 or key == "operating_cash_flow" else currency
     payload["earnings_growth"] = [
         {"factor": factor, "effect": gap, "basis": "所引财务数据不足以解释该因素的作用",
          "sources": ["S4"], "analysis_state": "analyzed"}
         for factor, gap in (("volume", "缺产销量，无法验证"), ("price", "缺产品价格及价差，无法验证"),
                             ("cost_efficiency", "缺成本费用拆分，无法验证"))
     ]
-    monkeypatch.setattr(app_module.model_client, "call_active_model", lambda *args, **kwargs:
-                        ModelReply(content=json.dumps(payload), model="period-test", provider="test", latency_ms=0))
+    prompts = []
+
+    def generate(profile, store, messages, **kwargs):
+        prompts.append("\n".join(message["content"] for message in messages))
+        return ModelReply(content=json.dumps({**payload, "observations": [], "risks": []}),
+                          model="period-test", provider="test", latency_ms=0)
+
+    monkeypatch.setattr(app_module.model_client, "call_active_model", generate)
     if collab:
-        monkeypatch.setattr(app_module.collab_engine.model_client, "call_active_model", lambda *args, **kwargs:
-                            ModelReply(content=json.dumps({**payload, "observations": [], "risks": []}), model="period-test", provider="test", latency_ms=0))
+        monkeypatch.setattr(app_module.collab_engine.model_client, "call_active_model", generate)
         created = http.post("/evidence/collab-run", json={"symbol": "600001"}, headers=headers).json()
         assert created["ok"] is True, created
         for stage in app_module.collab_engine.STAGES:
@@ -111,15 +124,30 @@ def test_report_preserves_financial_period_rules_and_unverified_analysis(scan_ht
     else:
         result = run_stock_report(http, headers, symbol="600001", with_counter_check=False, with_auto_repair=False)
     assert result["ok"] is True and result["persisted"] is True, result
+    report_prompts = [text for text in prompts if '"cash_flow_quality":' in text]
+    assert len(report_prompts) >= (2 if collab else 1)
+    for text in report_prompts:
+        assert "经营现金流 ÷ 归母净利润" in text
+        assert "不得先列机械计算值再补不可比声明" in text
     block = result["cash_flow_quality"]
+    assert block["currency_policy"] == "required"
     assert block["verdict"] == "分期列示" and block["coverage_ratio"] is None
     ttm, half_year = block["periods"]
-    assert ttm["coverage_ratio"] == 1.27 and ttm["free_cash_flow"] is None
-    assert half_year["coverage_ratio"] == 0.92
+    assert ttm["coverage_ratio"] == (None if currency == "all_missing" else 1.27)
+    assert ttm["free_cash_flow"] is None
+    assert half_year["coverage_ratio"] == (0.92 if currency == "CNY" else None)
+    if currency in {"USD", "", "all_missing"}:
+        assert "币种" in half_year["note"]
+        assert not half_year["free_cash_flow_derived"]
     assert half_year["free_cash_flow"] == expected
     assert half_year["free_cash_flow_reported"] == 99
     assert half_year["metric_metadata"]["capex"]["sources"] == ["S4"]
-    assert half_year["verdict"] == "不足以判断盈利质量", "Funding balance alone must not certify earnings quality"
+    assert half_year["verdict"] == (report_quality.CASH_FLOW_VERDICT_STRONG if expected is not None else "不足以判断盈利质量")
+    cash_item = next(row for row in result["research_completeness"]["items"] if row["key"] == "cash_flow_and_capex")
+    assert cash_item["state"] == "partial", "TTM 分期缺少解释项，不能借半年分期字段计为全部完成"
+    if expected is None:
+        assert "折旧摊销" in cash_item["gaps"]
+        assert "折旧摊销" not in cash_item["covered"]
     state = "insufficient" if review_enabled else "unverified"
     assert all(row["analysis_state"] == state for row in result["earnings_growth"])
     assert bool(reviews) is review_enabled, "Both generation routes must consume factor review, not merely discard self-ratings"
@@ -135,6 +163,12 @@ def test_report_preserves_financial_period_rules_and_unverified_analysis(scan_ht
     saved = database.get_ai_research_report(result["report_id"])
     detail = http.get(f"/ai-research/reports/{result['report_id']}", headers=headers)
     assert detail.status_code == 200
+    assert detail.json()["item"]["source_health"] == report_quality.report_source_health(
+        result, today=app_module.datetime.now(app_module.UTC).date())
+    if collab:
+        assert response["run"]["source_health"] == detail.json()["item"]["source_health"]
+    else:
+        assert saved["source_health"] == result["source_health"] == detail.json()["item"]["source_health"]
     for key in ("cash_flow_quality", "earnings_growth", "research_completeness"):
         assert saved[key] == result[key] == detail.json()["item"][key]
         if collab:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -12,8 +13,10 @@ from investment_steward_core.domain import (
     AgentResponse,
     Evidence,
     EvidenceRelation,
+    EvidenceSearchScope,
     InvestorProfile,
     JevRouteDecision,
+    ResearchMemoryMatch,
     ResearchRun,
     RunStatus,
 )
@@ -31,10 +34,11 @@ _LOCAL_TOKENIZE = str.split
 
 def _tokens(text: str) -> set[str]:
     """中英文混合的轻量 token 化：保留空格词，并为中文生成 2~5-gram。"""
-    normalized = re.sub(r"\s+", "", text or "").lower()
+    lowered = (text or "").lower()
+    normalized = re.sub(r"\s+", "", lowered)
     if not normalized:
         return set()
-    tokens = {part for part in re.findall(r"[a-z0-9_]+", normalized) if len(part) >= 2}
+    tokens = {part for part in re.findall(r"[a-z0-9_]+", lowered) if len(part) >= 2}
     cjk = "".join(re.findall(r"[\u3400-\u9fff]", normalized))
     for size in (2, 3, 4, 5):
         tokens.update(cjk[index : index + size] for index in range(len(cjk) - size + 1))
@@ -58,15 +62,35 @@ def _evidence_tokens(evidence: Evidence) -> set[str]:
     return tokens
 
 
-def select_relevant_evidence(question: str, evidence: list[Evidence]) -> list[Evidence]:
+def select_relevant_evidence(
+    question: str, evidence: list[Evidence], *, scope: EvidenceSearchScope | None = None,
+    now: datetime | None = None,
+) -> list[Evidence]:
     """按问题 token 与证据主体/摘要的命中交集筛选相关证据；无命中则视为无关。"""
     if not question.strip():
         return []
     q = _question_tokens(question)
     relevant: list[Evidence] = []
     for item in evidence:
-        if not is_current_evidence(item):
+        if not is_current_evidence(item, now=now):
             continue
+        if scope:
+            if scope.subject_refs and not set(scope.subject_refs).intersection(item.subject_refs):
+                continue
+            if scope.source_names and item.source_name not in scope.source_names:
+                continue
+            if scope.financial_period_ends and item.financial_period_end not in scope.financial_period_ends:
+                continue
+            if scope.financial_period_basis and item.financial_period_basis != scope.financial_period_basis:
+                continue
+            if scope.published_from or scope.published_to:
+                if item.published_at is None:
+                    continue
+                published = as_utc(item.published_at)
+                if scope.published_from and published < scope.published_from:
+                    continue
+                if scope.published_to and published > scope.published_to:
+                    continue
         overlap = q & _evidence_tokens(item)
         if overlap:
             relevant.append(item)
@@ -75,6 +99,25 @@ def select_relevant_evidence(question: str, evidence: list[Evidence]) -> list[Ev
 
 def _advance(db: Database, run: ResearchRun, target: RunStatus) -> ResearchRun:
     return db.transition_research_run(run.run_id, run.user_id, target)
+
+
+def research_memory_matches(db: Database, run: ResearchRun, selected: list[Evidence]) -> list[ResearchMemoryMatch]:
+    subjects = set(run.evidence_scope.subject_refs) if run.evidence_scope else set()
+    if not subjects:
+        return []
+    matches = []
+    for thesis in db.list_theses(run.user_id):
+        if thesis.status != "active" or thesis.instrument not in subjects:
+            continue
+        current = [item for item in selected if thesis.instrument in item.subject_refs]
+        matches.append(ResearchMemoryMatch(
+            thesis_id=thesis.thesis_id, instrument=thesis.instrument, original_statement=thesis.original_statement,
+            core_assumptions=list(thesis.core_assumptions), invalidation_conditions=list(thesis.invalidation_conditions),
+            thesis_updated_at=thesis.updated_at, linked_evidence_refs=list(thesis.evidence_refs),
+            candidate_supporting_refs=[item.evidence_id for item in current if item.relation == EvidenceRelation.SUPPORTING],
+            candidate_contradicting_refs=[item.evidence_id for item in current if item.relation == EvidenceRelation.CONTRADICTING],
+        ))
+    return matches
 
 
 def _synthesize(
@@ -109,6 +152,12 @@ def _synthesize(
         supported_actions = ["create_plan"]
         confidence = "无证据可评估，结论不成立（证据缺失）。"
         missing = ["与本问题直接相关的证据条目缺失（行情、公告或财报）。", "证据占比为零，未调用外部模型，避免编造。"]
+    elif not supporting and not contradicting:
+        summary = f"本地证据账本中有 {len(unknown)} 条关系未知的相关证据，不能形成方向性判断，需先核验与问题的关系。"
+        action_mode = ActionMode.RESEARCH
+        supported_actions = ["create_plan"]
+        confidence = "相关材料的支持或相反关系尚未核验，方向性判断置信度无法评估。"
+        missing = ["核验相关材料与本问题的支持或相反关系；关系未知不等于支持，也不证明不存在相反证据。"]
     elif contradicting:
         summary = (
             f"证据存在矛盾：{len(supporting)} 条支持 vs {len(contradicting)} 条相反。"
@@ -194,7 +243,7 @@ def run_research(
     collecting = _advance(db, plan, RunStatus.COLLECTING_EVIDENCE)
 
     try:
-        relevant = select_relevant_evidence(question, evidence)
+        relevant = select_relevant_evidence(question, evidence, scope=run.evidence_scope)
         supporting = [item for item in relevant if item.relation == EvidenceRelation.SUPPORTING]
         contradicting = [item for item in relevant if item.relation == EvidenceRelation.CONTRADICTING]
         unknown = [item for item in relevant if item.relation == EvidenceRelation.UNKNOWN]
@@ -206,6 +255,16 @@ def run_research(
             db, composing, question, supporting, contradicting, unknown,
             model_client=model_client, profile=profile, action_router=action_router,
         )
+        financial = [item for item in relevant if item.evidence_type == "financial"]
+        period_notes = []
+        if any(item.financial_period_end is None or item.financial_period_basis == "unknown" for item in financial):
+            period_notes.append("本轮财务证据存在缺失报告期末或未知口径；不能从摘要、发布日期或相同数值推定可比，也未自动补齐或换算。")
+        if len({(item.financial_period_end, item.financial_period_basis) for item in financial}) > 1:
+            period_notes.append("本轮财务证据包含不同期末或口径；需分别引用，不能混作同一期、同口径数据计算。")
+        if period_notes:
+            response = response.model_copy(update={"limitations": [*response.limitations, *period_notes]})
+        # 在回答闸门之后本地附加；用户判断不成为事实引用，也不自动发送给外部模型。
+        response = response.model_copy(update={"research_memory": research_memory_matches(db, run, relevant)})
         db.upsert_agent_response(response)
 
         done = db.transition_research_run(run.run_id, run.user_id, RunStatus.COMPLETED)
@@ -386,6 +445,13 @@ def _context_for_prompt(
     ):
         for ev in items:
             lines.append(f"- [{group}] {ev.evidence_id} · {ev.source_name}: {ev.summary}")
+            if ev.evidence_type == "financial":
+                lines.append("  财务来源元数据：" + json.dumps({
+                    "evidence_id": str(ev.evidence_id),
+                    "published_at": ev.published_at.isoformat() if ev.published_at else None,
+                    "financial_period_end": ev.financial_period_end.isoformat() if ev.financial_period_end else None,
+                    "financial_period_basis": ev.financial_period_basis,
+                }, ensure_ascii=False))
 
     lines.append("")
     lines.append("投资者画像（仅作参考视角，不作为买卖依据）：")

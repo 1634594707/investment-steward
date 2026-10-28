@@ -16,17 +16,34 @@
 
 from __future__ import annotations
 
+import errno
+import hashlib
 import json
+import os
 import threading
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from investment_steward_core import analysis_followup, followup_research, jev_client, macro_ai, model_client, report_quality
-from investment_steward_core.prompting import STOCK_REPORT_RULES_TEXT, STOCK_REPORT_SCHEMA_TEXT
+from investment_steward_core import (
+    analysis_followup,
+    followup_research,
+    jev_client,
+    macro_ai,
+    model_client,
+    report_quality,
+)
+from investment_steward_core.prompting import (
+    CASH_FLOW_RULES_TEXT,
+    STOCK_REPORT_PROMPT_VERSION,
+    STOCK_REPORT_RULES_TEXT,
+    STOCK_REPORT_SCHEMA_TEXT,
+)
 
 # 角色严格串行：阶段顺序即执行顺序，禁止并行。
 STAGES: tuple[str, ...] = ("check", "draft", "risk", "revise")
+PIPELINE_VERSION = 4  # 估值否定枚举逐处判定，旧任务不可混用此前质量结果。
 STAGE_LABELS: dict[str, str] = {
     "check": "数据核对",
     "draft": "首席初稿",
@@ -54,6 +71,32 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+@contextmanager
+def run_guard(database: Any, run_id: str):
+    """同一数据目录的进程互斥；退出/崩溃由操作系统释放，锁文件保留避免竞态。"""
+    directory = database.path.resolve().parent / ".collab-locks"
+    directory.mkdir(exist_ok=True)
+    key = hashlib.sha256((os.path.normcase(str(database.path.resolve())) + ":" + run_id).encode()).hexdigest()
+    with (directory / key).open("a+b") as lock_file:
+        lock_file.seek(0, 2)
+        if lock_file.tell() == 0:
+            lock_file.write(b"\0")
+            lock_file.flush()
+        lock_file.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                raise CollabBusyError("另一请求仍在执行此协同任务，请等待完成后刷新") from exc
+            raise
+        yield
+
+
 def _run_in_flight(run: dict[str, Any]) -> bool:
     """该运行当前是否有角色正在执行（调用方须已持锁）。"""
     index = run.get("next_index", 0)
@@ -75,7 +118,7 @@ def _prune_locked() -> None:
     expired = [
         run_id
         for run_id, run in _runs.items()
-        if now_ts - datetime.fromisoformat(run["created_at"]).timestamp() > _RUN_TTL_SECONDS
+        if not _run_in_flight(run) and now_ts - datetime.fromisoformat(run["created_at"]).timestamp() > _RUN_TTL_SECONDS
     ]
     for run_id in expired:
         _runs.pop(run_id, None)
@@ -86,6 +129,24 @@ def _prune_locked() -> None:
             break
         oldest = min(candidates, key=lambda rid: _runs[rid]["created_at"])
         _runs.pop(oldest, None)
+
+
+def profile_fingerprint(profile: Any) -> str:
+    """只绑定配置身份，不读取密钥；同引用换钥、改名和调整超时允许续跑。"""
+    config = {key: str(getattr(profile, key)) for key in ("profile_id", "base_url", "model", "credential_ref")}
+    return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+
+
+def resume_conflict(run: dict[str, Any], profiles: dict[str, Any]) -> str | None:
+    if run.get("pipeline_version") != PIPELINE_VERSION or run.get("prompt_version") != STOCK_REPORT_PROMPT_VERSION:
+        return "任务流水线或提示词版本不兼容，请重新创建任务；已有阶段结果保留"
+    fingerprints = run.get("profile_fingerprints") or {}
+    for stage in STAGES:
+        profile_id = (run.get("stage_profiles") or {}).get(stage) or run.get("profile_id")
+        profile = profiles.get(profile_id)
+        if stage not in fingerprints or profile is None or fingerprints[stage] != profile_fingerprint(profile):
+            return f"阶段 {STAGE_LABELS[stage]} 的原模型配置已变化或缺少校验信息，请恢复原配置或重新创建任务；已有阶段结果保留"
+    return None
 
 
 def create_run(
@@ -100,6 +161,7 @@ def create_run(
     stage_models: dict[str, str] | None = None,
     evidence_meta: dict[str, Any] | None = None,
     report_mode: str | None = None,
+    profile_fingerprints: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """创建协同运行：证据包此刻定稿，四角色共享同一快照（证据同源）。
 
@@ -138,19 +200,70 @@ def create_run(
             for stage in STAGES
         ],
     }
+    run["pipeline_version"] = PIPELINE_VERSION
+    run["prompt_version"] = STOCK_REPORT_PROMPT_VERSION
+    run["profile_fingerprints"] = dict(profile_fingerprints or {})
+    snapshot = {key: run[key] for key in ("symbol", "question", "profile_id", "model", "stage_profiles",
+                                         "report_mode", "evidence", "evidence_meta", "pipeline_version",
+                                         "prompt_version", "profile_fingerprints")}
+    run["input_hash"] = hashlib.sha256(json.dumps(snapshot, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     with _lock:
         _prune_locked()
         _runs[run["run_id"]] = run
     return run
 
 
-def get_run(run_id: str) -> dict[str, Any] | None:
+def get_run(run_id: str, database: Any = None) -> dict[str, Any] | None:
     with _lock:
-        return _runs.get(run_id)
+        cached = _runs.get(run_id)
+        if database is None:
+            return cached
+        scope = str(database.path.resolve())
+        if cached is not None and cached.get("_database_path") == scope:
+            saved = database.get_collab_run(run_id)
+            if saved is None:
+                _runs.pop(run_id, None)
+                return None
+            if saved and saved.get("cancelled_at"):
+                return saved
+            if saved == cached or _run_in_flight(cached):
+                return cached
+        with run_guard(database, run_id):
+            run = database.get_collab_run(run_id)
+            if run is None:
+                return None
+            for stage in run["stages"]:
+                if stage["status"] == "running":
+                    stage["status"] = "failed"
+                    stage["error"] = "任务中断，远端结果未知；确认后可手动重试当前阶段，可能重复计费"
+            run["_database_path"] = scope
+            database.save_collab_run(run)
+        _prune_locked()
+        _runs[run_id] = run
+        return run
 
 
 def is_done(run: dict[str, Any]) -> bool:
     return run["next_index"] >= len(STAGES)
+
+
+def recovery_summary(run: dict[str, Any]) -> dict[str, Any]:
+    """只投影恢复所需状态；列表不能把持久化 running 当成仍在执行的证明。"""
+    index = run["next_index"]
+    stages = run.get("stages") or []
+    stage = stages[index] if 0 <= index < len(stages) else {}
+    state = "pending"
+    if run.get("cancelled_at"):
+        state = "cancelled"
+    elif is_done(run):
+        state = "archive_pending"
+    elif stage.get("status") == "failed":
+        state = "failed"
+    elif stage.get("status") == "running":
+        state = "running_or_interrupted"
+    return {**{key: run[key] for key in ("run_id", "symbol", "question", "model", "created_at", "next_index")},
+            "done": is_done(run), "cancelled_at": run.get("cancelled_at"),
+            "recovery_state": state, "stage": stage.get("stage"), "stage_label": stage.get("label")}
 
 
 def public_view(run: dict[str, Any]) -> dict[str, Any]:
@@ -165,6 +278,10 @@ def public_view(run: dict[str, Any]) -> dict[str, Any]:
     }))
     return {
         "source_catalog": catalog,
+        "source_health": report_quality.report_source_health({
+            **(run.get("evidence_meta") or {}),
+            "source_keys": run["source_keys"], "source_errors": run["source_errors"],
+        }, today=datetime.now(UTC).date()),
         "run_id": run["run_id"],
         "symbol": run["symbol"],
         "question": run["question"],
@@ -174,6 +291,7 @@ def public_view(run: dict[str, Any]) -> dict[str, Any]:
         "report_mode": run.get("report_mode") or report_quality.DEFAULT_REPORT_MODE,
         "created_at": run["created_at"],
         "done": is_done(run),
+        "cancelled_at": run.get("cancelled_at"),
         "next_index": run["next_index"],
         "stages": [dict(stage) for stage in run["stages"]],
         "source_keys": list(run["source_keys"]),
@@ -190,9 +308,10 @@ def _evidence_text(evidence: dict[str, Any]) -> str:
     # 显式 [S#] 前缀，与个股研报端点同一口径（避免模型靠小标题猜编号导致引用错位）。
     numbered = "\n".join(f"[{key}] {value}" for key, value in sources.items())
     errors = evidence.get("source_errors") or {}
-    unavailable = ("\n来源不可用（禁止引用、禁止臆测其内容）：" + "；".join(errors.values())) if errors else ""
-    tech = evidence.get("tech_summary") or "K 线取数失败，技术面无数据。"
-    return f"[S1] {tech}\n\n{numbered}{unavailable}"
+    unavailable = ("\nsource_errors（禁止引用、禁止臆测其内容）："
+                   + "；".join(f"{key}: {value}" for key, value in errors.items())) if errors else ""
+    tech = f"[S1] {evidence['tech_summary']}" if evidence.get("tech_summary") else "S1技术面证据本次未提供。"
+    return f"{tech}\n\n{numbered}{unavailable}"
 
 
 # 与个股研报同一份报告 JSON 结构（v24 起由 prompting.STOCK_REPORT_SCHEMA_TEXT 单一维护：
@@ -235,7 +354,9 @@ def _stage_user_prompt(run: dict[str, Any], stage: str) -> str:
     symbol = run["symbol"]
     question = run["question"] or "综合趋势与基本面"
     evidence_block = _evidence_text(run["evidence"])
-    head = f"研究对象：A 股 {symbol}。用户关注点：{question}\n\n{evidence_block}"
+    head = (f"研究对象：A 股 {symbol}。用户关注点：{question}\n\n{evidence_block}\n"
+            "只有 source_errors 明确记录的来源才可称取数失败；未出现的来源仅表示本次未提供，"
+            "不得推断失败原因或其中内容。\n")
 
     if stage == "check":
         return (
@@ -244,6 +365,7 @@ def _stage_user_prompt(run: dict[str, Any], stage: str) -> str:
             '"gaps": ["缺失或取数失败来源及对研究的具体影响；全部可用时给空数组"], '
             '"readiness": "high|medium|low"}\n'
             "铁律：只描述证据包里真实存在的内容；不得建议拉取不存在的数据源；来源标注失败的必须列入 gaps。"
+            + CASH_FLOW_RULES_TEXT
         )
     if stage == "draft":
         checklist = run["stages"][0].get("result") or {}
@@ -262,6 +384,7 @@ def _stage_user_prompt(run: dict[str, Any], stage: str) -> str:
             '{"risks": ["3-6 条具体风险或反证：每条指出依据（哪条证据/哪个缺口），或明确指出初稿某判断证据不足"], '
             '"verdict": "support|partial|against"}\n'
             "铁律：禁止「市场有风险」式空话；每条必须可追溯到证据或证据缺口；不新造证据里不存在的事实。"
+            + CASH_FLOW_RULES_TEXT
         )
     # revise
     draft = run["stages"][1].get("result") or {}
@@ -294,6 +417,31 @@ def _allowed_citations(run: dict[str, Any]) -> set[str]:
 
 
 def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store: Any) -> dict[str, Any]:
+    database = getattr(core, "database", None)
+    with run_guard(database, run["run_id"]) if database is not None else nullcontext():
+        if database is not None:
+            saved = database.get_collab_run(run["run_id"])
+            if saved is not None and saved.get("cancelled_at"):
+                run.update(saved)
+                return run["stages"][run["next_index"]]
+            if saved is not None and saved["next_index"] != run["next_index"]:
+                with _lock:
+                    _runs.pop(run["run_id"], None)
+                raise CollabBusyError("任务已由另一请求推进，请刷新后继续")
+        try:
+            stage = _execute_next(core, run, profile, credential_store)
+        finally:
+            if database is not None:
+                database.save_collab_run(run)
+                saved = database.get_collab_run(run["run_id"])
+                if saved is not None and saved.get("cancelled_at"):
+                    run.update(saved)
+        if run.get("cancelled_at"):
+            return run["stages"][run["next_index"]]
+        return stage
+
+
+def _execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store: Any) -> dict[str, Any]:
     """执行下一个角色（严格串行：一次只推进一个）。
 
     - 当前阶段失败（模型调用/解析）→ 标记 failed，**不进入下一阶段**；再次调用本函数会重试该阶段；
@@ -308,6 +456,9 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
         if stage["status"] == "running":
             raise CollabBusyError("上一角色仍在执行中（协同流水线严格串行，请等待其完成）")
         stage["status"] = "running"
+        database = getattr(core, "database", None)
+        if database is not None:
+            database.save_collab_run(run)
 
     stage_name = stage["stage"]
     try:
@@ -324,6 +475,12 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
         stage["status"] = "failed"
         stage["error"] = f"角色执行异常：{exc}"
         return stage
+
+    if database is not None:
+        saved = database.get_collab_run(run["run_id"])
+        if saved is not None and saved.get("cancelled_at"):
+            run.update(saved)
+            return run["stages"][run["next_index"]]
 
     # S8（用户视角路线图 2026-09-26）：**以下整段必须在 try 内**。
     # 改造前只有模型调用被两个 except 包住，JSON 解析与质量闸门（含
@@ -399,6 +556,7 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
             )
             raw_cash = parsed.get("cash_flow_quality") if isinstance(parsed.get("cash_flow_quality"), dict) else {}
             parsed["cash_flow_quality"] = report_quality.cash_flow_quality(
+                require_currency=True,
                 operating_cash_flow=raw_cash.get("operating_cash_flow"),
                 net_income=raw_cash.get("net_income"),
                 depreciation_amortization=raw_cash.get("depreciation_amortization"),
@@ -416,6 +574,7 @@ def execute_next(core: Any, run: dict[str, Any], profile: Any, credential_store:
         stage["status"] = "done"
         stage["result"] = parsed
         stage["latency_ms"] = reply.latency_ms
+        stage["completed_at"] = _now()
         decided = True
         with _lock:
             run["next_index"] = index + 1

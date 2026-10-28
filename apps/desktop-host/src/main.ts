@@ -98,7 +98,8 @@ app.commandLine.appendSwitch("disable-dev-shm-usage");
 // 无条件禁用硬件加速：与上述开关双保险。
 app.disableHardwareAcceleration();
 if (!app.isPackaged) {
-  app.setPath("userData", join(PROJECT_ROOT, ".runtime-local", "desktop-user-data"));
+  const userDataOverride = app.commandLine.getSwitchValue("user-data-dir");
+  app.setPath("userData", userDataOverride ? resolve(userDataOverride) : join(PROJECT_ROOT, ".runtime-local", "desktop-user-data"));
 }
 
 function findFreePort(): Promise<number> {

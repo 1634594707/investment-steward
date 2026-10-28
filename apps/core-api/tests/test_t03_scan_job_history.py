@@ -71,6 +71,10 @@ def test_existing_terminal_jobs_backfill_without_reconstructing_missing_data(dat
     database.finish_scan_job("old", "done", {"results": []})
     with database._connection() as connection:
         connection.exec_driver_sql("DROP TABLE scan_job_history")
+        # 回到实际的旧表结构，不能只回退版本号后重放新增列迁移。
+        for column in ("returned_model", "attempt_count", "error_kind", "http_status", "usage_complete", "attempts"):
+            connection.exec_driver_sql(f"ALTER TABLE model_calls DROP COLUMN {column}")
+        connection.exec_driver_sql("DROP TABLE collab_runs")
         connection.exec_driver_sql("PRAGMA user_version = 35")
     database._migrate()
     assert _history(database, "old")["state"] == "done"

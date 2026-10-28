@@ -26,6 +26,23 @@ function delivery(cash: CashFlowQualityBlock) {
   return [pageText, markdown, html.body.textContent ?? ""];
 }
 
+it("币种及停止计算说明在页面、MD、HTML 一致保留", () => {
+  for (const output of delivery({ operating_cash_flow: 100, capex: 60, free_cash_flow: null,
+    free_cash_flow_reported: 40, free_cash_flow_derived: false,
+    verdict: "不足以判断盈利质量", note: "币种不一致，停止计算，不自动换汇。",
+    metric_metadata: {
+      operating_cash_flow: { period: "2026H1", unit: "百万", currency: "CNY", sources: ["S4"] },
+      capex: { period: "2026H1", unit: "百万", currency: "USD", sources: ["S4"] },
+    },
+  })) {
+    expect(output).toContain("币种：CNY");
+    expect(output).toContain("币种：USD");
+    expect(output).toContain("自由现金流 未取到");
+    expect(output).toContain("币种不一致，停止计算，不自动换汇。");
+    expect(output).toContain("未标注币种不代表已核验");
+  }
+});
+
 describe("R01/R02 页面与两种导出的现金流交付口径", () => {
   it("TTM 与半年逐组保留期间、单位和来源，不把资金缺口当盈利质量结论", () => {
     const outputs = delivery({ verdict: "分期列示", periods: [

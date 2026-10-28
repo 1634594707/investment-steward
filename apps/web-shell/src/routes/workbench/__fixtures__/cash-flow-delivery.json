@@ -1,0 +1,484 @@
+[
+  {
+    "input": {
+      "operating_cash_flow": 100,
+      "net_income": 80,
+      "capex": 60,
+      "depreciation_amortization": 20,
+      "free_cash_flow": 40,
+      "metric_metadata": {
+        "operating_cash_flow": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "CNY",
+          "sources": [
+            "S4"
+          ]
+        },
+        "net_income": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "CNY",
+          "sources": [
+            "S4"
+          ]
+        },
+        "capex": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "CNY",
+          "sources": [
+            "S4"
+          ]
+        },
+        "depreciation_amortization": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "CNY",
+          "sources": [
+            "S4"
+          ]
+        }
+      }
+    },
+    "report": {
+      "ok": true,
+      "symbol": "600001",
+      "title": "合成币种口径验收",
+      "report": "模型原文保留，金额尚需核验 [S4]。",
+      "citations": [
+        "S4"
+      ],
+      "limitations": [],
+      "confidence": "low",
+      "model": "synthetic",
+      "source_keys": [
+        "S4"
+      ],
+      "source_errors": {},
+      "generated_at": "2026-10-26T00:00:00Z",
+      "cash_flow_quality": {
+        "version": "v1",
+        "metric_metadata": {
+          "operating_cash_flow": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          },
+          "net_income": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          },
+          "depreciation_amortization": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          },
+          "capex": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          },
+          "free_cash_flow": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          }
+        },
+        "currency_policy": "required",
+        "periods": [],
+        "operating_cash_flow": 100.0,
+        "net_income": 80.0,
+        "coverage_ratio": 1.25,
+        "operating_cash_flow_period": "2026H1",
+        "capex_period": "2026H1",
+        "free_cash_flow_derived": true,
+        "depreciation_amortization": 20.0,
+        "working_capital": null,
+        "working_capital_change": null,
+        "capex": 60.0,
+        "free_cash_flow": 40.0,
+        "free_cash_flow_reported": 40.0,
+        "funding_balance_note": "2026H1 资本开支后资金结余 40.0（百万）。该结果不单独证明盈利质量；资本开支性质与投资回报需另查证据，不由金额正负推断。",
+        "extras_present": [
+          "折旧摊销",
+          "资本开支",
+          "自由现金流（2026H1：经营现金流－资本开支，服务端复算）"
+        ],
+        "explanatory_present": [
+          "折旧摊销"
+        ],
+        "derived_present": [
+          "资本开支",
+          "自由现金流（2026H1：经营现金流－资本开支，服务端复算）"
+        ],
+        "verdict": "盈利质量较好",
+        "note": "覆盖倍数 1.25，并已交叉核对 折旧摊销、资本开支、自由现金流（2026H1：经营现金流－资本开支，服务端复算）。",
+        "downgrade_note": "",
+        "strength": "usable"
+      },
+      "research_completeness": {
+        "version": "v1",
+        "items": [
+          {
+            "key": "earnings_decomposition",
+            "label": "盈利增长拆解",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "业务量",
+              "价格",
+              "成本效率",
+              "低基数",
+              "非经常性损益"
+            ],
+            "evidence": [
+              "payload 里没有可判定该项的字段或文字"
+            ],
+            "note": "至少三项因素须有证据支持事实及作用推导才计为完成；已检查、证据不足与未核验均不等于完成分析，不强求贡献百分比。"
+          },
+          {
+            "key": "cash_flow_and_capex",
+            "label": "现金流与资本开支",
+            "state": "done",
+            "state_label": "已完成",
+            "covered": [
+              "经营现金流",
+              "折旧摊销",
+              "资本开支",
+              "自由现金流"
+            ],
+            "gaps": [
+              "营运资本变动"
+            ],
+            "evidence": [
+              "服务端现金流质量判定：盈利质量较好",
+              "已覆盖：经营现金流、折旧摊销、资本开支、自由现金流"
+            ],
+            "note": "现金流 ÷ 净利之外，还须补到折旧摊销或营运资本变动（解释项）之一，再加一项资本开支/自由现金流。"
+          },
+          {
+            "key": "valuation_explanation",
+            "label": "估值分化解释",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "ROE/净资产回报口径",
+              "净资产口径",
+              "盈利周期位置",
+              "可比公司样本与筛选规则"
+            ],
+            "evidence": [
+              "payload 里没有可判定该项的字段或文字"
+            ],
+            "note": "低分位与高分位并存时必须解释（ROE/盈利周期/净资产口径），并说明可比样本与筛选规则。"
+          },
+          {
+            "key": "scenarios_and_counter_evidence",
+            "label": "情景与反证",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "结构化情景清单",
+              "反证或局限声明"
+            ],
+            "evidence": [
+              "本次 payload 未带反方检查结果，反证以局限声明判定"
+            ],
+            "note": "情景须同时给触发条件与失效条件，并留下反证（反方检查最强反证或 ≥3 条局限声明）。"
+          }
+        ],
+        "done_count": 1,
+        "partial_count": 0,
+        "missing_count": 3,
+        "score": 0.25,
+        "complete": false,
+        "headline": "关键研究项缺失：盈利增长拆解（缺失）；估值分化解释（缺失）；情景与反证（缺失）——研究完成度 1/4，字数只作辅助提示，不能替代论证。",
+        "word_count": 18,
+        "word_count_mode": {
+          "mode": "standard",
+          "label": "标准版",
+          "min": 2000,
+          "max": 3500
+        },
+        "word_count_note": "正文 18 字，低于标准版建议区间 2000-3500 字；字数只作辅助提示，不参与完成度判定。",
+        "word_count_advisory": true,
+        "warnings": [
+          "关键研究项缺失（盈利增长拆解，完成度 1/4）：至少三项因素须有证据支持事实及作用推导才计为完成；已检查、证据不足与未核验均不等于完成分析，不强求贡献百分比。当前缺 业务量、价格、成本效率、低基数；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。",
+          "关键研究项缺失（估值分化解释，完成度 1/4）：低分位与高分位并存时必须解释（ROE/盈利周期/净资产口径），并说明可比样本与筛选规则。当前缺 ROE/净资产回报口径、净资产口径、盈利周期位置、可比公司样本与筛选规则；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。",
+          "关键研究项缺失（情景与反证，完成度 1/4）：情景须同时给触发条件与失效条件，并留下反证（反方检查最强反证或 ≥3 条局限声明）。当前缺 结构化情景清单、反证或局限声明；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。"
+        ],
+        "note": "完成度由 payload 的结构化拆解块与正文探针**确定性推导**，不采信模型自评；探针命不中即按缺口如实标注，不补写模型没说过的内容。"
+      },
+      "source_catalog": [
+        {
+          "source_id": "S4",
+          "name": "财务摘要与派生指标",
+          "url": "",
+          "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+          "documents": [],
+          "data_date": "",
+          "retrieved_at": "",
+          "quality": "",
+          "scope_note": "财务为数据商 F10 摘要（二次分发）：可核对绝对值与同比，不构成审计级证据。 未记录数据日期。",
+          "cited": true,
+          "used_by": []
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "operating_cash_flow": 100,
+      "net_income": 80,
+      "capex": 60,
+      "depreciation_amortization": 20,
+      "free_cash_flow": 40,
+      "metric_metadata": {
+        "operating_cash_flow": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "CNY",
+          "sources": [
+            "S4"
+          ]
+        },
+        "net_income": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "USD",
+          "sources": [
+            "S4"
+          ]
+        },
+        "capex": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "USD",
+          "sources": [
+            "S4"
+          ]
+        },
+        "depreciation_amortization": {
+          "period": "2026H1",
+          "unit": "百万",
+          "currency": "USD",
+          "sources": [
+            "S4"
+          ]
+        }
+      }
+    },
+    "report": {
+      "ok": true,
+      "symbol": "600001",
+      "title": "合成币种口径验收",
+      "report": "模型原文保留，金额尚需核验 [S4]。",
+      "citations": [
+        "S4"
+      ],
+      "limitations": [],
+      "confidence": "low",
+      "model": "synthetic",
+      "source_keys": [
+        "S4"
+      ],
+      "source_errors": {},
+      "generated_at": "2026-10-26T00:00:00Z",
+      "cash_flow_quality": {
+        "version": "v1",
+        "metric_metadata": {
+          "operating_cash_flow": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "CNY"
+          },
+          "net_income": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "USD"
+          },
+          "depreciation_amortization": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "USD"
+          },
+          "capex": {
+            "period": "2026H1",
+            "unit": "百万",
+            "sources": [
+              "S4"
+            ],
+            "currency": "USD"
+          }
+        },
+        "currency_policy": "required",
+        "periods": [],
+        "operating_cash_flow": 100.0,
+        "net_income": 80.0,
+        "coverage_ratio": null,
+        "operating_cash_flow_period": "2026H1",
+        "capex_period": "2026H1",
+        "free_cash_flow_derived": false,
+        "depreciation_amortization": 20.0,
+        "working_capital": null,
+        "working_capital_change": null,
+        "capex": 60.0,
+        "free_cash_flow": null,
+        "free_cash_flow_reported": 40.0,
+        "funding_balance_note": "未能按同期间、同单位复算自由现金流，无法判断资本开支后的资金余缺。",
+        "extras_present": [],
+        "explanatory_present": [],
+        "derived_present": [
+          "资本开支"
+        ],
+        "verdict": "不足以判断盈利质量",
+        "note": "覆盖倍数未计算：经营现金流与归母净利润的期间、单位或币种缺失、不一致，或期间声明冲突，原值保留，不对盈利质量作判断。 解释项缺失或期间、单位不一致；折旧摊销和营运资本原值保留，但不用于抬高结论强度。 自由现金流未计算： 币种缺失或不一致，停止计算，不自动换汇。",
+        "downgrade_note": "",
+        "strength": "insufficient"
+      },
+      "research_completeness": {
+        "version": "v1",
+        "items": [
+          {
+            "key": "earnings_decomposition",
+            "label": "盈利增长拆解",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "业务量",
+              "价格",
+              "成本效率",
+              "低基数",
+              "非经常性损益"
+            ],
+            "evidence": [
+              "payload 里没有可判定该项的字段或文字"
+            ],
+            "note": "至少三项因素须有证据支持事实及作用推导才计为完成；已检查、证据不足与未核验均不等于完成分析，不强求贡献百分比。"
+          },
+          {
+            "key": "cash_flow_and_capex",
+            "label": "现金流与资本开支",
+            "state": "partial",
+            "state_label": "部分完成",
+            "covered": [
+              "经营现金流"
+            ],
+            "gaps": [
+              "折旧摊销",
+              "营运资本变动",
+              "资本开支",
+              "自由现金流"
+            ],
+            "evidence": [
+              "未通过期间、单位或币种校验，原值仅留痕、不计完成度：折旧摊销、资本开支",
+              "服务端现金流质量判定：不足以判断盈利质量",
+              "已覆盖：经营现金流",
+              "只报了经营现金流对净利的覆盖倍数——覆盖倍数本身不等于盈利质量，折旧摊销与营运资本变动才解释它为何是这个数。"
+            ],
+            "note": "现金流 ÷ 净利之外，还须补到折旧摊销或营运资本变动（解释项）之一，再加一项资本开支/自由现金流。"
+          },
+          {
+            "key": "valuation_explanation",
+            "label": "估值分化解释",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "ROE/净资产回报口径",
+              "净资产口径",
+              "盈利周期位置",
+              "可比公司样本与筛选规则"
+            ],
+            "evidence": [
+              "payload 里没有可判定该项的字段或文字"
+            ],
+            "note": "低分位与高分位并存时必须解释（ROE/盈利周期/净资产口径），并说明可比样本与筛选规则。"
+          },
+          {
+            "key": "scenarios_and_counter_evidence",
+            "label": "情景与反证",
+            "state": "missing",
+            "state_label": "缺失",
+            "covered": [],
+            "gaps": [
+              "结构化情景清单",
+              "反证或局限声明"
+            ],
+            "evidence": [
+              "本次 payload 未带反方检查结果，反证以局限声明判定"
+            ],
+            "note": "情景须同时给触发条件与失效条件，并留下反证（反方检查最强反证或 ≥3 条局限声明）。"
+          }
+        ],
+        "done_count": 0,
+        "partial_count": 1,
+        "missing_count": 3,
+        "score": 0.0,
+        "complete": false,
+        "headline": "关键研究项缺失：盈利增长拆解（缺失）；现金流与资本开支（部分完成）；估值分化解释（缺失）；情景与反证（缺失）——研究完成度 0/4，字数只作辅助提示，不能替代论证。",
+        "word_count": 18,
+        "word_count_mode": {
+          "mode": "standard",
+          "label": "标准版",
+          "min": 2000,
+          "max": 3500
+        },
+        "word_count_note": "正文 18 字，低于标准版建议区间 2000-3500 字；字数只作辅助提示，不参与完成度判定。",
+        "word_count_advisory": true,
+        "warnings": [
+          "关键研究项缺失（盈利增长拆解，完成度 0/4）：至少三项因素须有证据支持事实及作用推导才计为完成；已检查、证据不足与未核验均不等于完成分析，不强求贡献百分比。当前缺 业务量、价格、成本效率、低基数；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。",
+          "关键研究项部分完成（现金流与资本开支，完成度 0/4）：现金流 ÷ 净利之外，还须补到折旧摊销或营运资本变动（解释项）之一，再加一项资本开支/自由现金流。当前缺 折旧摊销、营运资本变动、资本开支、自由现金流；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。",
+          "关键研究项缺失（估值分化解释，完成度 0/4）：低分位与高分位并存时必须解释（ROE/盈利周期/净资产口径），并说明可比样本与筛选规则。当前缺 ROE/净资产回报口径、净资产口径、盈利周期位置、可比公司样本与筛选规则；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。",
+          "关键研究项缺失（情景与反证，完成度 0/4）：情景须同时给触发条件与失效条件，并留下反证（反方检查最强反证或 ≥3 条局限声明）。当前缺 结构化情景清单、反证或局限声明；下一步：补上述项的来源与计算口径——无法拆解的因素如实留空，服务端不代填数字，本项按证据不足降级对待。"
+        ],
+        "note": "完成度由 payload 的结构化拆解块与正文探针**确定性推导**，不采信模型自评；探针命不中即按缺口如实标注，不补写模型没说过的内容。"
+      },
+      "source_catalog": [
+        {
+          "source_id": "S4",
+          "name": "财务摘要与派生指标",
+          "url": "",
+          "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+          "documents": [],
+          "data_date": "",
+          "retrieved_at": "",
+          "quality": "",
+          "scope_note": "财务为数据商 F10 摘要（二次分发）：可核对绝对值与同比，不构成审计级证据。 未记录数据日期。",
+          "cited": true,
+          "used_by": []
+        }
+      ]
+    }
+  }
+]

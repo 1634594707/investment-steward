@@ -1,5 +1,5 @@
 import type { Evidence } from "@investment-steward/domain-contracts";
-import { formatDate } from "../state/format";
+import { FINANCIAL_PERIOD_LABELS, formatDate } from "../state/format";
 import { ActionModeChip } from "../components/ActionModeChip";
 import { useFocusTrap } from "../components/useFocusTrap";
 
@@ -42,6 +42,12 @@ export function EvidenceDrawer({ items, evidenceId, onClose }: Props) {
           <dd>{formatDate(item.collected_at)}</dd>
           <dt>观测时间</dt>
           <dd>{item.observed_at ? formatDate(item.observed_at) : "—"}</dd>
+          <dt>发布时间</dt>
+          <dd>{item.published_at ? formatDate(item.published_at) : "未提供"}</dd>
+          <dt>报告期末</dt>
+          <dd>{item.financial_period_end ?? "未提供"}</dd>
+          <dt>财务口径</dt>
+          <dd>{FINANCIAL_PERIOD_LABELS[item.financial_period_basis ?? "unknown"]}</dd>
           {item.valid_until && (
             <>
               <dt>有效期至</dt>

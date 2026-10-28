@@ -6,7 +6,7 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -78,6 +78,7 @@ from investment_steward_core.domain import (
     DecisionEntry,
     Evidence,
     EvidenceRelation,
+    EvidenceSearchScope,
     EvidenceStatus,
     EvidenceType,
     FreshnessPatrolResult,
@@ -688,6 +689,7 @@ class ThesisRequest(BaseModel):
     supporting_conditions: list[str] = Field(default_factory=list)
     invalidation_conditions: list[str] = Field(default_factory=list)
     observation_metrics: list[str] = Field(default_factory=list)
+    evidence_refs: list[UUID] | None = Field(default=None, max_length=100)
     status: str = "active"
 
 
@@ -722,6 +724,7 @@ class DecisionOutcomeRequest(BaseModel):
 
 class ResearchQuestionRequest(BaseModel):
     user_question: str = Field(min_length=1, max_length=10000)
+    evidence_scope: EvidenceSearchScope | None = None
 
 
 class ResearchTransitionRequest(BaseModel):
@@ -1721,8 +1724,16 @@ def create_app(settings: CoreSettings) -> FastAPI:
         unsupported = [key for key in body if key not in known_keys]
         return {"ok": True, "tables": report, "unsupported_keys": unsupported}
 
+    def _collab_storage_guard(core: CoreState = Depends(_require_session)) -> Iterator[CoreState]:
+        """同目录协同与整库维护互斥，覆盖完整请求（含最终报告归档）。"""
+        try:
+            with collab_engine.run_guard(core.database, "storage-maintenance"):
+                yield core
+        except collab_engine.CollabBusyError as exc:
+            raise HTTPException(status_code=409, detail="协同任务或数据维护正在执行，请等待原请求结束后重试") from exc
+
     @app.post("/import/apply")
-    def import_apply(body: ImportApplyRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+    def import_apply(body: ImportApplyRequest, core: CoreState = Depends(_collab_storage_guard)) -> dict[str, object]:
         """正式恢复（E02）：恢复前强制 rotate_backup（可回退点），按表 merge/replace 写入，写入审计。
 
         - confirm 缺省 False → 422（显式确认要求，不做无提示覆盖）；
@@ -1804,6 +1815,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "sync_inbox", "sync_outbox", "sync_state", "audit_events", "macro_cache",
                 ],
                 "quant_artifacts_note": "导出为索引行（content_hash + file_name）；制品二进制在制品目录",
+                "collab_runs_note": "包含协同任务证据快照及阶段结果；不含设备数据库路径。异机续跑须重新配置原模型方案与凭据，缺失或变化时停止生成。",
             },
             "policies": db.list_policies(uid),
             "holdings": db.list_holdings(uid),
@@ -2580,13 +2592,21 @@ def create_app(settings: CoreSettings) -> FastAPI:
         )
 
     @app.get("/evidence/collab-state")
-    def collab_run_state(run_id: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
-        """v23 协同流水线③查询运行状态（页面重挂后恢复视图；运行态在内存，重启清空）。
+    def collab_run_state(run_id: str | None = None, core: CoreState = Depends(_collab_storage_guard)) -> dict[str, object]:
+        """查询已保存任务；不传 run_id 时列出最近未归档任务，不调用模型。
 
         ★ 必须注册在 GET /evidence/{evidence_id}（UUID 通配）之前，否则被截获 422
         （与 /evidence/macro/weights 的路由顺序教训同源）。
         """
-        run = collab_engine.get_run(run_id)
+        if run_id is None:
+            return {"ok": True, "items": [
+                collab_engine.recovery_summary(item)
+                for item in core.database.list_recoverable_collab_runs()
+            ]}
+        try:
+            run = collab_engine.get_run(run_id, core.database)
+        except collab_engine.CollabBusyError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="协同运行不存在或已过期")
         return {"ok": True, "run": collab_engine.public_view(run)}
@@ -3303,33 +3323,26 @@ def create_app(settings: CoreSettings) -> FastAPI:
         }
 
     @app.post("/storage/backups/{name}/restore")
-    def restore_storage_backup(name: str, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+    def restore_storage_backup(name: str, core: CoreState = Depends(_collab_storage_guard)) -> dict[str, object]:
         """从指定备份恢复当前库（E03）。
 
-        安全顺序：① 校验文件名（仅允许 backups 目录内 steward-*.sqlite3，拒绝任何路径穿越）；
-        ② 先 rotate_backup 给当前数据留回退点；③ 经 SQLite backup API 在线还原（WAL 安全）；
-        ④ 写审计 storage.backup.restored。
+        临时副本先验证及迁移，通过后生成回退点再还原；复制失败自动回退，成功写审计。
         """
         import re as _re
-        import sqlite3 as _sqlite3
 
         if not _re.fullmatch(r"steward-\d{8}-\d{6}(?:-\d+)?\.sqlite3", name):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"备份文件名不合法：{name}")
         backup_path = core.layout.backups / name
         if not backup_path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"备份不存在：{name}")
-        from investment_steward_core.storage.database import rotate_backup
+        from investment_steward_core.storage.backup_restore import restore_backup
 
-        rollback_point = rotate_backup(core.layout.database_file)
-        source = _sqlite3.connect(f"file:{backup_path.as_posix()}?mode=ro", uri=True)
         try:
-            target = _sqlite3.connect(core.layout.database_file)
-            try:
-                source.backup(target)
-            finally:
-                target.close()
-        finally:
-            source.close()
+            rollback_point = restore_backup(backup_path, core.layout.database_file)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         _audit(
             core,
             "storage.backup.restored",
@@ -4289,6 +4302,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
     @app.post("/thesis", response_model=Thesis, status_code=status.HTTP_201_CREATED)
     def create_thesis(body: ThesisRequest, core: CoreState = Depends(_require_session)) -> Thesis:
         existing = core.database.get_thesis(body.thesis_id, core.local_user_id) if body.thesis_id else None
+        refs = _thesis_evidence_refs(body, existing, core)
         thesis = Thesis(
             thesis_id=existing.thesis_id if existing else (body.thesis_id or uuid4()),
             user_id=core.local_user_id,
@@ -4298,12 +4312,24 @@ def create_app(settings: CoreSettings) -> FastAPI:
             supporting_conditions=body.supporting_conditions,
             invalidation_conditions=body.invalidation_conditions,
             observation_metrics=body.observation_metrics,
+            evidence_refs=refs,
             status=ThesisStatus(body.status),
             created_at=existing.created_at if existing else datetime.now(UTC),
         )
         core.database.upsert_thesis(thesis)
         _audit(core, "thesis.updated" if existing else "thesis.created", "thesis", str(thesis.thesis_id))
         return thesis
+
+    def _thesis_evidence_refs(body: ThesisRequest, existing: Thesis | None, core: CoreState) -> list[UUID]:
+        if body.evidence_refs is None and existing and body.instrument == existing.instrument:
+            return existing.evidence_refs
+        refs = list(dict.fromkeys(body.evidence_refs if body.evidence_refs is not None else
+                                  existing.evidence_refs if existing else []))
+        for evidence_id in refs:
+            evidence = core.database.get_evidence(evidence_id, core.local_user_id)
+            if evidence is None or body.instrument not in evidence.subject_refs:
+                raise HTTPException(status_code=422, detail="关联证据不可用或标的与投资逻辑不匹配")
+        return refs
 
     @app.put("/thesis/{thesis_id}", response_model=Thesis)
     def update_thesis(
@@ -4314,6 +4340,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             raise HTTPException(status_code=404, detail="thesis not found")
         if not normalize_instrument(body.instrument).key:
             raise HTTPException(status_code=422, detail="instrument 无法解析为可识别标的")
+        refs = _thesis_evidence_refs(body, existing, core)
         thesis = existing.model_copy(
             update={
                 "instrument": body.instrument,
@@ -4322,6 +4349,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 "supporting_conditions": body.supporting_conditions,
                 "invalidation_conditions": body.invalidation_conditions,
                 "observation_metrics": body.observation_metrics,
+                "evidence_refs": refs,
                 "status": ThesisStatus(body.status),
                 "updated_at": datetime.now(UTC),
             }
@@ -4437,6 +4465,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             user_id=core.local_user_id,
             status=RunStatus.CREATED,
             user_question=body.user_question,
+            evidence_scope=body.evidence_scope,
         )
         core.database.upsert_research_run(run)
         _audit(core, "research.run.created", "research_run", str(run.run_id))
@@ -7004,6 +7033,10 @@ def create_app(settings: CoreSettings) -> FastAPI:
         for row in rows:
             collected = now
             published = parse_notice_timestamp(row.published_raw) or collected
+            try:
+                period_end = date.fromisoformat(row.period_end[:10])
+            except ValueError:
+                period_end = None
             item_snapshot = "；".join(f"{k}={v}" for k, v in row.items.items())
             evidence = Evidence(
                 evidence_id=uuid4(),
@@ -7022,6 +7055,9 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 producer_release="0.1.0",
                 schema_version="1.0",
                 summary=f"{row.statement_type}·{row.period_end or '未知报告期'}：{item_snapshot or '无细目'}",
+                financial_period_end=period_end,
+                financial_period_basis=("instant" if row.statement_type == "balance" else "cumulative"
+                                        if row.statement_type in {"income", "cash_flow"} else "unknown"),
                 raw_locator=raw_locator_for_financials(symbol, row),
                 content_hash=row.identity,
                 relation="unknown",
@@ -7787,6 +7823,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         )
         raw_cash_flow = parsed.get("cash_flow_quality") if isinstance(parsed.get("cash_flow_quality"), dict) else {}
         cash_flow_block = report_quality.cash_flow_quality(
+            require_currency=True,
             operating_cash_flow=raw_cash_flow.get("operating_cash_flow"),
             net_income=raw_cash_flow.get("net_income"),
             depreciation_amortization=raw_cash_flow.get("depreciation_amortization"),
@@ -7981,6 +8018,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "source_errors": source_errors,
             "generated_at": datetime.now(UTC).isoformat(),
         }
+        response["source_health"] = report_quality.report_source_health(response, today=datetime.now(UTC).date())
         response["source_catalog"] = analysis_followup.source_catalog(
             followup_research.build_source_catalog(response)
         )
@@ -8197,7 +8235,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         }
 
     @app.post("/evidence/collab-run")
-    def collab_run_create(body: CollabRunCreate, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+    def collab_run_create(body: CollabRunCreate, core: CoreState = Depends(_collab_storage_guard)) -> dict[str, object]:
         """v23 协同流水线①创建运行：此刻定稿证据包（证据同源），角色由 collab-next 依次推进。"""
         installation = core.database.get_plugin_installation("official.cn-market-data")
         if installation is None or installation.state != PluginInstallationState.ENABLED:
@@ -8245,44 +8283,67 @@ def create_app(settings: CoreSettings) -> FastAPI:
             tech_summary=tech_summary,
             sources=sources,
             source_errors=source_errors,
-            profile_id=str(body.profile_id) if body.profile_id else None,
+            profile_id=str(profile.profile_id),
             model=profile.model,
             stage_profiles=stage_profiles,
             stage_models=stage_models,
             # v28：来源数据日期 + 同业样本数随运行快照留存（过期判定与结论卡估值标签共用）。
             evidence_meta=evidence_meta,
             report_mode=report_mode,
+            profile_fingerprints={
+                stage: collab_engine.profile_fingerprint(
+                    profiles_by_id[UUID(stage_profiles[stage])] if stage in stage_profiles else profile
+                )
+                for stage in collab_engine.STAGES
+            },
         )
+        run["_database_path"] = str(core.database.path.resolve())
+        core.database.save_collab_run(run)
         _audit(core, "evidence.collab.created", "symbol", symbol)
         return {"ok": True, "run": collab_engine.public_view(run)}
 
+    @app.post("/evidence/collab-cancel")
+    def collab_run_cancel(body: CollabNextRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+        run = core.database.cancel_collab_run(body.run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="未找到协同运行")
+        if collab_engine.is_done(run):
+            raise HTTPException(status_code=409, detail="任务已经完成，无法取消；已有结果保留")
+        return {"ok": True, "run": collab_engine.public_view(run)}
+
     @app.post("/evidence/collab-next")
-    def collab_run_next(body: CollabNextRequest, core: CoreState = Depends(_require_session)) -> dict[str, object]:
+    def collab_run_next(body: CollabNextRequest, core: CoreState = Depends(_collab_storage_guard)) -> dict[str, object]:
         """v23 协同流水线②执行下一个角色（用户拍板：角色不同时进行，依次执行）。
 
         一次调用只推进一个角色；失败阶段再次调用即重试同阶段，不跳过。
         """
-        run = collab_engine.get_run(body.run_id)
+        try:
+            run = collab_engine.get_run(body.run_id, core.database)
+        except collab_engine.CollabBusyError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         if run is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="协同运行不存在或已过期（运行态在内存，重启后清空）"
+                status_code=status.HTTP_404_NOT_FOUND, detail="未找到协同运行，请确认当前使用的数据目录"
             )
+        if run.get("cancelled_at"):
+            raise HTTPException(status_code=409, detail="任务已本地取消；远端可能已计费，请重新创建任务")
         if not collab_engine.is_done(run):
+            profiles = {str(item.profile_id): item for item in core.database.list_model_profiles()}
+            conflict = collab_engine.resume_conflict(run, profiles)
+            if conflict:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=conflict)
             if not core.settings.model_access_enabled:
                 return {"ok": False, "stage": "model_access_disabled", "detail": "模型出网已关闭（STEWARD_MODEL_ACCESS=0），未发起任何模型请求"}
             # v23 角色级模型：当前阶段优先用 stage_profiles 指定的方案，缺省回落运行默认（使用中）。
             current_stage = run["stages"][run["next_index"]]["stage"]
             stage_profile_id = (run.get("stage_profiles") or {}).get(current_stage)
-            profile = _resolve_model_profile(
-                core,
-                UUID(stage_profile_id) if stage_profile_id else (UUID(run["profile_id"]) if run["profile_id"] else None),
-            )
+            profile = profiles[stage_profile_id or run["profile_id"]]
             try:
                 stage = collab_engine.execute_next(core, run, profile, resolve_store(core.database))
             except collab_engine.CollabBusyError as exc:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         else:
-            stage = {"stage": "revise", "status": "done", "result": None}
+            stage = run["stages"][-1]
         response: dict[str, object] = {
             "ok": True,
             "done": collab_engine.is_done(run),
@@ -8294,6 +8355,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
         if stage["stage"] == "revise" and stage["status"] == "done" and isinstance(stage.get("result"), dict):
             parsed = stage["result"]
             try:
+                existing = core.database.get_ai_research_report(run["run_id"])
+                if existing is not None:
+                    response["collab_report_id"] = existing["report_id"]
+                    response["persisted"] = True
+                    return response
                 collab_meta = run.get("evidence_meta") or {}
                 collab_watchpoints = report_quality.normalize_watchpoints(parsed.get("watchpoints"))
                 collab_valuation = report_quality.normalize_valuation(parsed.get("valuation"))
@@ -8332,7 +8398,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "section_states": stage.get("section_states", []),
                     # v31 §2.2：生成留痕（提示词版本 / 各角色模型 / 已完成阶段 / 模式）。
                     "generation_trace": {
-                        "prompt_version": STOCK_REPORT_PROMPT_VERSION,
+                        "prompt_version": run.get("prompt_version"),
                         "model": run["model"],
                         "stage_models": dict(run.get("stage_models") or {}),
                         "stages_completed": [
@@ -8380,12 +8446,12 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "research_completeness": parsed.get("research_completeness"),
                     "limitations": parsed.get("limitations", []),
                     "confidence": str(parsed.get("confidence", "low")),
-                    "prompt_policy_version": STOCK_REPORT_PROMPT_VERSION,
+                    "prompt_policy_version": run.get("prompt_version"),
                     "model": f"{run['model']}·协同流水线",
                     "source_keys": run["source_keys"],
                     "source_errors": run["source_errors"],
-                    "generated_at": datetime.now(UTC).isoformat(),
-                    "report_id": str(uuid4()),
+                    "generated_at": stage.get("completed_at") or run["created_at"],
+                    "report_id": run["run_id"],
                     "kind": "stock",
                     "subject": run["symbol"],
                     # v31 §八.4：不完整报告仍落库为草稿（is_draft），不混入正式报告数量。
@@ -8415,6 +8481,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         limit: int = 50,
         offset: int = 0,
         count_only: bool = False,
+        include_source_health: bool = False,
         core: CoreState = Depends(_require_session),
     ) -> dict[str, object]:
         """AI 研究产出列表（v22；B01 桌面端升级路线图 2026-09-18：筛选/分页/计数下沉 SQL）。
@@ -8425,6 +8492,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         - items 为**轻量投影**（report_id/kind/subject/generated_at/model/is_draft/title/topic/symbol，
           不带 payload），回看全文走 GET /ai-research/reports/{report_id}。
         - counts/models 为全局真值计数与模型清单（不受筛选影响）；count_only=true 跳过 items 查询。
+        - include_source_health=true 为当前页个股报告附加按查看日重查的来源健康摘要，不返回正文。
         """
         if kind is not None and kind not in ("direction", "stock"):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="kind 仅支持 direction | stock")
@@ -8444,6 +8512,17 @@ def create_app(settings: CoreSettings) -> FastAPI:
             limit=page_limit,
             offset=page_offset,
         )
+        if include_source_health and not count_only:
+            payloads = core.database.get_ai_research_reports_by_ids([
+                str(item["report_id"]) for item in items if item.get("kind") == "stock"
+            ])
+            today = datetime.now(UTC).date()
+            items = [
+                {**item, "source_health": report_quality.report_source_health(
+                    payloads.get(str(item["report_id"]), {}), today=today)}
+                if item.get("kind") == "stock" else item
+                for item in items
+            ]
         facets = core.database.ai_research_report_facets()
         return {
             "ok": True,
@@ -8471,6 +8550,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         的口径必须屏显、导出、追问三处同源，否则同一条报告会在三个地方说出三种话。
         """
         hydrated = dict(item)
+        hydrated["source_health"] = report_quality.report_source_health(hydrated, today=datetime.now(UTC).date())
         cash = hydrated.get("cash_flow_quality")
         # Current normalization always retains free_cash_flow_reported, even when None.
         # Legacy blocks lack that field; recheck their inputs without changing storage.
@@ -10597,7 +10677,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
             "window": window,
             "since": (datetime.now(UTC) - timedelta(days=windows[window])).isoformat(),
             "summaries": core.database.summarize_model_usage(windows[window]),
-            "note": "usage 缺失的调用 token 记 null（不按字数反推）；retried_calls 为发生 thinking-disabled 重试的调用数。",
+            "recent_calls": core.database.list_recent_model_calls(windows[window]),
+            "note": "保留已知用量，缺失或部分缺失会明确标注；retried_calls 为发生第二次请求的调用数，失败请求也可能计费。",
         }
 
     @app.get("/model-profiles", response_model=list[ModelProfile])

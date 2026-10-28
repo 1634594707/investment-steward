@@ -61,6 +61,15 @@
       "title": "Observation Metrics",
       "type": "array"
     },
+    "evidence_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
     "status": {
       "$ref": "#/$defs/ThesisStatus",
       "default": "active"

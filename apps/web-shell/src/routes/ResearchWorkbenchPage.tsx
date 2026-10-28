@@ -39,6 +39,8 @@ interface WorkbenchProps {
   /** 战法雷达「AI 报告」跳转预填的标的代码（AppShell 一次性下发）。 */
   /** v33 D06：雷达/方向 → 单股研究的结构化交接（唯一 requestId）。 */
   reportHandoff: ReportHandoff | null;
+  reportViewRequest?: { requestId: string; reportId: string } | null;
+  collabViewRequest?: { requestId: string; runId: string } | null;
 }
 
 export function ResearchWorkbenchPage({
@@ -51,6 +53,8 @@ export function ResearchWorkbenchPage({
   onSendToTactics,
   onNavigate,
   reportHandoff,
+  reportViewRequest,
+  collabViewRequest,
 }: WorkbenchProps) {
   // B2：AI 研究产出领域数据自取（回调 props 已清零；别名对齐既有局部命名，页面主体零改动）。
   const client = useMemo(() => createCoreClient(), []);
@@ -66,6 +70,9 @@ export function ResearchWorkbenchPage({
     synthesizeCompareReports: onSynthesizeCompare,
     createCollabRun: onCreateCollabRun,
     runNextCollabStage: onNextCollabStage,
+    loadSavedCollabRuns: onLoadSavedCollabRuns,
+    loadCollabRun: onLoadCollabRun,
+    cancelCollabRun: onCancelCollabRun,
     loadAiReports: onRefreshReports,
     loadAiReportDetail: onLoadReportDetail,
     deleteAiResearchReport: onDeleteReport,
@@ -234,7 +241,36 @@ export function ResearchWorkbenchPage({
   useEffect(() => {
     studyGenerationRef.current += 1;
   }, [reportHandoff?.requestId]);
-
+  const handledReportViewRequest = useRef<string | null>(null);
+  const handledCollabNavigation = useRef<string | null>(null);
+  useEffect(() => {
+    if (collabViewRequest && active && handledCollabNavigation.current !== collabViewRequest.requestId) {
+      handledCollabNavigation.current = collabViewRequest.requestId;
+      setSection("reports"); setTab("stock");
+    }
+  }, [collabViewRequest?.requestId, active]);
+  useEffect(() => {
+    if (!reportViewRequest || !active || handledReportViewRequest.current === reportViewRequest.requestId) return;
+    let cancelled = false;
+    const generation = ++studyGenerationRef.current;
+    void onLoadReportDetail(reportViewRequest.reportId).then((full) => {
+      if (cancelled || generation !== studyGenerationRef.current) return;
+      handledReportViewRequest.current = reportViewRequest.requestId;
+      if (!full || full.kind !== "stock") {
+        setReportError("报告读取失败或已删除，请重新打开。");
+        return;
+      }
+      const report = full as unknown as StockReport;
+      updateCompareJob({ results: [{ symbol: full.subject, name: report.model || full.subject,
+        profileId: null, report, error: null }], activeIndex: 0 });
+      setTab("stock");
+      setSection("reports");
+      setReportError(null);
+      historyReadingPending.current = true;
+    }).catch(() => { if (!cancelled && generation === studyGenerationRef.current) setReportError("报告读取失败，请重新打开。"); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportViewRequest?.requestId, active]);
   /** B01/B02（2026-09-15 路线图）：单股生成透传所选模型与档位；失败不再转固定文案，
    * 由 reportErrors 把后端 stage/detail/source_errors 呈现为「原因 + 恢复动作」。 */
   function generateReport(target: string, question: string, barsLimit: number, profileId?: string | null, mode?: string): void {
@@ -392,6 +428,10 @@ export function ResearchWorkbenchPage({
         onSynthesizeCompare={onSynthesizeCompare}
         onCreateCollabRun={onCreateCollabRun}
         onNextCollabStage={onNextCollabStage}
+        onLoadSavedCollabRuns={onLoadSavedCollabRuns}
+        onLoadCollabRun={onLoadCollabRun}
+        collabViewRequest={active ? collabViewRequest : null}
+        onCancelCollabRun={onCancelCollabRun}
         onCollabFinished={appendCollabReport}
         onRefreshReports={onRefreshReports}
         onCreateFollowUp={onCreateFollowUp}

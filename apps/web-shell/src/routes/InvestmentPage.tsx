@@ -6,6 +6,7 @@ import { CardSlot } from "../cards/CardSlot";
 import { KLineCard } from "../cards/KLineCard";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EvidenceRow } from "../components/EvidenceRow";
+import { HistoricalEvidenceRefs, evidenceReferenceStatus } from "../components/HistoricalEvidenceRefs";
 import { formatDate } from "../state/format";
 import { useFocusTrap } from "../components/useFocusTrap";
 import { DemoNotice } from "../components/DemoNotice";
@@ -74,7 +75,7 @@ interface Props {
   onDeleteHolding: (holdingId: string, note?: string) => Promise<boolean>;
   /** M4-E01/E02：标的查找（代码 → 名称 / 名称 → 代码）。空结果与服务不可用分两种返回。 */
   onLookupInstrument: (query: string) => Promise<InstrumentLookupOutcome>;
-  onCreateThesis: (input: { instrument: string; original_statement: string; core_assumptions: string[]; supporting_conditions: string[]; invalidation_conditions: string[]; observation_metrics: string[] }) => Promise<boolean>;
+  onCreateThesis: (input: { instrument: string; original_statement: string; core_assumptions: string[]; supporting_conditions: string[]; invalidation_conditions: string[]; observation_metrics: string[]; evidence_refs?: string[] }) => Promise<boolean>;
   onCreatePolicyDraft: (input: object) => Promise<InvestmentPolicyVersion | null>;
   onConfirmPolicy: (policyId: string, summary: string) => Promise<boolean>;
   onSelectInstrument: (instrument: string) => void;
@@ -133,6 +134,7 @@ export function InvestmentPage({
   const [editSupporting, setEditSupporting] = useState("");
   const [editInvalidation, setEditInvalidation] = useState("");
   const [editMetrics, setEditMetrics] = useState("");
+  const [editEvidenceRefs, setEditEvidenceRefs] = useState<string[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -338,6 +340,7 @@ export function InvestmentPage({
     setEditSupporting((thesis?.supporting_conditions ?? []).join("\n"));
     setEditInvalidation((thesis?.invalidation_conditions ?? []).join("\n"));
     setEditMetrics((thesis?.observation_metrics ?? []).join("\n"));
+    setEditEvidenceRefs(thesis?.evidence_refs ?? []);
     setEditing(true);
     setEditError(null);
   }
@@ -352,6 +355,7 @@ export function InvestmentPage({
     setEditSupporting("");
     setEditInvalidation("");
     setEditMetrics("");
+    setEditEvidenceRefs([]);
     setEditError(null);
   }
 
@@ -359,6 +363,7 @@ export function InvestmentPage({
     if (!selected || thesisBusy) return;
     const statement = editStatement.trim();
     if (!statement) { setEditError("投资逻辑陈述不能为空。"); return; }
+    if (editEvidenceRefs.length > 100) { setEditError("关联证据最多 100 条。"); return; }
     setEditError(null);
     if (thesis) { setConfirmOpen(true); return; }
     setThesisBusy(true);
@@ -367,6 +372,7 @@ export function InvestmentPage({
         instrument: selected.instrument, original_statement: statement,
         core_assumptions: lines(editAssumptions), supporting_conditions: lines(editSupporting),
         invalidation_conditions: lines(editInvalidation), observation_metrics: lines(editMetrics),
+        evidence_refs: editEvidenceRefs,
       });
       if (!ok) throw new Error("Thesis not saved");
       setEditing(false);
@@ -385,6 +391,7 @@ export function InvestmentPage({
         core_assumptions: lines(editAssumptions), supporting_conditions: lines(editSupporting),
         invalidation_conditions: lines(editInvalidation), observation_metrics: lines(editMetrics),
         updated_at: new Date().toISOString(),
+        evidence_refs: editEvidenceRefs,
       });
       if (!ok) throw new Error("Thesis not saved");
       setConfirmOpen(false);
@@ -675,6 +682,23 @@ export function InvestmentPage({
                               <textarea aria-label="失效条件" value={editInvalidation} onChange={(event) => setEditInvalidation(event.target.value)} rows={3} placeholder="每行一条" />
                             </div>
                           </div>
+                          <fieldset className="thesis-panel" disabled={thesisBusy}>
+                            <legend>关联证据（{editEvidenceRefs.length}/100）</legend>
+                            <p className="form-hint">仅列出精确匹配当前标的的证据及已有引用。关联作为历史记录，不代表证据当前有效或假设已获验证。</p>
+                            {Array.from(new Set([...(thesis?.evidence_refs ?? []), ...editEvidenceRefs, ...evidence.filter((item) => item.subject_refs.includes(selected.instrument)).map((item) => item.evidence_id)])).map((id) => {
+                              const item = evidence.find((entry) => entry.evidence_id === id);
+                              const status = evidenceReferenceStatus(item);
+                              return <div key={id}>
+                                <label>
+                                  <input type="checkbox" checked={editEvidenceRefs.includes(id)}
+                                    disabled={!editEvidenceRefs.includes(id) && editEvidenceRefs.length >= 100}
+                                    onChange={(event) => setEditEvidenceRefs((current) => event.target.checked ? [...current, id] : current.filter((ref) => ref !== id))} />
+                                  {id} · {item ? `${item.source_name} · ${item.summary}` : "未挂载"}（{status}）
+                                </label>
+                                <button type="button" className="text-button" onClick={() => onOpenEvidence(id)}>查看证据 {id.slice(0, 8)}</button>
+                              </div>;
+                            })}
+                          </fieldset>
                         </div>
                       ) : (
                         <p className="thesis-copy">{thesis?.original_statement}</p>
@@ -711,6 +735,15 @@ export function InvestmentPage({
                           <ul className="answer-list">{thesis.invalidation_conditions.map((item) => <li key={item}>{item}</li>)}</ul>
                         </div>
                       </div>
+                    )}
+                    {!editing && thesis && (
+                      <section className="thesis-panel" aria-label="已关联证据">
+                        <h4 className="answer-block-title">历史关联证据</h4>
+                        <p className="form-hint">保留用户关联供追溯；状态按当前已加载详情显示，不代表假设成立或失效。</p>
+                        <HistoricalEvidenceRefs refs={thesis.evidence_refs ?? []}
+                          evidenceOf={(id) => evidence.find((item) => item.evidence_id === id)}
+                          onOpenEvidence={onOpenEvidence} />
+                      </section>
                     )}
                   </>
                 ) : (
@@ -906,6 +939,7 @@ export function InvestmentPage({
             { label: "支持条件", before: thesis.supporting_conditions.join("\n"), after: lines(editSupporting).join("\n") },
             { label: "失效条件", before: thesis.invalidation_conditions.join("\n"), after: lines(editInvalidation).join("\n") },
             { label: "观察指标", before: thesis.observation_metrics.join("\n"), after: lines(editMetrics).join("\n") },
+            { label: "关联证据", before: (thesis.evidence_refs ?? []).join("\n"), after: editEvidenceRefs.join("\n") },
           ]}
           busy={thesisBusy}
           error={editError}
