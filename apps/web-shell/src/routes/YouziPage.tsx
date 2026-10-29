@@ -241,7 +241,7 @@ export function YouziPage({ isDemo, pluginEnabled, onEnablePlugin, active, onOpe
     return (
       <section className="youzi-page">
         <header className="youzi-header">
-          <div><span className="youzi-tag">席位证据 · 游资雷达</span><h2>游资雷达</h2></div>
+          <div><h2>游资雷达</h2></div>
           <span>读席位、学游资；不构成买卖建议</span>
         </header>
         <div className="chart-pending">
@@ -250,7 +250,7 @@ export function YouziPage({ isDemo, pluginEnabled, onEnablePlugin, active, onOpe
           <p className="youzi-muted">
             启用后首次取数会访问公开席位数据；查询内容为交易日与证券代码，<strong>不包含你的持仓</strong>。
           </p>
-          <button className="primary-button mt-10" onClick={onEnablePlugin}>启用游资雷达 <span>→</span></button>
+          <button className="primary-button mt-10" onClick={onEnablePlugin}>启用游资雷达</button>
         </div>
       </section>
     );
@@ -259,7 +259,7 @@ export function YouziPage({ isDemo, pluginEnabled, onEnablePlugin, active, onOpe
   return (
     <section className="youzi-page">
       <header className="youzi-header">
-        <div><span className="youzi-tag">席位证据 · 游资雷达</span><h2>游资雷达</h2></div>
+        <div><h2>游资雷达</h2></div>
         <span>
           {today?.trading_day ? `交易日 ${dayLabel(today.trading_day)}` : "交易日待取数"}
           {isDemo ? " · 演示模式" : ""}

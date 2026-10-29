@@ -17,6 +17,7 @@ import { createCoreClient } from "../state/coreClient";
 import { useTactics } from "../hooks/useTactics";
 import type { TacticsHandoff } from "../state/handoff";
 import { useUiPrefs } from "../shell/uiprefs";
+import { readMaColors } from "../cards/chartTheme";
 import "./tactics.css";
 
 /* ---------- 数据形状（与 Core /tactics/* 同源） ---------- */
@@ -593,6 +594,11 @@ const DIRECTION_LABEL: Record<TacticSignal["direction"], string> = {
   neutral: "中性形态",
 };
 
+/** 行情供应方展示名（未登记的 provider 原样显示，保持来源可追溯）。 */
+const PROVIDER_LABEL: Record<string, string> = {
+  tencent: "腾讯行情",
+};
+
 const tacticNameOf = (catalog: TacticMeta[], id: string) =>
   catalog.find((item) => item.id === id)?.name ?? id;
 
@@ -974,8 +980,9 @@ function TacticsChart({ bars, signals }: { bars: TacticBar[]; signals: TacticSig
       color: bar.c >= bar.o ? colors.up : colors.down,
     })));
 
-    const ma5 = chart.addSeries(LineSeries, { color: "#7dc4ff", lineWidth: 1 });
-    const ma20 = chart.addSeries(LineSeries, { color: "#b9e6ca", lineWidth: 1 });
+    const ma = readMaColors();
+    const ma5 = chart.addSeries(LineSeries, { color: ma.ma5, lineWidth: 1 });
+    const ma20 = chart.addSeries(LineSeries, { color: ma.ma20, lineWidth: 1 });
     ma5.setData(movingAverage(bars, 5));
     ma20.setData(movingAverage(bars, 20));
 
@@ -1696,7 +1703,7 @@ export function TacticsPage({
   if (isDemo) {
     return (
       <section className="page-view tactics-page">
-        <header className="settings-heading"><div><span className="kicker">独立应用 · 战法插件</span><h2>战法雷达</h2></div></header>
+        <header className="settings-heading"><div><h2>战法雷达</h2></div></header>
         <div className="chart-pending">
           <strong>演示模式不可用</strong>
           <span>战法识别基于真实 K 线计算，演示数据不参与。连接本地 Core 后使用。</span>
@@ -1708,15 +1715,15 @@ export function TacticsPage({
   return (
     <section className="page-view tactics-page">
       <header className="settings-heading">
-        <div><span className="kicker">独立应用 · 战法插件</span><h2>战法雷达</h2></div>
+        <div><h2>战法雷达</h2></div>
         <span>{catalog.length} 个战法 · 信号只描述图形事实，不构成买卖建议</span>
       </header>
 
       {!pluginEnabled ? (
         <div className="chart-pending">
           <strong>战法插件未启用</strong>
-          <span>启用 official.stock-tactics 后开始扫描与观察。</span>
-          <button className="primary-button mt-10" onClick={onEnablePlugin}>启用战法雷达 <span>→</span></button>
+          <span>启用战法插件后开始扫描与观察。</span>
+          <button className="primary-button mt-10" onClick={onEnablePlugin}>启用战法雷达</button>
           {/* D05：交接数据保留——启用后回到本页即可按同一交接开始扫描 */}
           {tacticsHandoff && tacticsHandoff.pool.length > 0 && (
             <div className="key-note mt-10" data-testid="handoff-held">
@@ -2135,7 +2142,7 @@ export function TacticsPage({
                 </button>
               )}
               {marketResult?.mode === "all" && (
-                <p className="filter-hint" style={{ color: marketResult.complete ? "var(--muted)" : "var(--warn, #d9a05b)" }}>
+                <p className="filter-hint" style={{ color: marketResult.complete ? "var(--muted)" : "var(--warn)" }}>
                   全市场快照 {marketResult.market_rows ?? 0} 只 ·
                   {marketResult.complete ? "完整遍历" : "未完整遍历（页数预算内先覆盖最活跃股票）"} ·
                   最终排名按<b>战法质量分</b>；当日涨幅 + 换手率 + 成交额分位仅用于挑候选（纯快照粗筛，与战法形态无关）。
@@ -2208,7 +2215,7 @@ export function TacticsPage({
             <div className="dl-block">
               <h4>{signals.symbol} · 战法详情</h4>
               <p>
-                数据源 {signals.provider} · {signals.bars_count} 根日 K
+                数据源 {PROVIDER_LABEL[signals.provider] ?? signals.provider} · {signals.bars_count} 根日 K
                 {!signals.sufficient && <span className="probe-note err"> · 历史数据不足，指标仅供参考</span>}
               </p>
               {signals.score && (

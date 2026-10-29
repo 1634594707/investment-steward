@@ -670,7 +670,7 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
                     </div>
                     <div className="pi-side">
                       <button className="primary-btn center" onClick={() => setDetail(artifact)}>
-                        查看制品详情 <span>→</span>
+                        查看制品详情
                       </button>
                       <button className="ghost-btn" disabled title="此制品尚未提供本机参数集入口">Fork 并调参</button>
                       <button className="ghost-btn" disabled title="此制品尚未提供本机运行入口">本地复现运行</button>
@@ -757,8 +757,8 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
             <div className="ps-alert ok">
               过拟合自检 · 标签已随机置换(seed {mineResult.label_shuffle.seed},块长 {mineResult.label_shuffle.block}）
               {mineResult.top.length === 0
-                ? ":榜单为空 ✓ 统计口径没有从噪声里造出显著性。"
-                : `:⚠️ 仍挖出 ${mineResult.top.length} 条「显著」公式,说明该口径下假阳性未被拦住,不要采信本轮结果。`}
+                ? "：榜单为空，统计口径没有从噪声里造出显著性。"
+                : `：仍挖出 ${mineResult.top.length} 条「显著」公式，说明该口径下假阳性未被拦住，不要采信本轮结果。`}
             </div>
           )}
           {mineResult?.split && (
@@ -771,7 +771,7 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
                 ? `窗口档位 ${mineResult.window.bars} 根,实取 ${mineResult.window.bars_actual ?? mineResult.bars ?? "—"} 根`
                   + `（${mineResult.window.first_bar ?? "—"} → ${mineResult.window.last_bar ?? "—"},源 ${mineResult.window.source ?? "—"}）`
                   + `。${mineResult.window.reason}`
-                  + (mineResult.window.truncated ? ` ⚠️ ${mineResult.window.truncation_note ?? "上游返回行数少于请求档位"}` : "")
+                  + (mineResult.window.truncated ? `。注意：${mineResult.window.truncation_note ?? "上游返回行数少于请求档位"}` : "")
                 : ""}
               {mineResult.caliber
                 ? `口径:挖掘 v${mineResult.caliber.mine_spec_version} / 公式 v${mineResult.caliber.formula_spec_version ?? "—"} / IC v${mineResult.caliber.ic_spec_version} / 套件 v${mineResult.caliber.ic_suite_spec_version}。`
@@ -1373,7 +1373,7 @@ export function QuantPage({ isDemo, marketPluginEnabled, active, onNavigate }: P
   return (
     <section className="page-view quant-page">
       <header className="quant-heading">
-        <div><span className="kicker">专业模式 · {WORKFLOW.find(item => item.key === workflow)?.label}</span><h2>量化研究实验室</h2></div>
+        <div><h2>量化研究实验室</h2></div>
         <span className="quant-catalog-count">{psList?.length ?? 0} 项实验 · {packs?.length ?? 0} 个策略包</span>
       </header>
       <nav className="quant-workflow" aria-label="量化研究阶段">

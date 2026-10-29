@@ -19,21 +19,19 @@ export function Metric({ label, value, note, tone }: MetricProps) {
 }
 
 interface SectionHeadingProps {
-  eyebrow: string;
   title: string;
   action?: string;
   onClick?: () => void;
 }
-export function SectionHeading({ eyebrow, title, action, onClick }: SectionHeadingProps) {
+export function SectionHeading({ title, action, onClick }: SectionHeadingProps) {
   return (
     <div className="section-heading">
       <div>
-        <span className="section-kicker">{eyebrow}</span>
         <h3>{title}</h3>
       </div>
       {action && (
         <button className="text-button" onClick={onClick}>
-          {action} <span>→</span>
+          {action}
         </button>
       )}
     </div>

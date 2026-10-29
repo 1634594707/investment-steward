@@ -612,7 +612,7 @@ export function SettingsPage({
 
   return (
     <section className="page-view settings-page">
-      <header className="settings-heading"><div><span className="kicker">系统治理</span><h2>设置与偏好</h2></div><span className={`set-core-status ${connection === "ready" ? "ok" : connection === "connecting" ? "wait" : ""}`}><i aria-hidden="true" />Core {coreVersion} · {connection === "ready" ? "已连接" : connection === "connecting" ? "连接中" : "未连接"}</span></header>
+      <header className="settings-heading"><div><h2>设置与偏好</h2></div><span className={`set-core-status ${connection === "ready" ? "ok" : connection === "connecting" ? "wait" : ""}`}><i aria-hidden="true" />Core {coreVersion} · {connection === "ready" ? "已连接" : connection === "connecting" ? "连接中" : "未连接"}</span></header>
 
       <div className="set-layout">
         <nav className="set-nav" aria-label="设置分区">
@@ -627,7 +627,7 @@ export function SettingsPage({
                 <h4>身份与头像</h4>
                 <p>显示名与头像用于顶栏、侧栏与档案。保存到本机 Core（SQLite），不上传任何远端；无图片时以底色 + 首字呈现。</p>
                 <div className="pc-identity">
-                  <span className="avatar avatar-top" style={pcAvatar ? undefined : { background: pcColor, color: "#0b1018" }} aria-hidden="true">
+                  <span className="avatar avatar-top" style={pcAvatar ? undefined : { background: pcColor, color: "var(--avatar-on-color)" }} aria-hidden="true">
                     {pcAvatar ? <img src={pcAvatar} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : (pcName.trim() || "投资人").slice(0, 1)}
                   </span>
                   <div>
@@ -744,7 +744,7 @@ export function SettingsPage({
                   </tbody>
                 </table>
                 <button className="primary-btn mt-22" onClick={() => onNavigate("extensions")}>
-                  管理插件与插槽 <span>→</span>
+                  管理插件与插槽
                 </button>
               </div>
               <div className="dl-block">
@@ -969,7 +969,7 @@ export function SettingsPage({
                           aria-label={name}
                           value={credInputs[keyId] ?? ""}
                           onChange={(event) => setCredInputs((current) => ({ ...current, [keyId]: event.target.value }))}
-                          style={looksLikePlaceholderKey(credInputs[keyId] ?? "") ? { borderColor: "var(--danger, #df897a)" } : undefined}
+                          style={looksLikePlaceholderKey(credInputs[keyId] ?? "") ? { borderColor: "var(--danger-strong)" } : undefined}
                         />
                         {looksLikePlaceholderKey(credInputs[keyId] ?? "") && (
                           <span className="probe-note err">这看起来是示例/占位密钥，保存会覆盖你已配置的真实密钥（真实 key 请从服务商控制台重新复制）</span>
@@ -1035,7 +1035,7 @@ export function SettingsPage({
                 )}
                 <div className="mt-10">
                   <button className="primary-button" onClick={onEditProfile}>
-                    {investorProfile ? "更新画像" : "建立画像"} <span>→</span>
+                    {investorProfile ? "更新画像" : "建立画像"}
                   </button>
                 </div>
               </div>
@@ -1120,7 +1120,6 @@ export function SettingsPage({
         <div className="confirm-overlay" onClick={() => { if (!schemeBusy) setSchemeOpen(false); }}>
           <aside ref={schemeDialog} className="invest-modal" role="dialog" aria-modal="true" aria-label={editId ? "编辑模型方案" : "新增模型方案"} onClick={(event) => event.stopPropagation()}>
             <header className="confirm-head">
-              <span className="section-kicker">{editId !== null ? "EDIT MODEL SCHEME" : "NEW MODEL SCHEME"}</span>
               <h3>{editId !== null ? "编辑供应商方案" : "新增供应商方案"}</h3>
               <p>模型连接配置保存在本机，密钥单独存入凭据库。</p>
             </header>

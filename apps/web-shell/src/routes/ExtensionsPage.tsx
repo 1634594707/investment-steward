@@ -180,7 +180,7 @@ export function ExtensionsPage({ catalog, channels, client, capabilityCount, bus
   return (
     <div className="page-stack extensions-page">
       <header className="extensions-heading">
-        <div><span className="section-kicker">系统治理</span><h2>扩展控制中心</h2></div>
+        <div><h2>扩展控制中心</h2></div>
         <span>{isDemo ? "演示模式" : "本地 Core 管理"}</span>
       </header>
       <dl className="extensions-summary">
@@ -243,7 +243,6 @@ export function ExtensionsPage({ catalog, channels, client, capabilityCount, bus
                   {updateAvailable && !revoked && (
                     <button className="primary-button" disabled={!!busy || confirmBusy} onClick={() => requestAction({ id: entry.manifest.plugin_id, action: "update", version: entry.manifest.release_version })}>
                       {busy === entry.manifest.plugin_id ? "升级中" : `升级到 v${entry.manifest.release_version}`}
-                      <span>→</span>
                     </button>
                   )}
                   {enabled ? (
@@ -255,7 +254,6 @@ export function ExtensionsPage({ catalog, channels, client, capabilityCount, bus
                   ) : (
                     <button className="primary-button" disabled={!!busy || confirmBusy} onClick={() => requestAction({ id: entry.manifest.plugin_id, action: "install" })}>
                       {busy === entry.manifest.plugin_id ? "安装中" : "重新启用"}
-                      <span>→</span>
                     </button>
                   )}
                   {!revoked && (
@@ -294,7 +292,6 @@ export function ExtensionsPage({ catalog, channels, client, capabilityCount, bus
                 <span className="mono">{entry.manifest.plugin_id} v{entry.manifest.release_version}</span>
                 <button className="primary-button" onClick={() => requestAction({ id: entry.manifest.plugin_id, action: "install" })}>
                   安装
-                  <span>→</span>
                 </button>
               </footer>
               <p className="plugin-footnote">
@@ -349,7 +346,6 @@ export function ExtensionsPage({ catalog, channels, client, capabilityCount, bus
                 <div className="plugin-actions">
                   <button className="primary-button" disabled={!!busy || confirmBusy} onClick={() => requestAction({ id: entry.manifest.plugin_id, action: "update", version: entry.manifest.release_version })}>
                     {busy === entry.manifest.plugin_id ? "升级中" : `升级到 v${entry.manifest.release_version}`}
-                    <span>→</span>
                   </button>
                 </div>
               </article>

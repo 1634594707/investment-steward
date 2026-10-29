@@ -62,7 +62,7 @@ export function TopBar({ entry, isDemo, onOpenPalette, onRefresh, refreshing, no
         <NotificationBell notifications={notifications} muted={notificationMuted} onMarkNotificationRead={onMarkNotificationRead} onOpenToday={onOpenToday} triage={notificationTriage} onLoadTriage={onLoadNotificationTriage} />
         <button
           className="avatar avatar-top"
-          style={avatar ? undefined : { background: color, color: "#0b1018" }}
+          style={avatar ? undefined : { background: color, color: "var(--avatar-on-color)" }}
           aria-label="个人中心"
           title={`个人中心 · ${name}`}
           onClick={onOpenPersonalCenter}

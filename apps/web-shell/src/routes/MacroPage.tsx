@@ -396,9 +396,8 @@ function MacroImpactMap({ isDemo, macroPluginEnabled = true, onFetchEvents, onFe
     <div className="radar-card">
       <div className="sec-head">
         <div>
-          <span className="kicker mint">MACRO RADAR / GLOBAL TRANSMISSION</span>
           <h3 className="h-band">全球商品与金融传导</h3>
-          
+
         </div>
         <span className="soft-tag amber">实测数值 · 世界地图</span>
       </div>
@@ -530,7 +529,6 @@ function ComtradePanel({ onFetch }: { onFetch: MacroContext["fetchComtradePrevie
     <div className="panel mt-16">
       <div className="sec-head">
         <div>
-          <span className="kicker">UN COMTRADE · 贸易数据源</span>
           <h3>商品贸易预览</h3>
         </div>
         <span className="soft-tag blue">真实 API · 不生成占位数据</span>
@@ -542,7 +540,7 @@ function ComtradePanel({ onFetch }: { onFetch: MacroContext["fetchComtradePrevie
         <label className="form-field"><span>期间（YYYY 或 YYYYMM）</span><input value={period} placeholder="例：2025" onChange={(event) => setPeriod(event.target.value)} /></label>
         <label className="form-field"><span>商品代码</span><input value={cmdCode} onChange={(event) => setCmdCode(event.target.value)} /></label>
         <label className="form-field"><span>流向</span><input value={flowCode} onChange={(event) => setFlowCode(event.target.value)} /></label>
-        <label className="form-field"><span>&nbsp;</span><button className="text-btn" disabled={busy} onClick={() => void query()}>{busy ? "查询中…" : "查询 Comtrade"} <span>→</span></button></label>
+        <label className="form-field"><span>&nbsp;</span><button className="text-btn" disabled={busy} onClick={() => void query()}>{busy ? "查询中…" : "查询 Comtrade"}</button></label>
       </div>
       {result && (
         <div className="result-block">
@@ -720,13 +718,11 @@ function UserViewEditor({ region, ruleBand, aiDirection, onFetch, onSave }: {
         )}
         {!editing && !loadError && (
           <button className="text-btn" onClick={() => setEditing(true)}>
-            {view ? "修改" : "写下我的判断"} <span>→</span>
-          </button>
+            {view ? "修改" : "写下我的判断"}          </button>
         )}
         {loadError && !editing && (
           <button className="text-btn" onClick={() => { setLoadOk(false); setLoadError(null); setReloadKey((n) => n + 1); }}>
-            重新读取 <span>→</span>
-          </button>
+            重新读取          </button>
         )}
       </div>
       {view && !editing && (
@@ -914,8 +910,7 @@ function SpeakerSignalRow({ signal, busy, aiReady = true, onInterpret }: {
           title={aiReady ? undefined : "AI 未接通：先在 设置 → 模型配置 添加方案并设为「使用中」"}
           onClick={onInterpret}
         >
-          {busy ? "解读中…" : signal.direction ? "重新解读" : "模型解读（引用原文）"} <span>→</span>
-        </button>
+          {busy ? "解读中…" : signal.direction ? "重新解读" : "模型解读（引用原文）"}        </button>
       </div>
       <div className="signal-excerpt">「{signal.excerpt.length > 180 ? `${signal.excerpt.slice(0, 180)}…` : signal.excerpt}」</div>
       {signal.ai_rationale && (
@@ -986,12 +981,11 @@ function SignalsPanel({ onFetchSignals, onCreateSignal, onInterpretSignal, aiRea
 
   return (
     <div className="slot-block">
-      <span className="slot-tag">SPEAKER SIGNALS · 发言人信号流 · 官方原文粘贴，模型只当副驾</span>
+      <span className="slot-tag">发言人信号 · 官方原文优先，转载注明出处；模型只辅助标注</span>
       <div className="panel stack">
         <div className="sec-head">
           <div>
-            <span className="kicker">沟通证据（官方优先、转载明示）</span>
-            <h3>发言人表态 → 方向标注 → 你决定要不要调权重</h3>
+            <h3>发言人表态</h3>
           </div>
           <select value={region} onChange={(event) => { setRegion(event.target.value); setMsg(null); }} className="mini-select">
             {COUNTRIES.map(({ region: r, name }) => <option key={r} value={r}>{name}</option>)}
@@ -1106,8 +1100,7 @@ function realCountryCard(
             title={aiReady ? undefined : "AI 未接通：先在 设置 → 模型配置 添加方案并设为「使用中」"}
             onClick={runAnalysis}
           >
-            {analysisBusy ? "模型解读中…" : "模型解读（挂引用，不打分）"} <span>→</span>
-          </button>
+            {analysisBusy ? "模型解读中…" : "模型解读（挂引用，不打分）"}          </button>
         </div>
       )}
       {analysis && (
@@ -1140,8 +1133,7 @@ function realCountryCard(
               if (aiReady && count !== null && count > 0) await runAnalysis(); // 异动提交后自动附模型解读（AI 未接通时跳过）
             }}
           >
-            提交 {severe.length} 条重度异动到研究页 <span>→</span>
-          </button>
+            提交 {severe.length} 条重度异动到研究页          </button>
         </div>
       )}
       {snapshot.degraded_reason && <div className="mc-foot warn">{snapshot.degraded_reason}</div>}
@@ -1322,7 +1314,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
   return (
     <section className="page-view macro-page">
       <header className="macro-heading">
-        <div><span className="kicker">全球宏观</span><h2>宏观雷达</h2></div>
+        <div><h2>宏观雷达</h2></div>
         <div><span>{loading ? "数据更新中" : isDemo ? "演示数据" : "公开数据与本机缓存"}</span><p>关注主题：贸易 · 金融 · 能源传导</p></div>
       </header>
       <nav className="macro-cycle-band" aria-label="五国概览与详情选择">
@@ -1410,7 +1402,6 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
             <div className="panel mt-10">
               <div className="sec-head">
                 <div>
-                  <span className="kicker">四维权重调节</span>
                   <h3>
                     {currentWeights ? `当前生效 ${currentWeights.version}（已按保存值预填）` : "默认 v1 · 增长 35 · 就业 25 · 通胀 20 · 货币 20"}
                   </h3>
@@ -1420,8 +1411,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
                   disabled={weightBusy}
                   onClick={() => { setWeightDraft({ ...DEFAULT_WEIGHT_PCT }); setWeightMsg("已恢复默认权重（未保存，拖动后点保存生效）"); }}
                 >
-                  恢复默认 <span>→</span>
-                </button>
+                  恢复默认                </button>
               </div>
               <div className="form-row">
                 {(Object.keys(DIM_LABELS) as Array<keyof typeof DIM_LABELS>).map((dim) => (
@@ -1485,8 +1475,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
                         setProposal(result ?? { ok: false, detail: "提议请求失败（Core 未就绪）" });
                       }}
                     >
-                      {proposalBusy ? "模型生成提议中…" : "生成模型提议"} <span>→</span>
-                    </button>
+                      {proposalBusy ? "模型生成提议中…" : "生成模型提议"}                    </button>
                   </label>
                 </div>
                 {proposal && !proposal.ok && (
@@ -1504,8 +1493,7 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
                     <div className="sub-text">依据（引用原句）：{proposal.proposal.rationale || "（模型未给出引用——建议忽略此提议）"}</div>
                     <div className="card-actions mt-8">
                       <button className="text-btn" disabled={proposalBusy} onClick={confirmProposal}>
-                        {proposalBusy ? "确认中…" : "确认生效（存为新版本）"} <span>→</span>
-                      </button>
+                        {proposalBusy ? "确认中…" : "确认生效（存为新版本）"}                      </button>
                       <button className="text-btn" onClick={() => setProposal(null)}>忽略</button>
                     </div>
                   </div>
@@ -1614,10 +1602,9 @@ export function MacroPage({ onNavigate, isDemo, macroPluginEnabled = true, onEna
       <div className="radar-card">
         <div className="sec-head first">
           <div>
-            <span className="kicker">宏观异动通道</span>
             <h3>异动将作为背景证据进入研究页</h3>
           </div>
-          <button className="text-btn" onClick={() => onNavigate("research")}>打开研究页 <span>→</span></button>
+          <button className="text-btn" onClick={() => onNavigate("research")}>打开研究页</button>
         </div>
         <div className="note-rule mt-10">
           <b>三层判断（已落地）</b>

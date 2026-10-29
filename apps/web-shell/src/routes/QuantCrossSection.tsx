@@ -111,7 +111,6 @@ export function QuantCrossSection({ active = true }: { active?: boolean } = {}) 
     <section className="cross-section" aria-label="横截面研究">
       <header className="cross-head">
         <div>
-          <span className="kicker">P2 · 横截面口径</span>
           <h3>横截面研究（面板 → 挖掘 → 报告卡）</h3>
         </div>
         {quantPanelJobBusy && (

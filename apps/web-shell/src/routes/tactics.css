@@ -64,7 +64,7 @@
 .tactic-score.bearish { border-color: color-mix(in srgb, var(--mkt-down) 45%, transparent); color: var(--mkt-down); }
 .tactic-score.conflict { border-color: color-mix(in srgb, var(--amber) 50%, transparent); color: var(--amber); }
 
-.insufficient-note { display: block; margin-top: calc(var(--space-1) * var(--density-scale)); color: var(--warn, #d9a05b); font-size: var(--text-1); }
+.insufficient-note { display: block; margin-top: calc(var(--space-1) * var(--density-scale)); color: var(--warn); font-size: var(--text-1); }
 
 .score-panel {
   margin: calc(var(--space-2) * var(--density-scale)) 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
@@ -227,8 +227,8 @@
 
 /* —— v29 信号时间线：状态 / 权重 / 失效条件列 —— */
 .tactics-signal-timeline td { vertical-align: top; }
-.tactics-signal-timeline .signal-timeline-invalidation { max-width: 220px; color: var(--muted, #7b828b); font-size: var(--text-2); line-height: 1.5; }
-.signal-state-none { color: var(--faint, #565d66); }
+.tactics-signal-timeline .signal-timeline-invalidation { max-width: 220px; color: var(--muted); font-size: var(--text-2); line-height: 1.5; }
+.signal-state-none { color: var(--faint); }
 
 /* —— v28 信号状态机：状态标签在明细表内不换行挤压，悬浮标题已含判定原因 —— */
 .score-detail-table td.signal-state-cell { white-space: nowrap; }

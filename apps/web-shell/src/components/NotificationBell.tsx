@@ -85,7 +85,7 @@ export function NotificationBell({ notifications, muted, onMarkNotificationRead,
                 onOpenToday();
               }}
             >
-              查看全部 <span>→</span>
+              查看全部
             </button>
           </header>
           {markFailed && <p className="notice-error">标记已读失败，请稍后重试。</p>}

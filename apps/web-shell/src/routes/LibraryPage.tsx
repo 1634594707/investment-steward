@@ -195,7 +195,7 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
   return (
     <section className="page-view library-page">
       <header className="library-heading">
-        <div><span className="kicker">阅读与研究</span><h2>研读工作台</h2></div>
+        <div><h2>研读工作台</h2></div>
         <button className="primary-button" disabled={busy} onClick={beginCreate}><Plus size={16} />添加书目</button>
       </header>
       <dl className="library-summary">
@@ -210,10 +210,9 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
         <div className="library-shelf">
           <div className="sec-head">
             <div>
-              <span className="kicker">{isDemo ? "书架（演示模式未接 Core）" : "书架 · 本机真实存储"}</span>
               <h3>{`在读 ${reading.length} · 已读 ${finished.length} · 想读 ${wishlist.length}`}</h3>
             </div>
-            <button className="text-btn" disabled={busy} onClick={() => formOpen ? (resetForm(), setFormOpen(false)) : beginCreate()}>{formOpen ? "收起" : "添加书目"} <span>→</span></button>
+            <button className="text-btn" disabled={busy} onClick={() => formOpen ? (resetForm(), setFormOpen(false)) : beginCreate()}>{formOpen ? "收起" : "添加书目"}</button>
           </div>
 
           <div className="library-filters">
@@ -328,10 +327,9 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
         <aside className="library-plan">
           <div className="sec-head">
             <div>
-              <span className="kicker">今日荐读</span>
               <h3>{isDemo ? "今天的 20 分钟（演示数据）" : "当前研读计划"}</h3>
             </div>
-            <button className="text-btn" onClick={() => onNavigate("review")}>去复盘 <span>→</span></button>
+            <button className="text-btn" onClick={() => onNavigate("review")}>去复盘</button>
           </div>
           {isDemo ? (
             <div className="action-list tight">
@@ -372,7 +370,7 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
               )}
               <div className="card-actions wide">
                 <button className="text-btn" disabled={planBusy} onClick={async () => { setPlanBusy(true); setPlanError(null); try { const plan = await onGeneratePlan(readingPlan?.book_ref ?? null); if (plan === null) setPlanError("生成失败，请重试。"); } catch { setPlanError("生成失败，请重试。"); } finally { setPlanBusy(false); } }}>
-                  {planBusy ? "生成中…" : readingPlan ? "换一份荐读" : "生成今日荐读"} <span>→</span>
+                  {planBusy ? "生成中…" : readingPlan ? "换一份荐读" : "生成今日荐读"}
                 </button>
                 {planError && <span className="form-error flat">{planError}</span>}
               </div>
@@ -384,7 +382,6 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
             <div className="panel mt-14">
               <div className="sec-head">
                 <div>
-                  <span className="kicker">认知档案</span>
                   <h3>知识结构与引用</h3>
                 </div>
                 <button
@@ -401,7 +398,7 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
                     finally { setInsightsBusy(false); }
                   }}
                 >
-                  {insightsBusy ? "生成中…" : insights ? "重新生成" : "生成认知档案"} <span>→</span>
+                  {insightsBusy ? "生成中…" : insights ? "重新生成" : "生成认知档案"}
                 </button>
               </div>
               {books.length === 0 && (
@@ -427,7 +424,6 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
             <div className="panel mt-14">
               <div className="sec-head">
                 <div>
-                  <span className="kicker">批注回顾</span>
                   <h3>把书里的批注变成研究问题</h3>
                 </div>
               </div>
@@ -446,11 +442,11 @@ export function LibraryPage({ onNavigate, isDemo, connection, disconnected = fal
                       {convertId === annotationId ? (
                         <div className="form-row mt-6">
                           <input value={questionDraft} onChange={(event) => setQuestionDraft(event.target.value)} placeholder="要研究的具体问题（如：安全边际在当下的 A 股如何量化？）" aria-label="研究问题" />
-                          <button className="text-btn" disabled={convertBusy} onClick={() => void handleConvertToResearch()}>{convertBusy ? "提交中…" : "提交"} <span>→</span></button>
+                          <button className="text-btn" disabled={convertBusy} onClick={() => void handleConvertToResearch()}>{convertBusy ? "提交中…" : "提交"}</button>
                           <button className="text-btn" onClick={() => { setConvertId(null); setQuestionDraft(""); }} disabled={convertBusy}>取消</button>
                         </div>
                       ) : (
-                        <button className="text-btn self-start" onClick={() => { setConvertId(annotationId); setQuestionDraft(""); setConvertMsg(null); }}>转研究问题 <span>→</span></button>
+                        <button className="text-btn self-start" onClick={() => { setConvertId(annotationId); setQuestionDraft(""); setConvertMsg(null); }}>转研究问题</button>
                       )}
                     </div>
                   ))}

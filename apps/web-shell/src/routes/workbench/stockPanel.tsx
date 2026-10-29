@@ -1239,11 +1239,14 @@ export function StockReportPanel({
                 <span className="soft-tag">{report.symbol}</span>
                 <span className="soft-tag blue">{report.model}</span>
                 <span className="soft-tag">置信 {report.confidence}</span>
-                {/* B04（2026-09-15 方向研判路线图）：如实显示模型初稿耗时（总请求还含闸门/反方检查/修复，会更长；旧记录缺失时不显示）。 */}
-                {typeof report.latency_ms === "number" && report.latency_ms > 0 && (
-                  <span className="report-meta">模型生成 {Math.round(report.latency_ms / 1000)} 秒</span>
-                )}
-                <span className="report-meta">{formatTimestamp(report.generated_at)}</span>
+                {/* B04（2026-09-15 方向研判路线图）：模型初稿耗时保留在悬停说明里（总请求还含闸门/反方检查/修复，会更长；
+                    正文前只留一行元信息，诊断细节不占阅读动线）。 */}
+                <span
+                  className="report-meta"
+                  title={typeof report.latency_ms === "number" && report.latency_ms > 0 ? `模型初稿生成 ${Math.round(report.latency_ms / 1000)} 秒（总请求还含闸门/反方检查/修复，会更长）` : undefined}
+                >
+                  {formatTimestamp(report.generated_at)}
+                </span>
               </div>
               {/* v31 §4.1 首屏固定行：模式 · 字数 · 三态质量状态；不完整时红色横幅 + 缺失项 */}
               <ReportFirstScreen report={report} />

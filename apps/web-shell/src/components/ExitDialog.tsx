@@ -25,7 +25,6 @@ export function ExitDialog({ open, onClose, onConfirm }: ExitDialogProps) {
         ref={trapRef}
       >
         <header className="confirm-head">
-          <span className="section-kicker">APPLICATION LIFECYCLE</span>
           <h3>关闭 Investment Steward</h3>
           <p>请选择关闭窗口后的运行模式：</p>
         </header>

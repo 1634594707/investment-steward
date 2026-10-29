@@ -11,10 +11,10 @@
 .cross-card h5 { margin: calc(var(--space-3) * var(--density-scale)) 0 calc(var(--space-2) * var(--density-scale)); font-size: var(--text-3); font-weight: 500; color: var(--muted); }
 .cross-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: calc(var(--space-3) * var(--density-scale)); margin-bottom: calc(var(--space-3) * var(--density-scale)); }
 .cross-fields label { display: flex; flex-direction: column; gap: calc(var(--space-1, 4px) * var(--density-scale)); font-size: var(--text-2); color: var(--muted); }
-.cross-fields input, .cross-fields select { padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--panel-2, #14161a); color: var(--ink); font-size: var(--text-3); }
+.cross-fields input, .cross-fields select { padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--surface-input); color: var(--ink); font-size: var(--text-3); }
 .cross-fields .cross-check { flex-direction: row; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); }
 .cross-hint { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font-size: var(--text-2); color: var(--faint); line-height: 1.7; }
-.cross-warn { margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding: calc(var(--space-2) * var(--density-scale)); border-left: 2px solid var(--amber, #b8860b); background: color-mix(in srgb, var(--amber, #b8860b) 8%, transparent); font-size: var(--text-2); line-height: 1.7; }
+.cross-warn { margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding: calc(var(--space-2) * var(--density-scale)); border-left: 2px solid var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); font-size: var(--text-2); line-height: 1.7; }
 .cross-summary { margin-top: calc(var(--space-3) * var(--density-scale)); }
 .cross-summary .ps-metrics span, .cross-result .ps-metrics span, .cross-report .ps-metrics span { font-variant-numeric: tabular-nums; }
 .cross-details { margin-top: calc(var(--space-2) * var(--density-scale)); border-top: 1px solid var(--line); padding-top: calc(var(--space-2) * var(--density-scale)); font-size: var(--text-2); }

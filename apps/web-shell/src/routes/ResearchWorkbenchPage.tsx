@@ -371,8 +371,7 @@ export function ResearchWorkbenchPage({
     <section className="page-view workbench-page">
       {isDemo && <DemoNotice context="AI 研究产出" />}
       <header className="settings-heading">
-        <div><span className="kicker">投资管家 · 研究工作台</span><h2>AI 研究工作台</h2></div>
-        <span>先筛方向 · 再筛 K 线 · 最后深研个股</span>
+        <div><h2>AI 研究工作台</h2></div>
       </header>
 
       {/* v33 A01：一级分区 = 研究报告 / 待验证 / 历史报告（互不穿透，切换保留状态）；
@@ -390,7 +389,7 @@ export function ResearchWorkbenchPage({
           {reports.length > 0 && <span className="wb-tab-badge blue">{reports.length}</span>}
         </button>
         <span className="wb-flowline" aria-label="研究流程提示">
-          流程：方向研判 → 候选股送
+          流程：方向研判 → 候选股池
           <button className="tag-button" onClick={() => onNavigate("tactics")}>战法雷达筛 K 线</button>
           → 个股研报 → 追问与验证
         </span>
@@ -457,7 +456,7 @@ export function ResearchWorkbenchPage({
           v33 A16：检索在前、独立入口、打开后定位阅读区，行内突出主题/标题，次要操作弱化。 */}
       <div className="wb-history" style={{ display: section === "history" ? undefined : "none" }}>
         <span className="answer-block-title">
-          历史研究产出（{aiReportsTotal}/{facetCounts.total} 条 · 正式 {formalCount} · 不完整草稿 {draftCount} · 已持久化，重启不丢）
+          历史研究产出（{aiReportsTotal}/{facetCounts.total} 条 · 正式 {formalCount} · 不完整草稿 {draftCount}）
         </span>
         {reports.length > 0 && (
           <div className="pool-filter">

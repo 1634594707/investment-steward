@@ -246,7 +246,6 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
     <div className="page-stack research-page">
       <section className="research-heading">
         <div>
-          <span className="section-kicker">问题与证据</span>
           <h2>研究工作台</h2>
           <p>{runs.length} 个研究问题 · {evidence.length} 条证据</p>
         </div>
@@ -298,7 +297,7 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
             <div className="transition-band">
               <span>该研究等待你确认后可推进到组织回答。</span>
               <button className="primary-button" disabled={transitionBusy} onClick={() => { setTransitionError(null); setConfirmRun(selectedRun); }}>
-                确认推进 <span>→</span>
+                确认推进
               </button>
             </div>
           )}
@@ -314,7 +313,6 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
             <AnswerDetail response={shownResponse} evidenceOf={refEvidence} onOpenEvidence={onOpenEvidence} onCardAction={onCardAction} />
           ) : (
             <div className="answer-empty">
-              <span className="slot-kicker">ANSWER PENDING</span>
               <strong>还没有一次有据回答。</strong>
               <span>选择一个进行中的问题或新建研究问题，答案会在此呈现全部证据与推理。</span>
             </div>
@@ -322,10 +320,10 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
         </div>
 
         <div className="research-evidence-board">
-          <SectionHeading eyebrow="证据流" title="支持、挑战与未知" action={filterOpen ? "收起筛选" : "筛选"} onClick={() => setFilterOpen((open) => !open)} />
+          <SectionHeading title="支持、挑战与未知" action={filterOpen ? "收起筛选" : "筛选"} onClick={() => setFilterOpen((open) => !open)} />
           <div className="brief-toolbar">
             <button className="text-button" onClick={handlePatrolFreshness} disabled={patrolBusy}>
-              {patrolBusy ? "巡检中…" : "巡检证据时效"} <span>→</span>
+              {patrolBusy ? "巡检中…" : "巡检证据时效"}
             </button>
             {patrolResult && <span className="probe-note">{patrolResult}</span>}
           </div>
@@ -395,7 +393,6 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
         <div className="confirm-overlay" onClick={() => { if (!submitBusy) setQuestionOpen(false); }}>
           <aside ref={questionDialog} className="invest-modal" role="dialog" aria-modal="true" aria-label="新建研究问题" onKeyDown={(event) => { if (event.key === "Escape" && !submitBusy) setQuestionOpen(false); }} onClick={(event) => event.stopPropagation()}>
             <header className="confirm-head">
-              <span className="section-kicker">NEW RESEARCH RUN</span>
               <h3>新建研究问题</h3>
               <p>问题会进入研究链路：规划 → 证据收集 → 有据回答。</p>
             </header>
@@ -433,7 +430,7 @@ export function ResearchPage({ evidence, response, runs, onNavigate, onOpenEvide
                   title={aiReady ? undefined : "AI 未接通：先在 设置 → 模型配置 添加方案并设为「使用中」"}
                   onClick={submitQuestion}
                 >
-                  {submitBusy ? "研究进行中…" : "开始研究"} <span>→</span>
+                  {submitBusy ? "研究进行中…" : "开始研究"}
                 </button>
               </footer>
             </div>

@@ -114,14 +114,14 @@ export function SyncSection({ coreRequest }: { coreRequest?: (req: CoreRequest) 
         <button className="ghost-btn" disabled={busy !== null} onClick={() => { setShowPairing((v) => !v); void loadPairing(); }}>{showPairing ? "收起手动接入" : "手动接入…"}</button>
       </div>
       {pairCode && (
-        <div className="storage-note" style={{ border: "1px solid #2a3546", borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
+        <div className="storage-note" style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
           <p style={{ marginTop: 0 }}><strong>手机配对码</strong>（10 分钟内有效、只能用一次）：在手机 App「设置 → 输入配对码」填入即可，无需抄写密钥。</p>
           <p style={{ fontSize: 30, letterSpacing: 10, margin: "6px 0", fontFamily: "monospace" }}><strong>{pairCode.code}</strong></p>
           <p style={{ marginBottom: 0 }}>过期时间：{pairCode.expires_at}（服务器暂存凭据，领取即删；泄露可等过期或撤销设备）。</p>
         </div>
       )}
       {showPairing && (
-        <div className="storage-note" style={{ border: "1px solid #2a3546", borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
+        <div className="storage-note" style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
           <p style={{ marginTop: 0 }}><strong>手机端接入（§5 设备绑定）</strong>：在手机 App「设置」中依次粘贴以下两项。凭据仅本机展示，勿经不可信渠道传输。</p>
           {pairError && <p role="alert">读取失败：{pairError}</p>}
           {pairing ? (

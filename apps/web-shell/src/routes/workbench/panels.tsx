@@ -7,7 +7,7 @@ import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSerie
 import type { StockReport, QuarterlyPoint, PriceChartPack, ValuationChartPack, ReviewQueue, DirectionReport, ReportScenario, ReportLevel, ReportWatchpoint, ReportValuation, ClaimFinding, ReportConclusion, CategorizedWarning, ReportRepairAction, ReportDecisionCard, QualityBlocker, SectionState, GenerationTrace, ReportCockpit, SourceCatalogEntry } from "./researchTypes";
 import { cashFlowDisplayLines, formatPrice, formatProbability, formatTimestamp, scenarioProbabilityDisplay, scenarioProbabilityWording, valuationEvidenceDisplay, deepMetricCell, sourceCatalogUrlText, coreSupportBreakdown, CLAIM_STATUS_LABEL, JEV_SKIP_LABEL, ROBUSTNESS_META, coreSupportState, watchpointDateView, watchpointTriageView, watchpointPriorityView, watchpointRefillLabel, watchpointRefillSummary, splitKeyFactSegments, HIGHLIGHT_BUDGET_PER_PARAGRAPH, type ReportHighlight } from "./format";
 // T7：与 K 线卡共用同一套图表配色实现（此前 panels 另写一份并硬编码深色系，浅色主题不可读）。
-import { readChartThemeColors, readMarketColors } from "../../cards/chartTheme";
+import { readChartThemeColors, readMaColors, readMarketColors } from "../../cards/chartTheme";
 import { earningsAnalysisDisplay, earningsNoteDisplay, comparableReviewNote, valuationEvidenceReadingNote, reportReadingSummary, valuationRepairDisplayLines, RESEARCH_COMPLETENESS_READING_NOTE } from "./format";
 import { useUiPrefs } from "../../shell/uiprefs";
 import { SourceHealthPanel } from "./SourceHealthPanel";
@@ -92,21 +92,23 @@ export function ReportCockpitRows({ cockpit }: { cockpit?: ReportCockpit }) {
   const horizon = cockpit.horizon ?? [];
   if (rows.length === 0) return null;
   return (
-    <div className="wb-cockpit" role="list" aria-label="首屏驾驶舱：基本面 / 价值估值 / 技术状态三行分项判断">
+    <div className="wb-cockpit" role="list" aria-label="首屏驾驶舱：基本面 / 价值估值 / 技术状态分项判断">
       {rows.map((row) => (
-        <div key={row.key} className="wb-cockpit-row" role="listitem">
-          <b>{row.label}</b>
-          <span className={`soft-tag ${row.tone}`} title={row.hint}>{row.verdict}</span>
+        <div key={row.key} className="wb-cockpit-item" role="listitem" title={row.hint}>
+          <span className="wb-cockpit-label">{row.label}</span>
+          <span className={`wb-cockpit-verdict tone-${row.tone}`}>{row.verdict}</span>
         </div>
       ))}
       {horizon.length > 0 && (
-        <div className="wb-cockpit-row is-horizon" role="listitem">
-          <b>适用期限</b>
-          {horizon.map((item) => (
-            <span key={item} className="soft-tag gray" title="该组结论适用的期限；三个时间尺度分开，禁止用一个标签覆盖全部期限">
-              {item}
-            </span>
-          ))}
+        <div className="wb-cockpit-item is-horizon" role="listitem">
+          <span className="wb-cockpit-label">适用期限</span>
+          <span className="wb-cockpit-verdict is-chips">
+            {horizon.map((item) => (
+              <span key={item} className="soft-tag gray" title="该组结论适用的期限；三个时间尺度分开，禁止用一个标签覆盖全部期限">
+                {item}
+              </span>
+            ))}
+          </span>
         </div>
       )}
     </div>
@@ -174,13 +176,24 @@ export function ReportFirstScreen({ report }: { report: StockReport }) {
           return latest ? <span className="soft-tag gray" title="各来源数据的最新日期（详见证据页签）">数据截至 {latest}</span> : null;
         })()}
       </div>
-      <div className="wb-exec-summary">
-        <b>阅读前核对</b>
-        <ul className="answer-list">
-          {reportReadingSummary(report).map((line) => <li key={line}>{line}</li>)}
-        </ul>
-      </div>
       <ReportCockpitRows cockpit={cockpit} />
+      {/* 阅读前核对折叠为一项可展开的核对清单：完整性与时效信息保留可达（跨页签恰一份、
+          先于下方判断边界），但不再占据结论前的整屏。 */}
+      {(() => {
+        const readingLines = reportReadingSummary(report);
+        if (readingLines.length === 0) return null;
+        return (
+          <details className="wb-reading-check">
+            <summary>
+              <span>阅读前核对</span>
+              <small>完整性 · 时效 · 验证义务 · {readingLines.length} 项</small>
+            </summary>
+            <ul className="answer-list">
+              {readingLines.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          </details>
+        );
+      })()}
       {/* D03：首屏给出判断边界——「局限与口径声明」「验证点」与结论同屏（命名与正文页签、导出标题一致）；
           原文缺哪一项就写缺哪一项，不从别处补写。 */}
       <div className="wb-firstscreen-guard" data-testid="report-firstscreen-guard">
@@ -1398,11 +1411,8 @@ export function ReportResultTabs({
       </div>
       {tab === "overview" && (
         <div className="wb-result-tabpane wb-reading" role="tabpanel">
-          {/* A05：长结论卡 / 执行摘要 / 最大支持与反证归入概览；报告导航（页签）先于这些内容出现。 */}
-          <SourceHealthPanel report={report} busy={supplementBusy} onSupplement={followup === undefined || !onPrepareSupplement ? undefined : (question) => {
-            onPrepareSupplement(question);
-            setTab("followup");
-          }} />
+          {/* A05：长结论卡 / 执行摘要 / 最大支持与反证归入概览；报告导航（页签）先于这些内容出现。
+              阅读动线：结论卡 → 执行摘要 → 估值判断 → 来源健康（数据管道信息收尾，不挡结论）。 */}
           <DecisionCardPanel report={report} />
           {report.executive_summary && (
             <div className="wb-exec-summary">
@@ -1418,6 +1428,10 @@ export function ReportResultTabs({
             </div>
           )}
           <ValuationCard report={report} />
+          <SourceHealthPanel report={report} busy={supplementBusy} onSupplement={followup === undefined || !onPrepareSupplement ? undefined : (question) => {
+            onPrepareSupplement(question);
+            setTab("followup");
+          }} />
         </div>
       )}
       {tab === "body" && (
@@ -1550,10 +1564,11 @@ export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
           color: (bar.close ?? 0) >= (bar.open ?? 0) ? `${market.up}73` : `${market.down}73`,
         })),
     );
+    const maColors = readMaColors();
     const maSeries: [ReturnType<typeof chartInstance.addSeries>, (number | null)[] | undefined][] = [
-      [chartInstance.addSeries(LineSeries, { color: "#7dc4ff", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma5],
-      [chartInstance.addSeries(LineSeries, { color: "#ffd27d", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma20],
-      [chartInstance.addSeries(LineSeries, { color: "#b9e6ca", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma60],
+      [chartInstance.addSeries(LineSeries, { color: maColors.ma5, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma5],
+      [chartInstance.addSeries(LineSeries, { color: maColors.ma20, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma20],
+      [chartInstance.addSeries(LineSeries, { color: maColors.ma60, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }), chart.ma60],
     ];
     for (const [line, values] of maSeries) {
       if (!values) continue;
@@ -1581,8 +1596,8 @@ export function ReportPriceChart({ chart }: { chart: PriceChartPack }) {
         <span className="wb-ma-legend">
           {/* K01（2026-09-18 排版与研报呈现一致性路线图）：MA5/MA20/MA60 三条均线图例色是「区分
               不同周期均线」的标识色，不是涨跌语义色，故刻意不走 --mkt-up/--mkt-down、也不随涨跌
-              开关变色——归入 K 组的均线豁免项（对照 tactics.css 已 token 化的涨跌色）。 */}
-          <i style={{ background: "#7dc4ff" }} />MA5 <i style={{ background: "#ffd27d" }} />MA20 <i style={{ background: "#b9e6ca" }} />MA60
+              开关变色——归入 K 组的均线豁免项（styles.css 令牌块 --ma-*）。 */}
+          <i style={{ background: "var(--ma-5)" }} />MA5 <i style={{ background: "var(--ma-20)" }} />MA20 <i style={{ background: "var(--ma-60)" }} />MA60
         </span>
       </p>
       <div className="lwc-host" ref={hostRef} />

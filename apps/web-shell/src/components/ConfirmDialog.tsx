@@ -69,7 +69,6 @@ export function ConfirmDialog({
         ref={dialogRef}
       >
         <header className="confirm-head">
-          <span className="section-kicker">EXPLICIT CONFIRMATION</span>
           <h3>{title}</h3>
           <p>{summary}</p>
         </header>

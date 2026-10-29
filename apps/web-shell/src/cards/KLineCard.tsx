@@ -4,10 +4,9 @@ import { CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSerie
 import { formatDate } from "../state/format";
 import type { CandlePeriod } from "../shell/AppShell";
 import { useUiPrefs } from "../shell/uiprefs";
-import { readChartThemeColors, readMarketColors, withAlpha } from "./chartTheme";
+import { readChartThemeColors, readMaColors, readMarketColors, withAlpha } from "./chartTheme";
 
 const PERIOD_LABEL: Record<CandlePeriod, string> = { day: "日K", week: "周K", month: "月K" };
-const PERIOD_KICKER: Record<CandlePeriod, string> = { day: "MARKET VIEW / 1D", week: "MARKET VIEW / 1W", month: "MARKET VIEW / 1MO" };
 const MA_HIDDEN_KEY = "steward.kline.ma-hidden";
 
 /** invest.market_view 插槽的内核渲染器（K 线卡）。数据来自契约类型 CandleSeries，不来自具体插件代码。 */
@@ -16,7 +15,6 @@ export function KLineCard({ series, title, loading = false, period = "day", mark
     <section className="kline-section">
       <div className="section-heading">
         <div>
-          <span className="section-kicker">{PERIOD_KICKER[period]}</span>
           <h3>{title ?? series?.instrument ?? "标的行情"}</h3>
         </div>
         <div className="period-switch" role="group" aria-label="K 线周期">
@@ -32,7 +30,7 @@ export function KLineCard({ series, title, loading = false, period = "day", mark
             </button>
           ))}
           <button className="text-button" onClick={onManage}>
-            管理行情插件 <span>→</span>
+            管理行情插件
           </button>
         </div>
       </div>
@@ -41,9 +39,7 @@ export function KLineCard({ series, title, loading = false, period = "day", mark
           <KLineChart series={series} />
           <div className="data-line">
             <span className="source-dot" />
-            {series.source_plugin_id} v{series.source_plugin_release}· {series.source_name}
-            <span>·</span>
-            {series.is_demo ? "演示数据" : "正式数据"}
+            {series.source_name} · {series.is_demo ? "演示数据" : "正式数据"}
             <time>截至 {formatDate(series.as_of)}</time>
           </div>
           <p className="chart-limit">{series.limitations[0]}</p>
@@ -64,7 +60,7 @@ export function KLineCard({ series, title, loading = false, period = "day", mark
           <strong>行情插件未启用</strong>
           <span>启用「中国市场行情」后，投资页会显示实时日 K 线（含当日蜡烛、多周期均线）。</span>
           <button className="primary-button" onClick={onManage}>
-            打开扩展 <span>→</span>
+            打开扩展
           </button>
         </div>
       )}
@@ -72,11 +68,11 @@ export function KLineCard({ series, title, loading = false, period = "day", mark
   );
 }
 
-const MA_WINDOWS: { window: number; color: string; label: string }[] = [
-  { window: 5, color: "#7dc4ff", label: "MA5" },
-  { window: 10, color: "#ffd27d", label: "MA10" },
-  { window: 20, color: "#b9e6ca", label: "MA20" },
-  { window: 40, color: "#d7a8ff", label: "MA40" },
+const MA_WINDOWS: { window: number; cssVar: string; label: string }[] = [
+  { window: 5, cssVar: "var(--ma-5)", label: "MA5" },
+  { window: 10, cssVar: "var(--ma-10)", label: "MA10" },
+  { window: 20, cssVar: "var(--ma-20)", label: "MA20" },
+  { window: 40, cssVar: "var(--ma-40)", label: "MA40" },
 ];
 
 interface BarPoint {
@@ -153,6 +149,8 @@ function KLineChart({ series }: { series: CandleSeries }) {
 
     const market = readMarketColors();
     const theme = readChartThemeColors();
+    const maColor = readMaColors();
+    const maColorByWindow: Record<number, string> = { 5: maColor.ma5, 10: maColor.ma10, 20: maColor.ma20, 40: maColor.ma40 };
     const chart = createChart(host, {
       autoSize: true,
       layout: {
@@ -190,9 +188,9 @@ function KLineChart({ series }: { series: CandleSeries }) {
       })),
     );
 
-    for (const { window, color } of activeMa) {
+    for (const { window } of activeMa) {
       const line = chart.addSeries(LineSeries, {
-        color,
+        color: maColorByWindow[window],
         lineWidth: 1,
         priceLineVisible: false,
         lastValueVisible: false,
@@ -236,7 +234,7 @@ function KLineChart({ series }: { series: CandleSeries }) {
     <div className="kline-chart">
       <div className="kline-legend" ref={legendRef} />
       <div className="ma-legend">
-        {MA_WINDOWS.map(({ window, color, label }) => {
+        {MA_WINDOWS.map(({ window, cssVar, label }) => {
           const off = hiddenMa.includes(window);
           return (
             <button
@@ -247,7 +245,7 @@ function KLineChart({ series }: { series: CandleSeries }) {
               title={off ? `显示 ${label}` : `隐藏 ${label}`}
               onClick={() => setHiddenMa((current) => (current.includes(window) ? current.filter((item) => item !== window) : [...current, window]))}
             >
-              <i style={{ background: color }} />
+              <i style={{ background: cssVar }} />
               <span>{label}</span>
             </button>
           );

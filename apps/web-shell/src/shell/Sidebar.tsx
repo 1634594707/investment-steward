@@ -126,7 +126,7 @@ function ProfileChip({ policyVersion, policyActive, onNavigate }: { policyVersio
   const profile = useProfile();
   return (
     <button className="profile-chip" onClick={() => onNavigate("investment")}>
-      <span className="avatar" style={profile.avatar ? { padding: 0, overflow: "hidden" } : { background: profile.color, color: "#0b1018" }}>
+      <span className="avatar" style={profile.avatar ? { padding: 0, overflow: "hidden" } : { background: profile.color, color: "var(--avatar-on-color)" }}>
         {profile.avatar
           ? <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover", display: "block" }} />
           : profile.name.slice(0, 1)}

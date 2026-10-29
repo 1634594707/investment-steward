@@ -19,7 +19,6 @@ export function EvidenceDrawer({ items, evidenceId, onClose }: Props) {
       <aside className="ev-drawer" role="dialog" aria-modal="true" aria-label="证据详情" onClick={(event) => event.stopPropagation()} ref={drawerRef}>
         <header className="ev-drawer-head">
           <div>
-            <span className="section-kicker">EVIDENCE DETAIL</span>
             <h3>一条证据的完整说明</h3>
           </div>
           <button className="icon-button" aria-label="关闭" onClick={onClose}>

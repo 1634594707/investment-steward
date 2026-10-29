@@ -61,7 +61,7 @@ describe("U01/U04 实际壳层与页面连接", () => {
     expect(await screen.findByText(`${holdingCount} 个持仓标的`)).toBeVisible();
     expect(screen.getByText("3 个自选标的")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "我的投资" }));
-    expect(await screen.findByText(`已确认 · ${holdingCount} 个持仓 · 3 个自选`)).toBeVisible();
+    expect(await screen.findByText(`已确认 v1 · ${holdingCount} 个持仓 · 3 个自选`)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "今天" }));
     expect(screen.getByText(`${holdingCount} 个持仓标的`)).toBeVisible();
   });

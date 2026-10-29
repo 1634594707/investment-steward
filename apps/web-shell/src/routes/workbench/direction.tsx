@@ -7,6 +7,7 @@
  * - 证券身份（B09）与三种资格（B10）按服务端核验结果如实展示，不猜测。
  */
 import { useMemo, useState, type ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 import type { DirectionReport, DirectionPoolCandidate } from "./researchTypes";
 import { MarkdownishText, QUALITY_STATUS_TONE } from "./panels";
 // M1-B04：候选身份判定与代码列口径收敛到 format.ts，与 Markdown 导出共用。
@@ -693,7 +694,7 @@ export function DirectionPoolTable({
                         title={`该候选所属板块「${board || item.sector || "未知"}」的系统参考分类为「${item.pool_board_judgment || violationBySymbol.get((item.symbol || "").replace(/\D/g, ""))?.label || "非低估象限"}」，而正文没有推翻该分类的数值论证——候选池代表性存疑（C02）`}
                         role="img"
                         aria-label="非低估象限候选告警"
-                      >⚠</span>
+                      ><TriangleAlert size={13} aria-hidden="true" /></span>
                     )}
                     {hasQuadrantData ? (
                       board || item.pool_board_judgment ? (

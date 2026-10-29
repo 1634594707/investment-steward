@@ -29,7 +29,6 @@ export function ShortcutsHelp({ open, onClose }: Props) {
     <div className="confirm-overlay" onClick={onClose}>
       <div className="shortcuts-help" role="dialog" aria-modal="true" aria-label="快捷键速查" onClick={(event) => event.stopPropagation()} ref={dialogRef}>
         <header className="confirm-head">
-          <span className="section-kicker">KEYBOARD FIRST</span>
           <h3>快捷键速查</h3>
           <p>键盘优先是这套桌面的默认操作方式：跳页、切持仓、开面板都不必碰鼠标。</p>
         </header>

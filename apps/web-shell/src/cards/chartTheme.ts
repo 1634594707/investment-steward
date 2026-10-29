@@ -43,3 +43,15 @@ export function readChartThemeColors(): { text: string; grid: string; scaleBorde
     scaleBorder: withAlpha(base, 0.4),
   };
 }
+
+/** K01 豁免项：均线周期标识色从令牌读取（--ma-5/--ma-10/--ma-20/--ma-40/--ma-60，见 styles.css 令牌块）。 */
+export function readMaColors(): { ma5: string; ma10: string; ma20: string; ma40: string; ma60: string } {
+  const style = getComputedStyle(document.body);
+  return {
+    ma5: style.getPropertyValue("--ma-5").trim() || "#7dc4ff",
+    ma10: style.getPropertyValue("--ma-10").trim() || "#ffd27d",
+    ma20: style.getPropertyValue("--ma-20").trim() || "#b9e6ca",
+    ma40: style.getPropertyValue("--ma-40").trim() || "#d7a8ff",
+    ma60: style.getPropertyValue("--ma-60").trim() || "#b9e6ca",
+  };
+}

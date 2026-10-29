@@ -7,7 +7,7 @@
 
 [English](README.md) · **简体中文**
 
-[2026-10-28 累计更新与验收状态](UPDATES-2026-10-28.md)
+[2026-10-30 前端优化说明](UPDATES-2026-10-30.md) · [2026-10-28 累计更新与验收状态](UPDATES-2026-10-28.md)
 
   <img src="docs/assets/demo-preview-zh.webp" width="920" alt="AI Investment Steward 演示循环——55 条在案证据，四种建议动作">
 

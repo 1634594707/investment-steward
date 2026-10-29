@@ -38,7 +38,7 @@
 
 /* ---------- [B3] 决定与证据/计划的显式关联 ---------- */
 .decision-evidence-refs { display: flex; flex-wrap: wrap; gap: calc(var(--space-1) * var(--density-scale)); margin-top: calc(var(--space-2) * var(--density-scale)); }
-.decision-plan-ref { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font-size: var(--text-3); color: var(--muted, #8b93a7); }
+.decision-plan-ref { margin: calc(var(--space-2) * var(--density-scale)) 0 0; font-size: var(--text-3); color: var(--muted); }
 .decision-evidence-picker { display: flex; flex-wrap: wrap; gap: calc(var(--space-1) * var(--density-scale)); margin-top: calc(var(--space-1) * var(--density-scale)); max-height: 132px; overflow-y: auto; }
 
 /* ---------- [E2] 决定结果补录 ---------- */
@@ -54,14 +54,14 @@
 .lt-row select, .lt-form select { min-width: 180px; }
 .lt-row { display: flex; gap: calc(var(--space-2) * var(--density-scale)); }
 .lt-form { display: flex; flex-wrap: wrap; gap: calc(var(--space-2) * var(--density-scale)); align-items: center; margin: calc(var(--space-2) * var(--density-scale)) 0; }
-.lt-form input, .lt-form select, .lt-row select { padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--panel-2, #14161a); color: var(--ink); font-size: var(--text-3); }
-.lt-form textarea { flex: 1 1 320px; min-width: 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--panel-2, #14161a); color: var(--ink); font-size: var(--text-3); resize: vertical; }
+.lt-form input, .lt-form select, .lt-row select { padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--surface-input); color: var(--ink); font-size: var(--text-3); }
+.lt-form textarea { flex: 1 1 320px; min-width: 0; padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale)); border: 1px solid var(--line); background: var(--surface-input); color: var(--ink); font-size: var(--text-3); resize: vertical; }
 .lt-check { display: inline-flex; align-items: center; gap: calc(var(--space-1) * var(--density-scale)); font-size: var(--text-3); color: var(--muted); }
 .lt-timeline { margin: calc(var(--space-2) * var(--density-scale)) 0 0; padding-left: calc(var(--space-4) * var(--density-scale)); display: grid; gap: calc(var(--space-2) * var(--density-scale)); }
 .lt-event-head { display: flex; align-items: center; gap: calc(var(--space-2) * var(--density-scale)); flex-wrap: wrap; }
 .lt-event-head small { color: var(--faint); font-size: var(--text-2); }
 .lt-timeline p, .lt-item p { margin: calc(var(--space-1) * var(--density-scale)) 0 0; color: var(--muted); font-size: var(--text-3); line-height: 1.6; }
-.lt-timeline li.lt-gap { opacity: .72; border-left: 2px dashed var(--amber-a40, #b8860b); padding-left: calc(var(--space-2) * var(--density-scale)); }
+.lt-timeline li.lt-gap { opacity: .72; border-left: 2px dashed var(--amber-a40); padding-left: calc(var(--space-2) * var(--density-scale)); }
 .lt-item { border-top: 1px solid var(--line); padding: calc(var(--space-2) * var(--density-scale)) 0; }
 .lt-item:first-of-type { border-top: none; }
 .lt-statement { white-space: pre-wrap; }

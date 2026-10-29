@@ -216,7 +216,7 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
   return (
     <div className="page-stack review-page">
       <section className="review-heading">
-        <div><span className="section-kicker">决定与学习</span><h2>决策复盘账本</h2><p>{review?.period_label ?? "暂无周期复盘"}</p></div>
+        <div><h2>决策复盘账本</h2><p>{review?.period_label ?? "暂无周期复盘"}</p></div>
         <label className="review-period">决定范围<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="all">全部记录</option></select></label>
       </section>
       <section className="metric-row" aria-label="决定复盘进度">
@@ -229,7 +229,6 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
         <section className="weekly-review-band">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">WEEKLY REVIEW</span>
               <h3>{review.period_label}</h3>
             </div>
           </div>
@@ -258,7 +257,6 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
       <section className="timeline-section">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">DECISIONS</span>
             <h3>决定时间线</h3>
           </div>
           <div className="section-heading-actions">
@@ -266,7 +264,7 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
               <Plus size={16} aria-hidden="true" />记录一次决定
             </button>
             <button className="text-button" onClick={() => onNavigate("research")}>
-              去研究新问题 <span>→</span>
+              去研究新问题
             </button>
           </div>
         </div>
@@ -345,7 +343,6 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
       <section className="plans-section">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">PLANS</span>
             <h3>执行计划</h3>
           </div>
         </div>
@@ -382,7 +379,6 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
       <section className="learning-reflections">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">LEARNING LOG</span>
             <h3>学习活动与反思</h3>
           </div>
           <button className="text-button review-export" disabled={exportBusy} onClick={handleExport}>
@@ -416,7 +412,6 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
         <div className="confirm-overlay" onClick={() => { if (!decisionBusy) setDecisionOpen(false); }}>
           <aside ref={dialogRef} className="invest-modal wide" role="dialog" aria-modal="true" aria-label="记录一次决定" onKeyDown={(event) => { if (event.key === "Escape" && !decisionBusy) setDecisionOpen(false); }} onClick={(event) => event.stopPropagation()}>
             <header className="confirm-head">
-              <span className="section-kicker">RECORD DECISION</span>
               <h3>记录一次决定</h3>
               <p>把当时的思考留档，复盘时不改写过去。</p>
             </header>
@@ -476,7 +471,7 @@ export function ReviewPage({ decisions, plans, activities, review, evidence, onO
               <footer className="form-foot">
                 <button className="secondary-button" disabled={decisionBusy} onClick={() => setDecisionOpen(false)}>取消</button>
                 <button className="primary-button" disabled={decisionBusy || !theme.trim() || !summary.trim()} onClick={saveDecision}>
-                  {decisionBusy ? "保存中…" : "保存决定"} <span>→</span>
+                  {decisionBusy ? "保存中…" : "保存决定"}
                 </button>
               </footer>
               {decisionError && <p className="form-error" role="alert">{decisionError}</p>}

@@ -493,14 +493,14 @@ export function LongtermSection({ decisions, coreRequest, onNavigate }: {
   if (!coreRequest) {
     return (
       <section className="review-longterm">
-        <div className="section-heading"><div><span className="eyebrow">LONG-TERM RESEARCH</span><h3>决策与研究长期能力</h3></div></div>
+        <div className="section-heading"><div><h3>决策与研究长期能力</h3></div></div>
         <p className="evidence-group-empty">当前环境没有 Core 请求通道,此面板不可用。</p>
       </section>
     );
   }
   return (
     <section className="review-longterm">
-      <div className="section-heading"><div><span className="eyebrow">LONG-TERM RESEARCH</span><h3>决策与研究长期能力</h3></div></div>
+      <div className="section-heading"><div><h3>决策与研究长期能力</h3></div></div>
       <TimelinePanel coreRequest={coreRequest} decisions={decisions} />
       <JudgmentsPanel coreRequest={coreRequest} />
       <WatchItemsPanel coreRequest={coreRequest} />

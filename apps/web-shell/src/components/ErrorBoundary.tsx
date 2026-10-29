@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
           数据仍保存在本地 Core，重新加载界面即可恢复；若反复出现请查看控制台日志并向维护者反馈。
         </span>
         <button className="primary-button" onClick={() => window.location.reload()}>
-          重新加载界面 <span>→</span>
+          重新加载界面
         </button>
       </div>
     );

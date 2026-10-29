@@ -550,17 +550,15 @@ export function InvestmentPage({
       {isDemo && <DemoNotice context="持仓 / 证据 / 行情" />}
       <section className="investment-heading">
         <div>
-          <span className="section-kicker">投资原则 {policy ? `v${policy.version}` : "待建立"}</span>
           <h2>{policy?.investment_goal ?? "先写下你希望怎样投资"}</h2>
           <p>
             {policy
-              ? `${policy.status === "active" ? "已确认" : "待确认"} · ${holdings.filter((item) => item.status === "holding").length} 个持仓 · ${holdings.filter((item) => item.status === "watchlist").length} 个自选`
+              ? `${policy.status === "active" ? "已确认" : "待确认"} v${policy.version} · ${holdings.filter((item) => item.status === "holding").length} 个持仓 · ${holdings.filter((item) => item.status === "watchlist").length} 个自选`
               : "暂无投资原则"}
           </p>
         </div>
         <button className="primary-button" onClick={() => { setPolicyError(null); (policy ? onNavigate("review") : setPolicyOpen(true)); }}>
           {policy ? "复核原则" : "建立原则"}
-          <span>→</span>
         </button>
       </section>
 
@@ -600,8 +598,7 @@ export function InvestmentPage({
               <>
                 <div className="holding-head">
                   <div>
-                    <span className="eyebrow">{selected.instrument}</span>
-                    <h3>{selected.label}</h3>
+                    <h3>{selected.label}<span className="inst-code">{selected.instrument}</span></h3>
                     <p>{selected.strategy_note}</p>
                   </div>
                   <div className="holding-actions">
@@ -653,7 +650,7 @@ export function InvestmentPage({
                 {holdingTab === "thesis" && (thesis || creatingThesis ? (
                   <>
                     <div className="thesis-block">
-                      <SectionHeading eyebrow="投资逻辑" title="一条可被证据检验的陈述" />
+                      <SectionHeading title="一条可被证据检验的陈述" />
                       {editing ? (
                         <div className="thesis-editor-stack">
                           <textarea
@@ -708,7 +705,7 @@ export function InvestmentPage({
                     {editing && (
                       <div className="thesis-edit-actions">
                         <button className="primary-button" disabled={thesisBusy} onClick={saveEditor}>
-                          {thesisBusy ? "保存中…" : creatingThesis ? "保存投资逻辑" : "预览并确认"} <span>→</span>
+                          {thesisBusy ? "保存中…" : creatingThesis ? "保存投资逻辑" : "预览并确认"}
                         </button>
                         <button className="text-button" disabled={thesisBusy} onClick={() => { setEditing(false); setCreatingThesis(false); }}>
                           取消
@@ -773,14 +770,14 @@ export function InvestmentPage({
             )}
 
             {holdingTab === "overview" && <section className="investment-overview">
-              <div><SectionHeading eyebrow="当前论点" title="判断与重新验证条件" /><p>{thesis?.original_statement || "尚未建立投资论点"}</p><h4>重新验证条件</h4>{thesis?.invalidation_conditions.length ? <ul>{thesis.invalidation_conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul> : <p className="evidence-group-empty">暂无失效条件</p>}<button className="text-button" onClick={() => setHoldingTab("thesis")}>查看论点</button></div>
-              <div><SectionHeading eyebrow="证据状态" title="支持与反证" /><div className="tag-row"><span className="soft-tag mint">支持 {relationCounts.supporting}</span><span className="soft-tag amber">反证 {relationCounts.contradicting}</span><span className="soft-tag gray">未知 {relationCounts.unknown}</span></div>{relevantEvidence.slice(0, 3).map((item) => <EvidenceRow item={item} key={item.evidence_id} onOpen={onOpenEvidence} />)}{!relevantEvidence.length && <p className="evidence-group-empty">暂无关联证据</p>}<button className="text-button" onClick={() => setHoldingTab("evidence")}>查看全部证据</button></div>
+              <div><SectionHeading title="判断与重新验证条件" /><p>{thesis?.original_statement || "尚未建立投资论点"}</p><h4>重新验证条件</h4>{thesis?.invalidation_conditions.length ? <ul>{thesis.invalidation_conditions.map((condition) => <li key={condition}>{condition}</li>)}</ul> : <p className="evidence-group-empty">暂无失效条件</p>}<button className="text-button" onClick={() => setHoldingTab("thesis")}>查看论点</button></div>
+              <div><SectionHeading title="支持与反证" /><div className="tag-row"><span className="soft-tag mint">支持 {relationCounts.supporting}</span><span className="soft-tag amber">反证 {relationCounts.contradicting}</span><span className="soft-tag gray">未知 {relationCounts.unknown}</span></div>{relevantEvidence.slice(0, 3).map((item) => <EvidenceRow item={item} key={item.evidence_id} onOpen={onOpenEvidence} />)}{!relevantEvidence.length && <p className="evidence-group-empty">暂无关联证据</p>}<button className="text-button" onClick={() => setHoldingTab("evidence")}>查看全部证据</button></div>
             </section>}
-            {holdingTab === "thesis" && thesisRecords.length > 0 && <section className="thesis-records"><SectionHeading eyebrow="论点记录" title="建立与更新" /><ol>{thesisRecords.map((record) => <li key={record.thesis_id}><time dateTime={record.created_at}>建立于 {formatDate(record.created_at)}</time><p>{record.original_statement}</p><span>{record.status === "active" ? "当前有效" : "已归档"} · 最近更新 {formatDate(record.updated_at)}</span></li>)}</ol></section>}
+            {holdingTab === "thesis" && thesisRecords.length > 0 && <section className="thesis-records"><SectionHeading title="建立与更新" /><ol>{thesisRecords.map((record) => <li key={record.thesis_id}><time dateTime={record.created_at}>建立于 {formatDate(record.created_at)}</time><p>{record.original_statement}</p><span>{record.status === "active" ? "当前有效" : "已归档"} · 最近更新 {formatDate(record.updated_at)}</span></li>)}</ol></section>}
 
             {selected && holdingTab === "evidence" && (
               <div className="holding-evidence">
-                <SectionHeading eyebrow="相关证据" title={`${selected.label} 的证据流`} />
+                <SectionHeading title={`${selected.label} 的证据流`} />
                 <div className="tag-row">
                   <span className="soft-tag mint">支持证据 {relationCounts.supporting}</span>
                   <span className="soft-tag amber">相反证据 {relationCounts.contradicting}</span>
@@ -907,7 +904,7 @@ export function InvestmentPage({
         <div>
           <p className="evidence-group-empty">还没有记录任何持仓或自选。先建立一个标的，管家才能把变化与你关联起来。</p>
           <button className="primary-button" onClick={openHoldingDialog}>
-            新建第一个标的 <span>→</span>
+            新建第一个标的
           </button>
         </div>
       )}
@@ -965,7 +962,6 @@ export function InvestmentPage({
         <div className="confirm-overlay" onClick={() => { if (!holdingBusy) setHoldingOpen(false); }}>
           <aside ref={holdingDialog} className="invest-modal" role="dialog" aria-modal="true" aria-label="新建持仓 / 自选" onKeyDown={(event) => { if (event.key === "Escape" && !holdingBusy) setHoldingOpen(false); }} onClick={(event) => event.stopPropagation()}>
             <header className="confirm-head">
-              <span className="section-kicker">NEW HOLDING</span>
               <h3>新建持仓 / 自选</h3>
               <p>先记账再讨论：管家只根据你这条记录关联后续变化。</p>
             </header>
@@ -1032,7 +1028,7 @@ export function InvestmentPage({
               <footer className="form-foot">
                 <button className="secondary-button" disabled={holdingBusy} onClick={() => setHoldingOpen(false)}>取消</button>
                 <button className="primary-button" disabled={holdingBusy || !holdingSaveable} onClick={saveHolding}>
-                  {holdingBusy ? "保存中…" : "保存"} <span>→</span>
+                  {holdingBusy ? "保存中…" : "保存"}
                 </button>
               </footer>
             </div>
@@ -1044,7 +1040,6 @@ export function InvestmentPage({
         <div className="confirm-overlay" onClick={() => { if (!policyBusy) setPolicyOpen(false); }}>
           <aside ref={policyDialog} className="invest-modal wide" role="dialog" aria-modal="true" aria-label="建立第一版投资原则" onKeyDown={(event) => { if (event.key === "Escape" && !policyBusy) setPolicyOpen(false); }} onClick={(event) => event.stopPropagation()}>
             <header className="confirm-head">
-              <span className="section-kicker">NEW POLICY DRAFT</span>
               <h3>建立第一版投资原则</h3>
               <p>先起草，经显式确认后才生效。仅「投资目标」为必填，其余按需补充。</p>
             </header>
@@ -1085,7 +1080,7 @@ export function InvestmentPage({
               <footer className="form-foot">
                 <button className="secondary-button" disabled={policyBusy} onClick={() => setPolicyOpen(false)}>取消</button>
                 <button className="primary-button" disabled={policyBusy || !policyGoal.trim()} onClick={createPolicyDraft}>
-                  {policyBusy ? "起草中…" : "起草原则"} <span>→</span>
+                  {policyBusy ? "起草中…" : "起草原则"}
                 </button>
               </footer>
             </div>

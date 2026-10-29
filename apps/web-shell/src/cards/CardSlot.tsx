@@ -47,7 +47,7 @@ export function CardSlot({ slot, loading: pageLoading = false, children }: Props
     <section className="card-slot" data-slot={slot}>
       {meta && (
         <span className="slot-kicker">
-          {meta.label} · {meta.id}
+          {meta.label}
         </span>
       )}
       {busy && !hasRemoteCards ? (

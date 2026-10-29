@@ -143,7 +143,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
                 onClick={() => onNavigate(step.view)}
                 aria-label={`${step.label}${step.done ? "（已完成）" : "（去完成）"}`}
               >
-                {step.label}{step.done ? " · 已完成" : " →"}
+                {step.label}{step.done ? " · 已完成" : ""}
               </button>
             ))}
           </div>
@@ -165,7 +165,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
       </section>}
       <section className="content-grid">
         <div className="section-block">
-          <SectionHeading eyebrow="需要你的判断" title="优先处理" action={hasBrief ? "查看全部" : undefined} onClick={() => onNavigate("research")} />
+          <SectionHeading title="优先处理" action={hasBrief ? "查看全部" : undefined} onClick={() => onNavigate("research")} />
           {hasBrief ? (
             <div className="action-list">
               {brief!.items.map((item) => (
@@ -207,7 +207,7 @@ export function TodayPage({ counts, evidence, brief, notifications, learningUnit
           )}
         </div>
         <div className="section-block evidence-column">
-          <SectionHeading eyebrow="最新证据" title="证据与来源" action="打开研究" onClick={() => onNavigate("research")} />
+          <SectionHeading title="证据与来源" action="打开研究" onClick={() => onNavigate("research")} />
           {evidence.length === 0 && <p className="evidence-group-empty">暂无证据记录</p>}
           {evidence.slice(0, 2).map((item) => (
             <EvidenceRow item={item} key={item.evidence_id} onOpen={onOpenEvidence} />

@@ -16,7 +16,7 @@ export function EmptyState({ title, reason, action, onAction }: Props) {
       {reason && <span>{reason}</span>}
       {action && onAction && (
         <button className="text-button" onClick={onAction}>
-          {action} <span>→</span>
+          {action}
         </button>
       )}
     </div>

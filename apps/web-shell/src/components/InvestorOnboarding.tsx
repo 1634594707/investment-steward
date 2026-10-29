@@ -93,7 +93,6 @@ export function InvestorOnboarding({ saving, error, initial, onSubmit, onDismiss
         ref={dialogRef}
       >
         <header className="confirm-head">
-          <span className="section-kicker">{initial ? "INVESTOR PROFILE · EDIT" : "INVESTOR PROFILE · FIRST RUN"}</span>
           <h3>{initial ? "更新你的画像" : "先让我了解一下你"}</h3>
           <p>这些信息只保存在本机，作为研究答卷的背景参考，用于让内容更贴合你的情况；<b>不会用于生成任何买卖建议</b>。任何字段都可留空。</p>
         </header>

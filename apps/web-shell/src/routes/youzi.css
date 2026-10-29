@@ -21,26 +21,26 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: calc(var(--space-3) * var(--density-scale));
-  border-bottom: 1px solid var(--line, #2a3833);
+  border-bottom: 1px solid var(--line);
   padding-bottom: calc(var(--space-2) * var(--density-scale));
 }
 
 .youzi-header h2 {
   margin: calc(var(--space-1) * var(--density-scale)) 0 0;
   font-size: 20px;
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 .youzi-header > span {
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-3);
 }
 
 .youzi-tag {
   font-size: var(--text-2);
-  letter-spacing: 0.06em;
-  color: var(--muted, #9baaa3);
-  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--muted);
+  text-transform: none;
 }
 
 .youzi-tabs {
@@ -50,26 +50,26 @@
 }
 
 .youzi-tab {
-  border: 1px solid var(--line, #2a3833);
+  border: 1px solid var(--line);
   background: transparent;
   border-radius: var(--radius-pill, 999px);
   padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
   font-size: var(--text-4);
   cursor: pointer;
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 .youzi-tab:hover {
-  color: var(--ink, #e7f0ea);
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  color: var(--ink);
+  border-color: var(--mint-a40);
 }
 
 /* 活跃标签沿用 .wb-tabs button.active 的强调口径（mint 文字 + mint 底），
    不要用 color:#fff 压在浅薄荷底上（对比度约 1.6:1）。 */
 .youzi-tab.active {
-  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
-  color: var(--mint, #9be3bc);
+  background: var(--mint-a12);
+  border-color: var(--mint-a40);
+  color: var(--mint);
 }
 
 .youzi-table {
@@ -80,7 +80,7 @@
 
 .youzi-table th,
 .youzi-table td {
-  border-bottom: 1px solid var(--line, #2a3833);
+  border-bottom: 1px solid var(--line);
   padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
   text-align: left;
   vertical-align: top;
@@ -88,7 +88,7 @@
 
 .youzi-table th {
   font-weight: 600;
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-3);
   white-space: nowrap;
 }
@@ -101,23 +101,23 @@
 }
 
 .youzi-table td.mono {
-  font-family: var(--font-data, "JetBrains Mono", ui-monospace, monospace);
-  color: var(--ink, #e7f0ea);
+  font-family: var(--font-data);
+  color: var(--ink);
 }
 
 /* 净额为负（净卖出）：CN 约定「跌/卖」用绿。 */
 .youzi-table td.neg {
-  color: var(--mkt-down, #5fb389);
+  color: var(--mkt-down);
 }
 
 /* 观察名单命中行：mint 极淡底，与命中徽章同色系。 */
 .youzi-table tr.hl {
-  background: var(--mint-a04, rgba(155, 227, 188, 0.04));
+  background: var(--mint-a04);
 }
 
 .youzi-reason {
   max-width: 320px;
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 .youzi-badge {
@@ -126,30 +126,30 @@
   line-height: 1.6;
   padding: 0 calc(var(--space-1) * var(--density-scale));
   border-radius: var(--radius-pill, 999px);
-  border: 1px solid var(--line, #2a3833);
-  color: var(--muted, #9baaa3);
+  border: 1px solid var(--line);
+  color: var(--muted);
   margin-left: calc(var(--space-1) * var(--density-scale));
   white-space: nowrap;
 }
 
 /* 观察名单命中：强调色 */
 .youzi-badge.hit {
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
-  color: var(--mint, #9be3bc);
-  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
+  border-color: var(--mint-a40);
+  color: var(--mint);
+  background: var(--mint-a12);
 }
 
 /* 匿名汇总桶：中性灰，刻意不与命中同色（别把「机构专用」看成游资）。
    此处原为浅色写死的 #f3f4f6/#6b7280，在深色底上是灰字浅底——改走 white-alpha 令牌。 */
 .youzi-badge.bucket {
-  border-color: var(--line, #2a3833);
-  color: var(--faint, #899b92);
-  background: var(--white-a04, rgba(255, 255, 255, 0.04));
+  border-color: var(--line);
+  color: var(--faint);
+  background: var(--white-a04);
 }
 
 .youzi-note,
 .youzi-muted {
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-4);
   line-height: 1.7;
   margin: 0;
@@ -159,9 +159,9 @@
    文字却继承 --ink（浅色）→ 整块几乎不可见。改按 .load-error-banner 口径：
    amber 左边框 + amber 极淡底 + amber 标题，正文用 --ink 保证可读。 */
 .youzi-alert {
-  border: 1px solid var(--amber-a40, rgba(241, 189, 116, 0.4));
-  border-left: 2px solid var(--amber, #f1bd74);
-  background: var(--amber-a07, rgba(241, 189, 116, 0.07));
+  border: 1px solid var(--amber-a40);
+  border-left: 2px solid var(--amber);
+  background: var(--amber-a07);
   border-radius: var(--radius-2, 8px);
   padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
   display: flex;
@@ -169,24 +169,24 @@
   gap: calc(var(--space-1) * var(--density-scale));
   align-items: flex-start;
   font-size: var(--text-4);
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 .youzi-alert strong {
-  color: var(--amber, #f1bd74);
+  color: var(--amber);
   font-size: var(--text-4);
 }
 
 .youzi-alert > span {
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
 .youzi-detail {
-  border: 1px solid var(--line, #2a3833);
+  border: 1px solid var(--line);
   border-radius: var(--radius-2, 8px);
-  background: var(--panel, #121918);
+  background: var(--panel);
   padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
   display: flex;
   flex-direction: column;
@@ -202,13 +202,13 @@
 .youzi-detail h3 {
   margin: 0;
   font-size: var(--text-5);
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 .youzi-seat-block h4 {
   margin: 0 0 calc(var(--space-1) * var(--density-scale));
   font-size: var(--text-4);
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 /* D04（2026-09-19 用户走查）：案例复盘的快捷区间与表单同行基线。 */
@@ -220,15 +220,15 @@
   gap: calc(var(--space-1) * var(--density-scale));
 }
 
-/* 名单原文块：原来用 var(--code-bg, #f8fafc)，而 --code-bg 全仓未定义 →
+/* 名单原文块：原来用 var(--code-bg)，而 --code-bg 全仓未定义 →
    落到近白底，深色主题下整块文字不可见。改走 surface-raised。 */
 .youzi-pre {
   white-space: pre-wrap;
-  background: var(--surface-raised, #17211f);
-  border: 1px solid var(--line, #2a3833);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: var(--radius-2, 8px);
   padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
   font-size: var(--text-3);
   line-height: 1.6;
   margin: 0;
@@ -238,7 +238,7 @@
 .youzi-limits {
   margin: 0;
   padding-left: calc(var(--space-4) * var(--density-scale));
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-4);
   line-height: 1.7;
 }
@@ -255,7 +255,7 @@
   margin: calc(var(--space-1) * var(--density-scale)) 0 0;
   font-size: var(--text-4);
   line-height: 1.7;
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 .youzi-lesson-head {
@@ -265,9 +265,9 @@
 }
 
 .youzi-footer {
-  border-top: 1px solid var(--line, #2a3833);
+  border-top: 1px solid var(--line);
   padding-top: calc(var(--space-2) * var(--density-scale));
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-3);
 }
 
@@ -278,9 +278,9 @@
 
 /* 事实类型筛选：选中的 chip 走高亮口径（不是浏览器默认的灰底）。 */
 .youzi-page .ghost-btn.small.active {
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
-  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
-  color: var(--mint, #9be3bc);
+  border-color: var(--mint-a40);
+  background: var(--mint-a12);
+  color: var(--mint);
 }
 
 /* 逐日覆盖状态徽章在事实面板里成排出现：允许换行、彼此留 4px。 */
@@ -302,9 +302,9 @@
   gap: calc(var(--space-2) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
   align-items: flex-end;
   padding: calc(var(--space-3) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
-  border: 1px solid var(--line, #2a3833);
+  border: 1px solid var(--line);
   border-radius: var(--radius-2, 8px);
-  background: var(--panel, #121918);
+  background: var(--panel);
 }
 
 .youzi-page .youzi-form label {
@@ -312,22 +312,22 @@
   flex-direction: column;
   gap: calc(var(--space-1) * var(--density-scale));
   font-size: var(--text-3);
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 .youzi-page .youzi-form input {
   width: 132px;
   padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
   border-radius: var(--radius-1, 4px);
-  border: 1px solid var(--line, #2a3833);
-  background: var(--surface-raised, #17211f);
-  color: var(--ink, #e7f0ea);
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--ink);
   font-size: var(--text-4);
 }
 
 .youzi-page .youzi-form input:focus {
   outline: none;
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  border-color: var(--mint-a40);
 }
 
 /* 摘要条：代码 / 区间 / 事件数。用 token 而非写死颜色，浅深主题都成立。 */
@@ -336,22 +336,22 @@
   flex-wrap: wrap;
   gap: calc(var(--space-1) * var(--density-scale)) calc(var(--space-4) * var(--density-scale));
   font-size: var(--text-4);
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 .youzi-page .youzi-summary strong {
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 /* 截短是「有损但不致命」的提示，与取数失败的 amber 区分开：用 muted 描边。 */
 .youzi-page .youzi-alert.warn {
-  border-color: var(--line, #2a3833);
-  border-left-color: var(--muted, #9baaa3);
+  border-color: var(--line);
+  border-left-color: var(--muted);
   background: transparent;
 }
 
 .youzi-page .youzi-alert.warn strong {
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 /* —— Y4-03 / Y4-04 练习 —— */
@@ -361,17 +361,17 @@
 .youzi-page .youzi-chip {
   padding: calc(var(--space-1) * var(--density-scale)) calc(var(--space-3) * var(--density-scale));
   border-radius: 999px;
-  border: 1px solid var(--line, #2a3833);
+  border: 1px solid var(--line);
   background: transparent;
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
   font-size: var(--text-3);
   cursor: pointer;
 }
 
 .youzi-page .youzi-chip.active {
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
-  background: var(--mint-a12, rgba(155, 227, 188, 0.12));
-  color: var(--mint, #9be3bc);
+  border-color: var(--mint-a40);
+  background: var(--mint-a12);
+  color: var(--mint);
 }
 
 /* 竖排表单：练习作答的三栏是长文本，横排会把每栏挤到不可读。 */
@@ -389,9 +389,9 @@
   min-height: 62px;
   padding: calc(var(--space-2) * var(--density-scale)) calc(var(--space-2) * var(--density-scale));
   border-radius: var(--radius-1, 4px);
-  border: 1px solid var(--line, #2a3833);
-  background: var(--surface-raised, #17211f);
-  color: var(--ink, #e7f0ea);
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--ink);
   font-size: var(--text-4);
   font-family: inherit;
   line-height: 1.5;
@@ -400,7 +400,7 @@
 
 .youzi-page .youzi-form .youzi-textarea:focus {
   outline: none;
-  border-color: var(--mint-a40, rgba(155, 227, 188, 0.4));
+  border-color: var(--mint-a40);
 }
 
 /* 禁用的「揭示结果」按钮要与可点状态明显不同——否则会被当成静默无响应。 */
@@ -413,7 +413,7 @@
 .youzi-page .youzi-code {
   display: block;
   font-size: var(--text-3);
-  color: var(--muted, #9baaa3);
+  color: var(--muted);
 }
 
 /* 64 位 ID 必须能断行，否则会把表格撑出横向滚动。 */
@@ -440,7 +440,7 @@
 .youzi-page .youzi-detail h4 {
   margin: 2px 0 0;
   font-size: var(--text-4);
-  color: var(--ink, #e7f0ea);
+  color: var(--ink);
 }
 
 /* —— K06（2026-09-18 排版与研报呈现一致性路线图）：游资页此前 0 条 @media、也不随宽度档变。
@@ -462,12 +462,12 @@ body[data-width-tier="sm"] .youzi-page .youzi-table { display: block; max-width:
   display: inline-block;
   margin-left: calc(var(--space-1) * var(--density-scale));
   font-size: var(--text-2);
-  color: var(--blue, #7db6ff);
+  color: var(--blue);
   text-decoration: none;
-  border-bottom: 1px dotted var(--blue-a35, rgba(125, 182, 255, 0.35));
+  border-bottom: 1px dotted var(--blue-a35);
   white-space: nowrap;
 }
 .youzi-src-link:hover {
-  color: var(--ink, #e6efe9);
-  border-bottom-color: var(--ink, #e6efe9);
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
