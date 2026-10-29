@@ -18,15 +18,25 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm test:web
       - run: pnpm build:web
 
   python:
     runs-on: ubuntu-latest
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      PYTHONPATH: src
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: uv lock --check
+      - run: uv sync --locked --all-packages
+      - run: node scripts/check-contracts.mjs
+      - run: node scripts/check-bridge-coverage.mjs
       - run: uv run --directory apps/core-api pytest
       - run: uv run --directory apps/core-api ruff check src tests

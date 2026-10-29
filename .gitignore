@@ -105,3 +105,6 @@ docs/architecture/.archify-*/
 .workbuddy/*
 !.workbuddy/settings.json
 .workbuddy-ai/
+
+# Internal decision notes follow the local-only process-document policy.
+.agents/notes/
