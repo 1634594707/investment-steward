@@ -97,7 +97,7 @@ def run_portfolio_backtest(
     weights: {symbol: 权重}（允许未归一,内部归一化）;
     industries: {symbol: 行业}（可选,缺省视为单一行业 "default"）。
     """
-    symbols = [s for s in weights if s in symbol_returns and symbol_returns[s]]
+    symbols = [s for s in weights if symbol_returns.get(s)]
     if len(symbols) < 2:
         raise ValueError("组合回测至少需要 2 个有效标的（有收益序列）")
     lengths = {len(symbol_returns[s]) for s in symbols}

@@ -1,20 +1,19 @@
 """Exercise HTTP serialization/authentication with isolated, shared in-memory storage."""
-from datetime import UTC, datetime, timedelta
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from uuid import UUID
 
-from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy.pool import StaticPool
-
+from fastapi.testclient import TestClient
 from investment_steward_core.api import app as app_module
 from investment_steward_core.config import CoreSettings
 from investment_steward_core.domain import PluginInstallationState
 from investment_steward_core.market_feed import FeedError
 from investment_steward_core.storage import database as database_module
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture
@@ -73,7 +72,7 @@ def test_daily_http_export_and_preview_preserve_batch_and_snapshot(scan_http):
 
 @pytest.mark.parametrize("offline", [False, True])
 def test_market_http_worker_archives_success_and_fetch_failure(scan_http, monkeypatch, offline):
-    http, headers, database = scan_http
+    http, headers, _database = scan_http
     monkeypatch.setattr(app_module, "fetch_cn_market_board", lambda *args, **kwargs:
                         [{"symbol": "600618", "name": "氯碱化工"}])
     if offline:
@@ -121,7 +120,7 @@ def test_cancel_http_preserves_cancelled_archive(scan_http):
 
 
 def test_cancel_during_rate_wait_stops_next_fetch_and_keeps_completed_snapshot(scan_http, monkeypatch):
-    http, headers, database = scan_http
+    http, headers, _database = scan_http
     monkeypatch.setattr(app_module, "fetch_cn_market_board", lambda *args, **kwargs: [
         {"symbol": "600618", "name": "氯碱化工"}, {"symbol": "000060", "name": "中金岭南"},
     ])

@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4, uuid5
 
 import pytest
-
 from investment_steward_core import feed_health, longterm, market_feed
 from investment_steward_core.domain.models import Evidence, EvidenceType
 from investment_steward_core.storage.database import Database
@@ -257,7 +256,6 @@ def test_quality_without_any_feed_log_says_sample_missing(tmp_path):
 
 def _client(tmp_path):
     from fastapi.testclient import TestClient
-
     from investment_steward_core.api import create_app
     from investment_steward_core.config import CoreSettings
 

@@ -10,10 +10,8 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
-
 from test_stock_research_tools import _file_client, _mock_sources, _setup_active_profile
 
 

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
+import itertools
 
+import pytest
 from investment_steward_core import quant_experiments, quant_portfolio
 from test_quant_pool import _bars
 
@@ -66,7 +67,7 @@ def test_rebalance_every_holds_position():
     assert weekly["total_turnover"] < daily["total_turnover"]
     weekly_curve = weekly["curve"]
     # 非调仓日 delta=0（position 不变）
-    for prev, cur in zip(weekly_curve, weekly_curve[1:]):
+    for prev, cur in itertools.pairwise(weekly_curve):
         if (cur["step"] % 5) != 0:
             assert cur["position"] == prev["position"]
 
@@ -122,7 +123,7 @@ def test_lookahead_bias_clean_fn_passes():
 
 def test_lookahead_bias_future_peeking_detected():
     bars = _bars(120)
-    closes = [float(b["close"]) for b in bars]
+    _closes = [float(b["close"]) for b in bars]
 
     def peeking(bars_):
         closes_ = [float(b["close"]) for b in bars_]

@@ -211,7 +211,7 @@ def _fetch_sse_index(index_type: str) -> dict[str, Any]:
     with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT) as response:
         payload = _json.loads(response.read().decode("utf-8"))
     if not isinstance(payload.get("curIndex"), dict) or not isinstance(payload.get("lastIndex"), dict):
-        raise RuntimeError(f"indexType={index_type} 响应缺少 curIndex/lastIndex")
+        raise RuntimeError(f"indexType={index_type} 响应缺少 curIndex/lastIndex")  # noqa: TRY004 - Preserve the public validation error contract.
     return payload
 
 

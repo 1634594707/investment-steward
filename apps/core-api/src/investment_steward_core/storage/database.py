@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 from sqlalchemy import bindparam, create_engine, event, text
@@ -1564,7 +1565,8 @@ class Database:
         for row in rows:
             try:
                 review = WatchpointManualReview.model_validate(self._load(row["payload"]))
-            except Exception:  # noqa: BLE001 - 队列装配不该因一条脏数据整体失败
+            except Exception:
+                logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
                 continue
             grouped.setdefault(str(review.report_id), []).append(review)
         return grouped
@@ -1593,7 +1595,8 @@ class Database:
         for row in rows:
             try:
                 verification = JudgmentVerification.model_validate(self._load(row["payload"]))
-            except Exception:  # noqa: BLE001 - 单条坏记录跳过，不让统计整体失败
+            except Exception:
+                logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
                 continue
             grouped.setdefault(str(row["judgment_id"]), []).append(verification)
         return grouped
@@ -3430,7 +3433,7 @@ class Database:
     # E02（桌面端升级路线图 2026-09-18）：/export/all 导出键 → 数据库表名（模型键与 raw 表键并存）。
     # 与 EXPORT_PAYLOAD_TABLES 合起来构成可恢复白名单；credentials/plugin_*/sync_*/audit_events/
     # macro_cache 等设备态/秘密/派生缓存同样**不可导入**（与导出政策对称）。
-    IMPORT_TABLE_MAP: dict[str, str] = {
+    IMPORT_TABLE_MAP: ClassVar[dict[str, str]] = {
         **{name: name for name in EXPORT_PAYLOAD_TABLES},
         "policies": "investment_policies",
         "holdings": "holdings",
@@ -3463,7 +3466,7 @@ class Database:
             existing = int(connection.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one())
             conflicts = 0
             if pk_columns:
-                placeholders = ", ".join(f":pk{i}" for i in range(len(pk_columns)))
+                _placeholders = ", ".join(f":pk{i}" for i in range(len(pk_columns)))
                 condition = " AND ".join(f"{col} = :pk{i}" for i, col in enumerate(pk_columns))
                 for row in rows:
                     params = {f"pk{i}": row.get(col) for i, col in enumerate(pk_columns)}
@@ -3538,7 +3541,7 @@ class Database:
                 return
             rotate_backup(self.path)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
 
     def record_model_call(
         self,
@@ -3591,7 +3594,7 @@ class Database:
                     },
                 )
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
 
     def summarize_model_usage(self, window_days: int) -> list[dict[str, Any]]:
         """F01：按方案聚合窗口内的调用次数/结果/token 三项/耗时（since 由端点换算传入）。
@@ -3726,7 +3729,7 @@ class Database:
                     },
                 )
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
 
     def list_feed_attempts(self, window_days: int, limit: int = 20000) -> list[dict[str, Any]]:
         """F02：窗口内的尝试行（按来源聚合的原料）。limit 是**如实登记的上限**：超出部分
@@ -3926,7 +3929,7 @@ def _parse_backup_stamp(name: str):
         return None
     from datetime import datetime as _datetime
     try:
-        return _datetime.strptime(f"{match.group(1)}{match.group(2)}", "%Y%m%d%H%M%S")
+        return _datetime.strptime(f"{match.group(1)}{match.group(2)}", "%Y%m%d%H%M%S")  # noqa: DTZ007 - Calendar or local backup timestamp; no instant conversion.
     except ValueError:
         return None
 
@@ -3964,7 +3967,7 @@ def rotate_backup(db_path, keep: int = 7):
         src.close()
         # E05：按时间跨度保留（替代旧的「只留最近 keep 份」）。
         files = sorted(backup_dir.glob("steward-*.sqlite3"))
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 - Compare local backup filename timestamps in the same clock.
         keep_names: set[str] = set()
         weekly: dict[tuple[int, int], str] = {}
         for path in files:
@@ -3990,4 +3993,5 @@ def rotate_backup(db_path, keep: int = 7):
                 path.unlink(missing_ok=True)
         return target
     except Exception:
+        logging.getLogger(__name__).debug("Database backup failed", exc_info=True)
         return None

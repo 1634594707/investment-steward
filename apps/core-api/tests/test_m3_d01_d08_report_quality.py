@@ -20,10 +20,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from investment_steward_core import direction_research as dr
-
 
 # ---------------------------------------------------------------------------
 # 合成载荷

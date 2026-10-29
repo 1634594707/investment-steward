@@ -554,7 +554,7 @@ def _parse_sina_sector_list(raw: str) -> list[dict[str, object]]:
         if len(parts) < 13:
             continue
 
-        def _num(index: int) -> float | None:
+        def _num(index: int, parts=parts) -> float | None:
             try:
                 return float(parts[index])
             except (TypeError, ValueError):

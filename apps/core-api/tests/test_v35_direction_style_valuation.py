@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 from investment_steward_core import direction_research as direction_engine
 from investment_steward_core import valuation_evidence as ve

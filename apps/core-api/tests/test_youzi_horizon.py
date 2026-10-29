@@ -17,7 +17,7 @@ from investment_steward_core import youzi_horizon as hz
 #: 连续的显式交易日（合成，仅供算法测试；不声明是真实交易所日历）。
 DAYS = tuple(
     (date(2026, 9, 1) + timedelta(days=offset)).strftime("%Y%m%d")
-    for offset in range(0, 60)
+    for offset in range(60)
     if (date(2026, 9, 1) + timedelta(days=offset)).weekday() < 5
 )
 

@@ -17,8 +17,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from investment_steward_core import macro_calendar as calendar_engine
 from investment_steward_core import direction_research as direction_engine
+from investment_steward_core import macro_calendar as calendar_engine
 
 TODAY = date(2026, 9, 14)
 
@@ -258,7 +258,6 @@ def test_v37_macro_timing_rule_applies_to_industry_topics_too():
 def test_v37_evidence_text_carries_phase_and_actual_value(tmp_path, monkeypatch):
     """方向研判证据块的宏观日历条目须含发布阶段与（可得的）实际值，而非只给窗口日期。"""
     from fastapi.testclient import TestClient
-
     from investment_steward_core import model_client as mc
     from investment_steward_core.api import app as api_app
     from investment_steward_core.api import create_app

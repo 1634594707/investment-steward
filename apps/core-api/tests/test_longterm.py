@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4, uuid5
 
 import pytest
-
 from investment_steward_core import longterm
-from investment_steward_core.domain.models import DecisionEntry, Evidence, EvidenceType, Plan, Thesis
+from investment_steward_core.domain.models import (
+    DecisionEntry,
+    Evidence,
+    EvidenceType,
+    Thesis,
+)
 from investment_steward_core.storage.database import Database
 
 USER = uuid5(UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "longterm-test")
@@ -219,7 +224,7 @@ def test_watch_item_endpoints_contract(client):
 
 def test_timeline_endpoint_contract(client):
     http, headers = client
-    decision = _decision()
+    _unused_decision = _decision()
     # 端点使用 client fixture 的 CoreState(独立 user),直接查不存在决定 → 404
     assert http.get(f"/timeline/decision/{uuid4()}", headers=headers).status_code == 404
 

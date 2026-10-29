@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401
+from conftest import run_stock_report
 
 
 def _file_client(tmp_path, monkeypatch):
@@ -127,7 +128,7 @@ def test_stock_report_persisted(tmp_path, monkeypatch):
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_payload}}]})
 
-    generated = run_stock_report(test_client, headers, **{"symbol": "000060"})
+    generated = run_stock_report(test_client, headers, symbol="000060")
     assert generated["ok"] is True and generated.get("report_id"), generated
 
     listed = test_client.get("/ai-research/reports", params={"kind": "stock"}, headers=headers).json()
@@ -163,7 +164,7 @@ def test_reports_survive_reopen(tmp_path, monkeypatch):
         return TestClient(create_app(CoreSettings(session_token=token, data_dir=tmp_path)))
 
     first, headers = make_client(), {"X-Core-Session-Token": token}
-    test_client, headers = first, headers
+    test_client = first
     _setup_active_profile(test_client, headers)
     payload = json.dumps({
         "report": "".join(f"## {n}\n正文。\n" for n in __import__("investment_steward_core").direction_research.REQUIRED_DIRECTION_SECTIONS),

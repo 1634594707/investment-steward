@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
-
 from investment_steward_core import quant_pool
 from investment_steward_core.storage import artifact_store
 from investment_steward_core.storage.database import Database
-from investment_steward_core.storage.paths import StorageLayout
 from test_quant_pool import _bars, _db, _lay
 
 

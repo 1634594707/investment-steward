@@ -8,10 +8,7 @@
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
-
-import pytest
 
 from investment_steward_core import analysis_followup
 from investment_steward_core.analysis_followup import (
@@ -67,7 +64,7 @@ def _direction_base() -> dict:
 
 
 def test_direction_followup_includes_judgment_ids() -> None:
-    system_text, user_text = direction_followup_messages(
+    _system_text, user_text = direction_followup_messages(
         base_report=_direction_base(), question="美国 CPI 已公布 3.4%，J6 是否成立？",
         supplements=[], facts=[],
     )

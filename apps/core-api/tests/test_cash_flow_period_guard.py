@@ -32,13 +32,13 @@ def test_same_declared_currency_allows_existing_period_and_unit_checks():
     assert result["metric_metadata"]["free_cash_flow"]["currency"] == "CNY"
 
 
-def test_original_user_report_never_reuses_mixed_period_quality_as_verified_analysis():
-    """Actual archived input must lose its old verdict without rewriting the archive."""
-    path = Path(__file__).resolve().parents[3] / "docs/assets/history-audit-2026-10-25/original-report.json"
+def test_legacy_report_never_reuses_mixed_period_quality_as_verified_analysis():
+    """Synthetic legacy input must lose its old verdict without rewriting the fixture."""
+    path = Path(__file__).parent / "fixtures/legacy-mixed-period-report.json"
     original = path.read_bytes()
     report = json.loads(original)
     cash = report["cash_flow_quality"]
-    assert report["report_id"] == "bea494cc-5e3f-44e4-9f8d-5b8156c85a30"
+    assert report["report_id"] == "00000000-0000-4000-8000-000000000001"
     assert cash["operating_cash_flow"] == 10.08 and cash["capex"] == 6.06
     assert cash["free_cash_flow"] == -2.63 and cash["verdict"] == "盈利质量偏弱"
     assert "metric_metadata" not in cash

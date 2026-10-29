@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from investment_steward_core import direction_research as direction_engine
 from investment_steward_core import valuation_evidence as ve
 
@@ -535,8 +534,8 @@ def test_e2e_evidence_entries_carry_judgment_and_prompt_asks_three_questions(tmp
     monkeypatch.setattr(ve, "latest_valuation_trade_date", lambda: "2026-09-11")
     monkeypatch.setattr(ve, "fetch_market_cross_section", lambda trade_date: list(rows))
 
-    pb_pct = {"银行Ⅱ": 96.6, "房屋建设Ⅱ": 3.4, "普钢": 28.9, "房地产开发": 10.3, "保险Ⅱ": 37.4}
-    pe_pct = {"银行Ⅱ": 97.9, "房屋建设Ⅱ": 84.5, "普钢": 52.2, "房地产开发": 72.5, "保险Ⅱ": 0.1}
+    _pb_pct = {"银行Ⅱ": 96.6, "房屋建设Ⅱ": 3.4, "普钢": 28.9, "房地产开发": 10.3, "保险Ⅱ": 37.4}
+    _pe_pct = {"银行Ⅱ": 97.9, "房屋建设Ⅱ": 84.5, "普钢": 52.2, "房地产开发": 72.5, "保险Ⅱ": 0.1}
 
     def _snap(symbol, **_kw):
         return ve.ValuationSnapshot(

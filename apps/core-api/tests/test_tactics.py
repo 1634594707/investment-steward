@@ -12,11 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
 from investment_steward_core import tactics
-from investment_steward_core.api import create_app
-from investment_steward_core.config import CoreSettings
 from investment_steward_core.signing import verify_manifest_integrity
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

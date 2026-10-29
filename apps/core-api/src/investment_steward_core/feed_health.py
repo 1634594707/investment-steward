@@ -22,14 +22,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import socket
 import time
 import urllib.error
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Any, Callable
+from typing import Any
 
 # —— 来源标签登记（feed 侧唯一来源，改这里即改全局口径） ——
 SOURCE_CN_MARKET_TENCENT = "中国市场行情（腾讯行情）"
@@ -128,8 +129,8 @@ def _emit(record: dict[str, Any]) -> None:
         return
     try:
         _recorder(record)
-    except Exception:  # noqa: BLE001 - 记录失败绝不影响取数
-        pass
+    except Exception:
+        logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
 
 
 @contextmanager
@@ -151,7 +152,7 @@ def attempt(
     error_kind: str | None = None
     try:
         yield
-    except BaseException as error:  # noqa: BLE001 - 记录后原样抛出，不改控制流
+    except BaseException as error:
         result = RESULT_ERROR
         error_kind = error_kind_of(error)
         raise
@@ -162,7 +163,7 @@ def attempt(
                 "endpoint": endpoint,
                 "params_fingerprint": fingerprint(params),
                 "started_at": started_at.isoformat(),
-                "latency_ms": int(round((time.monotonic() - started) * 1000.0)),
+                "latency_ms": round((time.monotonic() - started) * 1000.0),
                 "result": result,
                 "error_kind": error_kind,
                 "attempt_index": int(attempt_index),
@@ -213,4 +214,4 @@ def summarize(attempts: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _round_or_none(value: float | None) -> int | None:
-    return None if value is None else int(round(value))
+    return None if value is None else round(value)

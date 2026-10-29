@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "report_id": "00000000-0000-4000-8000-000000000001",
+  "kind": "stock",
+  "subject": "TEST",
+  "symbol": "TEST",
+  "title": "合成历史现金流报告",
+  "report": "合成历史正文：盈利质量偏弱 [S4]。",
+  "generated_at": "2026-10-25T00:00:00Z",
+  "model": "synthetic",
+  "confidence": "low",
+  "citations": [
+    "S4"
+  ],
+  "source_keys": [
+    "S4"
+  ],
+  "source_errors": {},
+  "quality_warnings": [
+    "合成历史告警"
+  ],
+  "decision_card": {},
+  "earnings_growth": [
+    {
+      "factor": "volume",
+      "effect": "未核验",
+      "analysis_state": "analyzed",
+      "sources": [
+        "S4"
+      ]
+    }
+  ],
+  "research_completeness": {
+    "done_count": 4,
+    "complete": true
+  },
+  "scenarios": [
+    {
+      "name": "合成情景",
+      "trigger": "收入增长",
+      "invalidates": "收入下降"
+    }
+  ],
+  "limitations": [
+    "合成局限一",
+    "合成局限二",
+    "合成局限三"
+  ],
+  "cash_flow_quality": {
+    "operating_cash_flow": 10.08,
+    "net_income": 7.93,
+    "capex": 6.06,
+    "free_cash_flow": -2.63,
+    "verdict": "盈利质量偏弱",
+    "depreciation_amortization": null,
+    "working_capital_change": null,
+    "operating_cash_flow_period": "TTM-2026H1",
+    "capex_period": "2026H1"
+  }
+}

@@ -431,10 +431,7 @@ def _rpn_arity_ok(tokens: list[str]) -> bool:
             if depth < 2:
                 return False
             depth -= 1
-        elif token in UNARY_OPS:
-            if depth < 1:
-                return False
-        elif parse_ts_token(token) is not None:
+        elif token in UNARY_OPS or parse_ts_token(token) is not None:
             if depth < 1:
                 return False
         elif token in FEATURE_NAMES:
@@ -688,7 +685,7 @@ def _beam_search(
         for left in pair_sources:
             for right in pair_sources:
                 for op in BINARY_OPS:
-                    candidate = tuple([*left, *right, op])
+                    candidate = (*left, *right, op)
                     if candidate in seen:
                         continue
                     seen.add(candidate)
@@ -1180,11 +1177,11 @@ def mine(
     marginal_view = [present(row, with_suite=False) for row in marginal]
 
     notes: list[str] = [
-        "三段式切分(train 选模/valid 调阈值/test 只确认一次):排序键 = "
+        ("三段式切分(train 选模/valid 调阈值/test 只确认一次):排序键 = "
         "|test_IC| × 逐段同号一致性 × 复杂度收缩(AIC/BIC 式);"
-        "榜单仅含多重检验校正后显著者,未达显著者在 marginal 中显式标注。",
-        f"IC 为秩相关(并列取平均秩),t 值按重叠窗口折算有效样本数(≈n/{forward_days});"
-        "仅作研究背景,不构成买卖建议。",
+        "榜单仅含多重检验校正后显著者,未达显著者在 marginal 中显式标注。"),
+        (f"IC 为秩相关(并列取平均秩),t 值按重叠窗口折算有效样本数(≈n/{forward_days});"
+        "仅作研究背景,不构成买卖建议。"),
     ]
     if search == "beam":
         notes.append(

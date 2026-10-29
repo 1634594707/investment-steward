@@ -18,8 +18,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from investment_steward_core.api import create_app
 from investment_steward_core.api import app as app_module
+from investment_steward_core.api import create_app
 from investment_steward_core.config import CoreSettings
 from investment_steward_core.domain import Notification
 
@@ -85,7 +85,7 @@ def test_daily_at_window_aggregates_and_flushes(client, monkeypatch):
         "/personal/settings", headers=headers, json={"notify": {"frequency": "daily"}}
     ).status_code == 200
 
-    user_id = test_client.get("/session", headers=headers).json()["user_id"]
+    _user_id = test_client.get("/session", headers=headers).json()["user_id"]
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(app_module, "digest_window", lambda prefs, local_now: (True, "digest:daily:2099-01-01"))
     monkeypatch.setattr(app_module, "deliver_notification", lambda n, store: _DELIVERED_RECEIPT)
@@ -112,7 +112,7 @@ def test_daily_same_window_no_duplicate_digest(client, monkeypatch):
         "/personal/settings", headers=headers, json={"notify": {"frequency": "daily"}}
     ).status_code == 200
 
-    user_id = test_client.get("/session", headers=headers).json()["user_id"]
+    _user_id = test_client.get("/session", headers=headers).json()["user_id"]
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(app_module, "digest_window", lambda prefs, local_now: (True, "digest:daily:2099-01-01"))
     deliver_calls: list[Notification] = []
@@ -137,7 +137,7 @@ def test_weekly_digest_uses_weekly_semantics(client, monkeypatch):
         "/personal/settings", headers=headers, json={"notify": {"frequency": "weekly"}}
     ).status_code == 200
 
-    user_id = test_client.get("/session", headers=headers).json()["user_id"]
+    _user_id = test_client.get("/session", headers=headers).json()["user_id"]
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(app_module, "digest_window", lambda prefs, local_now: (True, "digest:weekly:2099-01-05"))
     monkeypatch.setattr(app_module, "deliver_notification", lambda n, store: _DELIVERED_RECEIPT)
@@ -150,7 +150,7 @@ def test_weekly_digest_uses_weekly_semantics(client, monkeypatch):
 
 def test_realtime_frequency_never_produces_digest(client, monkeypatch):
     test_client, headers = client
-    user_id = test_client.get("/session", headers=headers).json()["user_id"]
+    _user_id = test_client.get("/session", headers=headers).json()["user_id"]
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(app_module, "digest_window", lambda prefs, local_now: (True, ""))
     monkeypatch.setattr(app_module, "deliver_notification", lambda n, store: [

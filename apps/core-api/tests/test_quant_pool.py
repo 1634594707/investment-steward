@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from investment_steward_core import market_feed, quant_factors, quant_pool
 from investment_steward_core.storage.database import Database
 from investment_steward_core.storage.paths import StorageLayout

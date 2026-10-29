@@ -117,7 +117,7 @@ def preview(layout: StorageLayout, target_user_data: str, target_artifacts: str 
     }
 
 
-def _fail(layout: StorageLayout, staging: Path, code: str, detail: str) -> "MigrationError":
+def _fail(layout: StorageLayout, staging: Path, code: str, detail: str) -> MigrationError:
     shutil.rmtree(staging, ignore_errors=True)
     return MigrationError(code, detail)
 

@@ -16,8 +16,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from investment_steward_core.storage.paths import StorageLayout
 from typing import Any
+
+from investment_steward_core.storage.paths import StorageLayout
+
 
 def _load(layout: StorageLayout) -> dict[str, list[dict[str, Any]]]:
     try:

@@ -21,14 +21,12 @@ from __future__ import annotations
 
 import json
 
-import pytest
-from conftest import (  # noqa: F401
+from conftest import (
     SAMPLE_CONCLUSION,
     SAMPLE_SUMMARY_IN_BAND,
-    client as client_fixture,
     run_stock_report,
 )
-from test_v31_repair_and_comparison import (  # noqa: F401  复用固定证据快照与样本
+from test_v31_repair_and_comparison import (
     _CannedModel,
     _good_payload,
     _good_report_text,
@@ -51,7 +49,7 @@ def _generate(
     body = run_stock_report(
         test_client,
         headers,
-        **{"symbol": symbol, "with_counter_check": False, "with_auto_repair": False},
+        symbol=symbol, with_counter_check=False, with_auto_repair=False,
     )
     assert body["ok"] is True, body
     assert body["report_id"], "报告必须落库，定向修复需要 report_id"
@@ -216,7 +214,7 @@ def test_repair_rolls_back_when_citations_no_longer_valid(client, tmp_path, monk
     payload["available_citations"] = ["S1", "S2", "S3", "S4", "S5"]
     payload["citations"] = ["S9"]  # 不存在于本报告真实来源
     payload.update({"report_id": "r-rollback", "kind": "stock", "subject": "600001"})
-    canned = _CannedModel(monkeypatch, [json.dumps(SAMPLE_CONCLUSION, ensure_ascii=False)])
+    _canned = _CannedModel(monkeypatch, [json.dumps(SAMPLE_CONCLUSION, ensure_ascii=False)])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
     monkeypatch.setattr(
         db_module.Database, "get_ai_research_report", lambda self, report_id: dict(payload)

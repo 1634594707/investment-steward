@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-
 from investment_steward_core import signing, sync_client
 from investment_steward_core.api import app as api_app
 from investment_steward_core.credential_store import DbCredentialStore

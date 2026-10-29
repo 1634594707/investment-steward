@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 import urllib.parse
 import urllib.request
@@ -164,7 +165,7 @@ def _num(value: Any) -> float | None:
             result = float(str(value).replace(",", "").strip())
         except (TypeError, ValueError):
             return None
-    if result != result:  # NaN
+    if math.isnan(result):  # NaN
         return None
     return result
 
@@ -546,7 +547,6 @@ def cross_section_with_fallback() -> tuple[str, list[CrossSectionRow], str]:
     一份横截面快照，则整份返回并附降级说明（注明抓取时点与数据截至日期）；否则照常
     抛 `ValuationError`——调用方进入「证据不足」状态，不做部分页拼凑。
     """
-    global _last_good_cross_section
     try:
         trade_date = latest_valuation_trade_date()
         rows = fetch_market_cross_section(trade_date)
@@ -894,8 +894,8 @@ def describe_prescreen_contrast_entry(aggregate: SectorValuationAggregate) -> st
     ratio_text = "不可得" if ratio is None else f"{ratio * 100:.1f}%"
     parts = [
         f"【对照清单·未入深取】板块「{aggregate.board_name or aggregate.board_code}」",
-        f"亏损面 {ratio_text}（{aggregate.loss_count}/{aggregate.member_count} 只成分股亏损）"
-        f" ≥ {VAL_PRESCREEN_LOSS_RATIO_MAX * 100:.0f}%，基本面质量未过初筛闸门",
+        (f"亏损面 {ratio_text}（{aggregate.loss_count}/{aggregate.member_count} 只成分股亏损）"
+        f" ≥ {VAL_PRESCREEN_LOSS_RATIO_MAX * 100:.0f}%，基本面质量未过初筛闸门"),
         f"PB(MRQ) 中位数 {_fmt(aggregate.pb_mrq_median)}（{aggregate.pb_mrq_positive_count} 只可比）",
         f"PE(TTM) 中位数 {_fmt(aggregate.pe_ttm_median)}（{aggregate.pe_ttm_positive_count} 只可比）",
         f"板块总市值 {_yi(aggregate.total_market_cap)}",
@@ -1256,11 +1256,11 @@ def _yi(value: float | None) -> str:
 def describe_valuation(snapshot: ValuationSnapshot) -> str:
     """把估值快照渲染为证据包 S5 的纯文本（口径逐项标注，缺失项如实写「无数据」）。"""
     lines: list[str] = [
-        f"估值快照（{VALUATION_SOURCE_LABEL}，截至 {snapshot.trade_date or '未知'}，"
-        f"行业：{snapshot.board_name or '未知'}）：",
-        f"- 估值：PE(TTM) {_fmt(snapshot.pe_ttm)}；PE(静态/最近年报) {_fmt(snapshot.pe_static)}；"
+        (f"估值快照（{VALUATION_SOURCE_LABEL}，截至 {snapshot.trade_date or '未知'}，"
+        f"行业：{snapshot.board_name or '未知'}）："),
+        (f"- 估值：PE(TTM) {_fmt(snapshot.pe_ttm)}；PE(静态/最近年报) {_fmt(snapshot.pe_static)}；"
         f"PB(MRQ) {_fmt(snapshot.pb_mrq)}；PS(TTM) {_fmt(snapshot.ps_ttm)}；"
-        f"PEG {_fmt(snapshot.peg)}；PCF(经营现金流 TTM) {_fmt(snapshot.pcf_ocf_ttm)}",
+        f"PEG {_fmt(snapshot.peg)}；PCF(经营现金流 TTM) {_fmt(snapshot.pcf_ocf_ttm)}"),
     ]
     scale = (
         f"- 规模：总市值 {_yi(snapshot.total_market_cap)}；"
@@ -1577,8 +1577,8 @@ def fetch_board_percentile_appendix(
 def describe_board_percentile_appendix(appendix: BoardPercentileAppendix) -> str:
     """B03：板块分位附录 → 证据文本（含代理口径声明；纯函数）。"""
     parts: list[str] = [
-        f"板块「{appendix.board_name or appendix.board_code}」代表股分位附录："
-        f"取市值前列 {appendix.representative_count} 只，其中 {appendix.comparable_count} 只分位可得"
+        (f"板块「{appendix.board_name or appendix.board_code}」代表股分位附录："
+        f"取市值前列 {appendix.representative_count} 只，其中 {appendix.comparable_count} 只分位可得")
     ]
     if appendix.pb_percentile_median is not None:
         parts.append(f"代表股 PB 分位中位数 {appendix.pb_percentile_median:.1f}%")

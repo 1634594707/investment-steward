@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from investment_steward_core.storage import artifact_store
 from investment_steward_core.storage.paths import StorageLayout

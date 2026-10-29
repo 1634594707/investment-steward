@@ -1,6 +1,5 @@
 """Archive the selected response series; a qfq request alone proves no response basis."""
 import pytest
-
 from investment_steward_core import market_feed
 
 

@@ -516,7 +516,7 @@ def choice_question(instructions: Any, options: Mapping[str, str | None] | Seque
                 raise ValueError("Jev choice 选项名不能为空")
             criteria[key] = None
     else:
-        raise ValueError("Jev choice 的 options 必须是映射或选项名序列")
+        raise ValueError("Jev choice 的 options 必须是映射或选项名序列")  # noqa: TRY004 - Preserve the public validation error contract.
 
     if not criteria:
         raise ValueError("Jev choice 至少需要一个选项")
@@ -535,7 +535,7 @@ def score_question(instructions: Any, levels: Sequence[str]) -> dict[str, Any]:
     要 0–100 请用 `JevAnswer.score_percent`（本机换算，非 Jev 原生输出）。
     """
     if isinstance(levels, (str, bytes)) or not isinstance(levels, Sequence):
-        raise ValueError("Jev score 的 levels 必须是有序等级描述数组")
+        raise ValueError("Jev score 的 levels 必须是有序等级描述数组")  # noqa: TRY004 - Preserve the public validation error contract.
     cleaned: list[str] = []
     for level in levels:
         text = str(level).strip()
@@ -552,7 +552,7 @@ def score_question(instructions: Any, levels: Sequence[str]) -> dict[str, Any]:
 def _validate_question(question_id: str, question: Any) -> str:
     """校验单道题目结构，返回题型字符串。题型定义越界属代码缺陷 → `ValueError`（不是降级条件）。"""
     if not isinstance(question, dict):
-        raise ValueError(f"Jev 题目「{question_id}」必须是 dict")
+        raise ValueError(f"Jev 题目「{question_id}」必须是 dict")  # noqa: TRY004 - Preserve the public validation error contract.
     qtype = question.get("type")
     if qtype == "noul":
         _require_instructions(question.get("instructions"))
@@ -594,7 +594,7 @@ def _validate_state(state: Any) -> None:
             raise JevUnavailable("Jev state 为空数组，本次无内容可判（调用方应跳过该层）")
         for index, item in enumerate(state):
             if not isinstance(item, (str, Mapping, Sequence)):
-                raise ValueError(f"Jev state 第 {index} 项必须是文本 / 对象 / 数组")
+                raise ValueError(f"Jev state 第 {index} 项必须是文本 / 对象 / 数组")  # noqa: TRY004 - Preserve the public validation error contract.
         return
     raise ValueError("Jev state 只能是字符串、对象或数组（官方仅接受文本输入，不支持图像/音频/视频）")
 

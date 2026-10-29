@@ -21,13 +21,9 @@ import urllib.error
 import urllib.request
 
 import pytest
-
 from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import _file_client  # noqa: F401
-
 from investment_steward_core import model_client as mc
-
+from test_stock_research_tools import _file_client
 
 # ---------------------------------------------------------------------------
 # 纯函数：明文密钥判定与解析
@@ -435,7 +431,7 @@ def test_is_waf_block_only_matches_403(monkeypatch):
 # 后端守卫：超时必须单列——报出方案超时秒数 + 指路「调大方案超时」。
 # ---------------------------------------------------------------------------
 
-def _active_profile(timeout_secs: int = 120) -> "object":
+def _active_profile(timeout_secs: int = 120) -> object:
     from uuid import uuid4
 
     from investment_steward_core.domain import ModelProfile, ModelProfileStatus

@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from datetime import date
 
-import investment_steward_core.macro_feed as macro_feed
 from investment_steward_core import direction_research as direction_engine
 from investment_steward_core import macro_calendar as calendar_engine
+from investment_steward_core import macro_feed
 
 TODAY = date(2026, 9, 14)
 
@@ -144,7 +144,7 @@ def test_macro_timing_rule_requires_official_caliber_priority():
 
 def test_macro_timing_rule_injected_for_style_topic():
     """规则 17 仍注入风格分支（v37 语义保持）。"""
-    system_text, user_text = direction_engine.build_messages(
+    _system_text, user_text = direction_engine.build_messages(
         topic="被低估的板块",
         question="",
         mode=direction_engine.direction_mode_budget("standard")[0],

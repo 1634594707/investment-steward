@@ -347,7 +347,7 @@ def bar_date_issues(bars: list[dict[str, Any]]) -> list[str]:
     dates = [_bar_date(bar) for bar in bars]
     if any(not value for value in dates):
         issues.append("部分 K 线缺少日期字段")
-    seen: set[str] = set()
+    _seen: set[str] = set()
     if len({value for value in dates if value}) != len([value for value in dates if value]):
         issues.append("K 线日期存在重复")
     previous = ""

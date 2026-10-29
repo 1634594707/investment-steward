@@ -7,11 +7,10 @@ import math
 from datetime import date, timedelta
 
 import pytest
-
 from investment_steward_core import quant_panel
 from investment_steward_core.storage import artifact_store
-from investment_steward_core.storage.paths import StorageLayout
-from test_quant_pool import _db, _lay
+from test_quant_pool import _lay
+
 
 # --------------------------------------------------------------------------- #
 # 合成夹具（确定性:同输入同输出,不依赖行情源）
@@ -164,7 +163,7 @@ def test_empty_fetch_result_does_not_build_a_fake_panel(tmp_path):
 def test_no_common_trading_dates_is_reported_not_padded(tmp_path):
     layout = _lay(tmp_path)
     dates = synth_dates(30)
-    early, late = SYMBOLS[0:2], SYMBOLS[2:5]
+    early, _late = SYMBOLS[0:2], SYMBOLS[2:5]
 
     def fetch(symbol: str, window: int):
         days = dates[:15] if symbol in early else dates[15:]
@@ -329,7 +328,7 @@ def test_short_history_member_is_excluded_and_reported_not_collapsing_the_panel(
     交集口径下面板长度由最短成员决定 —— 一个刚上市的票就能让整个横截面研究样本不足。
     v2 起剔除它并把门槛与原因如实报出,其余成员仍按严格交集对齐（不填充）。
     """
-    layout = _lay(tmp_path)
+    _layout = _lay(tmp_path)
     dates = synth_dates(120)
     fresh = SYMBOLS[0]
     # 其余 11 只各 120 根,新票只有 40 根（< 0.9 × 120 = 108）
@@ -358,7 +357,7 @@ def test_history_filter_keeps_everyone_when_coverage_is_even(tmp_path):
 
     整体样本太短该由下游可行性闸门如实证伪,不能在装配期把面板清空。
     """
-    layout = _lay(tmp_path)
+    _layout = _lay(tmp_path)
     dates = synth_dates(30)
     per_symbol = {symbol: synth_bars(symbol, dates) for symbol in SYMBOLS}
     panel = quant_panel.assemble_panel(
@@ -371,7 +370,7 @@ def test_history_filter_keeps_everyone_when_coverage_is_even(tmp_path):
 
 def test_small_shortfall_stays_in_the_panel_and_is_handled_by_intersection(tmp_path):
     """只差一点点（38/40 = 95% > 90%）属于正常停牌级别,不该剔除 —— 由交集如实裁掉那两天。"""
-    layout = _lay(tmp_path)
+    _layout = _lay(tmp_path)
     dates = synth_dates(40)
     per_symbol = {symbol: synth_bars(symbol, dates) for symbol in SYMBOLS}
     per_symbol[SYMBOLS[0]] = synth_bars(SYMBOLS[0], [day for day in dates if day not in {dates[30], dates[31]}])

@@ -12,18 +12,15 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import (  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import financial_evidence, report_quality
+from investment_steward_core.financial_evidence import FinancialStatementRow
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import financial_evidence, report_quality
-from investment_steward_core.financial_evidence import FinancialStatementRow
 
 
 def _fin_row(statement_type: str, period: str, published: str, items: dict[str, str]) -> FinancialStatementRow:
@@ -258,7 +255,7 @@ def test_endpoint_rewrites_overlong_summary_only(client, tmp_path, monkeypatch):
 
     monkeypatch.setattr(mc, "_post_json", _fake)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     # 摘要被重写：正文未被改写
     assert body["executive_summary"] == rewritten_summary
@@ -302,7 +299,7 @@ def test_endpoint_keeps_summary_when_rewrite_still_over_limit(client, tmp_path, 
 
     monkeypatch.setattr(mc, "_post_json", _fake)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True
     assert body["executive_summary"] == long_summary                       # 原文保留
     assert body["summary_rewrite"]["needed"] is True

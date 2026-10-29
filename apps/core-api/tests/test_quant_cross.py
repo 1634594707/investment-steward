@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import pytest
-
 from investment_steward_core import quant_cross, quant_factors, quant_panel
 from test_quant_panel import SYMBOLS, synth_dates
 
@@ -468,7 +468,7 @@ def test_long_short_report_folds_cover_the_sample():
     assert folds[-1]["last_date"] == panel["dates"][-1]
     assert all(fold["ic_mean"] is not None for fold in folds)
     # fold 覆盖不重叠、首尾相接
-    for previous, current in zip(folds, folds[1:]):
+    for previous, current in itertools.pairwise(folds):
         assert previous["last_date"] < current["first_date"]
 
 

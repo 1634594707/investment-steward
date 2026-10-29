@@ -11,7 +11,6 @@ import json
 import statistics
 
 import pytest
-
 from investment_steward_core import quant_factors, quant_stats
 
 

@@ -206,14 +206,11 @@ def _select_lambda(
         return {"method": "walk_forward_grid", "grid": list(lambda_grid), "selected": fallback,
                 "reports": reports, "criterion": "全部 λ 均无法折分,回退中位值",
                 "folds": SELECTION_FOLDS, "prefix_bars": prefix_end}
-    best = sorted(
-        usable,
-        key=lambda item: (
+    best = min(usable, key=lambda item: (
             -item["median_excess_vs_baseline"],
             -item["oos_consistency"],
             item["lambda"],
-        ),
-    )[0]
+        ))
     return {
         "method": "walk_forward_grid",
         "criterion": "中位超额收益 → 折间一致性 → 较小 λ（确定性 tie-break）",

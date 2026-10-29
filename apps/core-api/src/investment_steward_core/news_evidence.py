@@ -61,7 +61,7 @@ ANNOUNCEMENT_BODY_CHARS = 2000
 # 形状不符（空串、占位号、测试桩）**不发起请求**——不发无意义请求，也不猜测。
 _ART_CODE_PATTERN = re.compile(r"^(?:AN)?\d{10,}$")
 _CONTENT_CACHE_TTL_SECONDS = 300.0
-_content_cache: dict[str, tuple[float, "AnnouncementBody"]] = {}
+_content_cache: dict[str, tuple[float, AnnouncementBody]] = {}
 _content_fail_cache: dict[str, float] = {}
 
 

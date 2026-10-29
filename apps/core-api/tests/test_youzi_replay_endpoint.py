@@ -290,7 +290,7 @@ def test_fetches_up_to_four_context_days_before_the_range(client, monkeypatch):
 
 
 def test_context_is_capped_at_four_days(client, monkeypatch):
-    calls = _stub_reports(monkeypatch)
+    _calls = _stub_reports(monkeypatch)
     _stub_calendar(monkeypatch)
     test_client, headers = enable(client)
     body = test_client.get(
@@ -333,10 +333,9 @@ def test_calendar_is_requested_from_before_the_range(client, monkeypatch):
     )
     # 前移量必须真的把起点推到区间之前足够远（≥ 常量声明的自然日数）。
     from datetime import datetime as _dt
-    from datetime import timedelta as _td
 
     gap = (
-        _dt.strptime(START, "%Y%m%d") - _dt.strptime(cal_start, "%Y%m%d")
+        _dt.strptime(START, "%Y%m%d") - _dt.strptime(cal_start, "%Y%m%d")  # noqa: DTZ007 - Calendar or local backup timestamp; no instant conversion.
     ).days
     assert gap >= youzi_replay.CONTEXT_LOOKBACK_DAYS, f"只前移了 {gap} 天"
     assert body["context_days"] == list(DAYS[0:4])
@@ -477,7 +476,7 @@ def test_fact_omission_reasons_distinguish_checked_from_uncheckable(client, monk
     assert "window_incomplete" not in reasons, "上下文已取全，不得报「没法检查」"
 
     # (b) 区间第一天就是事件日、且夹具没给区间前的日子 → 窗口不完整。
-    _stub_calendar(monkeypatch, days=tuple(day for day in DAYS if day >= day))
+    _stub_calendar(monkeypatch, days=tuple(value for value in DAYS if value >= day))
     lonely = test_client.get(
         f"/youzi/replay/{CODE}?start={day}&end={day}&as_of={day}", headers=headers
     ).json()

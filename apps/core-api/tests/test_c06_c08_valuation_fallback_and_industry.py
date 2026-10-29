@@ -18,7 +18,6 @@ import time
 from datetime import date
 
 import pytest
-
 from investment_steward_core import industry_evidence as ie
 from investment_steward_core import macro_calendar as calendar_engine
 from investment_steward_core import valuation_evidence as ve

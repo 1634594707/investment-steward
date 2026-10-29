@@ -70,7 +70,7 @@ def load_snapshot(layout: StorageLayout, content_hash: str, file_name: str) -> l
     payload = artifact_store.read_artifact(layout, SNAPSHOT_KIND, file_name, content_hash)
     bars = payload.get("bars")
     if not isinstance(bars, list):
-        raise ValueError("数据快照结构异常:缺少 bars")
+        raise ValueError("数据快照结构异常:缺少 bars")  # noqa: TRY004 - Preserve the public validation error contract.
     return bars
 
 
@@ -177,11 +177,12 @@ def run_backtest(values: list[float], closes: list[float], *, commission_bps: fl
             delta = 0.0
         if delta != 0.0 and price_limit_pct is not None and i > 0 and eff[i - 1]:
             bar_move = (eff[i] - eff[i - 1]) / eff[i - 1]
-            if abs(bar_move) >= price_limit_pct * PRICE_LIMIT_TOLERANCE:
-                # 涨停禁买、跌停禁卖;只允许减仓/平仓方向
-                if (bar_move > 0 and delta > 0) or (bar_move < 0 and delta < 0):
-                    delta = 0.0
-                    limit_blocked += 1
+            # 涨停禁买、跌停禁卖;只允许减仓/平仓方向
+            if abs(bar_move) >= price_limit_pct * PRICE_LIMIT_TOLERANCE and (
+                (bar_move > 0 and delta > 0) or (bar_move < 0 and delta < 0)
+            ):
+                delta = 0.0
+                limit_blocked += 1
         position = prev_position + delta
         cost = abs(delta) * (fee + slip)
         day_return = position * gross - cost

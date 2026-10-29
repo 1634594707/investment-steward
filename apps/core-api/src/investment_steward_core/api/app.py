@@ -152,7 +152,6 @@ from investment_steward_core.news_evidence import (
     NewsError,
     NoticeError,
     announcement_body_targets,
-    clean_notice_content,
     content_hash_for,
     content_hash_for_news,
     fetch_announcement_bodies,
@@ -1306,7 +1305,7 @@ def _round_number(value: object, digits: int) -> object:
     if number is None:
         return value
     if digits <= 0:
-        return int(round(number))
+        return round(number)
     return round(number, digits)
 
 
@@ -1465,8 +1464,8 @@ def _recent_signals_with_state(signals: list[dict[str, Any]], bars: list[dict[st
             row["state_label"] = state["label"]
             if state.get("reason"):
                 row["state_reason"] = str(state["reason"])
-        except Exception:  # noqa: BLE001 - 单条状态判定失败不影响证据包（该条如实缺 state）
-            pass
+        except Exception:
+            logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
         enriched.append(row)
     return enriched
 
@@ -3913,7 +3912,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         client = _market_client(core)
         try:
             catalog = client.catalog()
-        except Exception as error:  # relay 不可达 → 如实报告,不伪造目录
+        except Exception as error:  # relay 不可达 → 如实报告,不伪造目录  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             return {"ok": False, "error": f"市场目录不可达:{error}", "entries": []}
         return {
             "ok": True,
@@ -4892,7 +4891,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         因此取日历的起点必须**早于**业务区间起点。这里只平移取数窗口，不参与任何
         交易判定——平移出来的自然日会由 `in_range` 过滤掉，不会混进事件集。
         """
-        base = datetime.strptime(day, "%Y%m%d").date() + timedelta(days=offset_days)
+        base = datetime.strptime(day, "%Y%m%d").date() + timedelta(days=offset_days)  # noqa: DTZ007 - Calendar or local backup timestamp; no instant conversion.
         return base.strftime("%Y%m%d")
 
     @app.get("/youzi/tactics")
@@ -5216,7 +5215,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         # `insufficient_context_days` → 复盘页「事实标签」一片空白（而 coverage 全
         # complete，看起来毫无异常）。因此改为把日历起点前移 `CONTEXT_LOOKBACK_DAYS`
         # 个自然日；多取的自然日在 `in_range` 过滤时会被排除，不会混进区间。
-        lookback_start = start
+        _lookback_start = start
         try:
             probe = calendar_module.fetch_calendar(
                 _shift_day(start, -replay_module.CONTEXT_LOOKBACK_DAYS), horizon_as_of
@@ -5236,7 +5235,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         if probe.days and probe.days[-1] < start:
             return degraded("calendar_missing")
         if start < probe.days[0]:
-            lookback_start = probe.days[0]
+            _lookback_start = probe.days[0]
 
         in_range = tuple(day for day in probe.days if start <= day <= end)
         if not in_range:
@@ -6172,9 +6171,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     return False
                 if price_min is not None and float(price) < price_min:
                     return False
-                if price_max is not None and float(price) > price_max:
-                    return False
-                return True
+                return not (price_max is not None and float(price) > price_max)
 
             rows = [row for row in rows if _in_price_range(row)]
             ranked = score_market_rows(rows)[: body.top_symbols]
@@ -6866,8 +6863,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 quality_flags=[],
                 limitations=(
                     [
-                        "公告正文为数据商转载的交易所披露原文（含董事会保证声明与落款），不是摘要；"
-                        "关键数字请与原文核对（raw_locator.attach_url 为原文 PDF）。",
+                        ("公告正文为数据商转载的交易所披露原文（含董事会保证声明与落款），不是摘要；"
+                        "关键数字请与原文核对（raw_locator.attach_url 为原文 PDF）。"),
                     ]
                     if body is not None
                     else ["公告为原始稿件标题，正文本次未取到；正文需回链原始来源阅读（art_code 定位）。"]
@@ -7167,7 +7164,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                 + f"指标 {json.dumps(display_indicators(indicators), ensure_ascii=False)}；"
                 f"近期战法信号 {json.dumps(_recent_signals_with_state(snap['signals'][-5:], bars), ensure_ascii=False)}。"
             )
-        except Exception as error:  # 单来源失败只降级该来源，不拖垮报告（如实标注）
+        except Exception as error:  # 单来源失败只降级该来源，不拖垮报告（如实标注）  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             source_errors["kline"] = f"K 线取数失败：{error.detail if isinstance(error, HTTPException) else error}"
 
         # v22 补充周线/月线结构摘要（用户反馈：日线偏向短期，未覆盖更大级别结构）。
@@ -7185,7 +7182,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     f"近 {len(p_closes)} 个{period_label[:-1]}收盘区间 {min(p_closes):.2f}~{max(p_highs):.2f}"
                     + (f"，现价位于 20{period_label[:-1]}均线{'上方' if p_closes[-1] >= p_ma else '下方'}（均值 {p_ma:.2f}）。" if p_ma else "。")
                 )
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
                 source_errors[f"kline_{period_code}"] = (
                     f"{period_label}结构取数失败：{error.detail if isinstance(error, HTTPException) else error}"
                 )
@@ -7208,7 +7205,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                              if str(getattr(item, "url", "") or "").strip()), "")
             if news_url:
                 source_links["S2"] = news_url
-        except Exception as error:  # 单来源失败只降级该来源（NewsError 或底层网络异常）
+        except Exception as error:  # 单来源失败只降级该来源（NewsError 或底层网络异常）  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             source_errors["news"] = f"新闻取数失败：{error}"
 
         try:
@@ -7260,7 +7257,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                         f"公告正文抓取：{len(body_targets)} 条尝试、{len(body_codes)} 条成功，"
                         f"{failed} 条失败（失败条目仍按 S3 标题口径、B 级处理，不编造正文）。"
                     )
-        except Exception as error:  # 单来源失败只降级该来源（NoticeError 或底层网络异常）
+        except Exception as error:  # 单来源失败只降级该来源（NoticeError 或底层网络异常）  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             source_errors["announcements"] = f"公告取数失败：{error}"
 
         fin_rows: list[Any] = []
@@ -7280,7 +7277,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             # R2：财报沿用 /evidence/financials 落库时用的同一固定入口（不另拼 URL）。
             if fin_rows:
                 source_links["S4"] = "https://data.eastmoney.com/bbsj/"
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             source_errors["financials"] = f"财报取数失败：{error}"
 
         # —— v24 档 B/C：估值证据 S5（当前估值 + 历史分位 + 同业相对）——
@@ -7293,7 +7290,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
             if valuation.trade_date:
                 source_asof["S5"] = str(valuation.trade_date)[:10]
             peer_count = int(valuation.peer_count) if valuation.peer_count else None
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
             source_errors["valuation"] = f"估值取数失败：{error}"
 
         # —— P2-C04 席位证据 S6（龙虎榜）——
@@ -7323,7 +7320,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     latest_price=valuation.close_price if valuation else None,
                 )
                 sources["S4"] = f"{sources['S4']}\n{describe_derived(derived)}"
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
                 source_errors["derived_metrics"] = f"派生指标计算失败：{error}"
 
         # —— v29（三次方案 §3）：图表数据包 —— 纯取数结果的搬运与整型，不在服务端做任何主观判断；
@@ -7365,7 +7362,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     "ma20": ma_full[20][-tail_n:],
                     "ma60": ma_full[60][-tail_n:],
                 }
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
                 source_errors["price_chart"] = f"价格量能图数据组装失败：{error}"
         # 2) 单季财务图：累计报表相邻报告期差分（口径见 derive_quarterly_series），缺失不补零。
         quarterly: dict[str, object] = {}
@@ -7383,7 +7380,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     )
                     if series:
                         quarterly[key] = series
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - Boundary reports the error without aborting independent work.
                     source_errors[f"quarterly_{key}"] = f"单季拆分失败（{key}）：{error}"
         # 3) 估值分位图：快照里的历史分位 + 同业中位（都是取数结果，缺哪个字段就少哪个键）。
         valuation_chart: dict[str, object] = {}
@@ -7709,8 +7706,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     allowed_citations=allowed_citations,
                     missing_sections=missing_now,
                     full_rerun_prompts=(
-                        "你是严谨的 A 股研究助理：只依据给定来源输出，每条判断必须可溯源；"
-                        "证据不足时如实说证据不足；宁可给「无数据」也不编造。你的输出不构成投资建议。",
+                        ("你是严谨的 A 股研究助理：只依据给定来源输出，每条判断必须可溯源；"
+                        "证据不足时如实说证据不足；宁可给「无数据」也不编造。你的输出不构成投资建议。"),
                         user_prompt,
                     ),
                 )
@@ -8817,7 +8814,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
         except model_client.ModelUnavailable as exc:
             repaired = False
             repair_detail = f"修复模型调用失败：{exc}"
-        except Exception as exc:  # noqa: BLE001 - 修复尽力而为，失败保留原稿
+        except Exception as exc:
             logger.exception("研报定向修复异常 report_id=%s strategy=%s", report_id, strategy)
             repaired = False
             repair_detail = f"修复执行异常：{exc}"
@@ -9088,7 +9085,7 @@ def create_app(settings: CoreSettings) -> FastAPI:
                     closes = [float(row.get("close") or 0) for row in kline_rows if float(row.get("close") or 0) > 0]
                     as_of = str(kline_rows[-1].get("timestamp") or "")[:10] if kline_rows else ""
 
-                    def _ma(window: int) -> str:
+                    def _ma(window: int, closes=closes) -> str:
                         if len(closes) < window:
                             return f"MA{window} 样本不足"
                         return f"MA{window} {round(sum(closes[-window:]) / window, 3)}"
@@ -9514,7 +9511,8 @@ def create_app(settings: CoreSettings) -> FastAPI:
         for region in sorted(regions):
             try:
                 snapshot = macro_feed.get_region_snapshot(core.database, store, region)
-            except Exception:  # noqa: BLE001 - 单路宏观取数失败不影响证据包（缺口如实声明）
+            except Exception:
+                logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
                 continue
             if snapshot is None:
                 continue
@@ -10465,11 +10463,11 @@ def create_app(settings: CoreSettings) -> FastAPI:
             downgraded_ids = list(counter_check_application.get("downgraded_judgment_ids") or [])
             quality = _run_direction_validation(parsed)
             quality["quality_warnings"] = list(quality["quality_warnings"]) + [
-                f"反方审查已进入定稿：撤下 {len(removed_ids)} 条判断"
+                (f"反方审查已进入定稿：撤下 {len(removed_ids)} 条判断"
                 f"{('（' + '、'.join(removed_ids) + '）') if removed_ids else ''}，"
                 f"降级 {len(downgraded_ids)} 条判断"
                 f"{('（' + '、'.join(downgraded_ids) + '）') if downgraded_ids else ''}"
-                "——正文已加行内标注，摘要与风险段落已同步。"
+                "——正文已加行内标注，摘要与风险段落已同步。")
             ]
             if (
                 (removed_ids or downgraded_ids)

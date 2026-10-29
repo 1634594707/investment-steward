@@ -5,15 +5,16 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from conftest import run_stock_report
-from test_t03_scan_history_http import scan_http  # noqa: F401
-from test_v31_repair_and_comparison import _good_payload, _mock_sources
+from investment_steward_core import lhb_feed
 from investment_steward_core.api import app as app_module
 from investment_steward_core.domain import ModelProfileStatus
 from investment_steward_core.model_client import ModelReply
 from investment_steward_core.news_evidence import AnnouncementBody
-from investment_steward_core import lhb_feed
+from test_t03_scan_history_http import scan_http as _scan_http
+from test_v31_repair_and_comparison import _good_payload, _mock_sources
+
+scan_http = _scan_http
 
 
 @pytest.mark.parametrize("missing_news_url", [False, True])

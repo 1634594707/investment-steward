@@ -22,11 +22,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from investment_steward_core import report_quality
 from investment_steward_core.instruments import normalize_instrument
+
 # A02：估值口径的声明文本必须与估值源一致 —— 从模块导入常量，不复制第二份定义
 # （路线图 §9：同一估值事实在证据包中只出现一个来源定义）。
 # v36：`BoardTrendAggregate` 同理由 valuation_evidence 定义（趋势数据源侧），
@@ -682,8 +684,8 @@ def classify_board_valuation(
     if pb >= VALUATION_HIGH_PB_PERCENTILE_MIN:
         return (
             VALUATION_JUDGMENT_HIGH,
-            f"高位：{name} 代表股 PB 分位中位数 {pb:.1f}% ≥ {VALUATION_HIGH_PB_PERCENTILE_MIN:.0f}%，"
-            f"相对自身历史已处高位区间（绝对 PB 低不改变这一相对位置）。",
+            (f"高位：{name} 代表股 PB 分位中位数 {pb:.1f}% ≥ {VALUATION_HIGH_PB_PERCENTILE_MIN:.0f}%，"
+            f"相对自身历史已处高位区间（绝对 PB 低不改变这一相对位置）。"),
         )
 
     # —— 2. 盈利周期顶：PE 分位 ≤ 10% 且 PB 分位 ≥ 30% ——
@@ -694,10 +696,10 @@ def classify_board_valuation(
     ):
         return (
             VALUATION_JUDGMENT_CYCLE_TOP,
-            f"盈利周期顶：{name} PE 分位中位数 {pe:.1f}% ≤ "
+            (f"盈利周期顶：{name} PE 分位中位数 {pe:.1f}% ≤ "
             f"{VALUATION_CYCLE_TOP_PE_PERCENTILE_MAX:.0f}% 且 PB 分位 {pb:.1f}% ≥ "
             f"{VALUATION_CYCLE_TOP_PB_PERCENTILE_MIN:.0f}%，盈利端估值极低而价格端未同步跌透，"
-            "提示盈利处周期高位。",
+            "提示盈利处周期高位。"),
         )
 
     # —— 3. 深跌未反转：PB 分位 ≤ 40% 且（亏损面 ≥ 40% 或 ROE 塌陷背离 ≥ 40pp） ——
@@ -732,9 +734,9 @@ def classify_board_valuation(
                 critical_text = " " + critical_gap_note(name, gap)
             return (
                 VALUATION_JUDGMENT_LOW,
-                f"低估候选：{name} PB 分位 {pb:.1f}% ≤ {VALUATION_CHEAP_PB_PERCENTILE_MAX:.0f}%，"
+                (f"低估候选：{name} PB 分位 {pb:.1f}% ≤ {VALUATION_CHEAP_PB_PERCENTILE_MAX:.0f}%，"
                 f"亏损面 {loss * 100:.1f}% ≤ {VALUATION_LOSS_RATIO_LOW_MAX * 100:.0f}%，"
-                f"{gap_text}，且未处高位——便宜且基本面未塌陷。{critical_text}",
+                f"{gap_text}，且未处高位——便宜且基本面未塌陷。{critical_text}"),
             )
 
     # —— 5. 待定：落入空档（如 PB 分位 40-70% 之间，或亏损面介于 30-40% 无法归入深跌） ——
@@ -1897,7 +1899,7 @@ def judgment_refs_cover_boards(
         all_board_refs |= refs
     problems: list[dict[str, Any]] = []
     for item in claims:
-        section = str(item["section"])
+        _section = str(item["section"])
         refs = set(item["refs"])
         if not refs:
             problems.append({**item, "reason": "no_refs"})
@@ -2719,7 +2721,7 @@ def validate_direction(
                 f"「{item['section']}」小节出现估值水位表述（{'、'.join(item['claims'])}）"
                 "但无对应证据引用——按 C02 口径该表述不可核对，须补 [E#] 引用或删除。"
             )
-        detail = "；".join(
+        _detail = "；".join(
             f"{item['section']}：{'、'.join(item['claims'])}" for item in unsupported[:5]
         )
         missing_information = [
@@ -2728,7 +2730,7 @@ def validate_direction(
             for item in unsupported[:5]
         ]
     else:
-        detail = ""
+        __detail = ""
         missing_information = []
     # 多处违规 → 降 needs_review（引用闸门与「篇幅/摘要」类纯软告警区分开）。
     if len(unsupported) >= VALUATION_CLAIM_WARN_THRESHOLD:
@@ -3217,8 +3219,7 @@ def _longest_common_run(a: str, b: str) -> int:
             if ch_a == ch_b:
                 value = prev[j - 1] + 1
                 cur[j] = value
-                if value > best:
-                    best = value
+                best = max(best, value)
         prev = cur
     return best
 

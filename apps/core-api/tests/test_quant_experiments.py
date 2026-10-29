@@ -6,10 +6,7 @@ import hashlib
 import json
 
 import pytest
-
 from investment_steward_core import quant_experiments
-from investment_steward_core.storage.database import Database
-from investment_steward_core.storage.paths import StorageLayout
 from test_quant_pool import _bars, _db, _lay
 
 USER = _user = __import__("uuid").uuid5(__import__("uuid").NAMESPACE_URL, "test-user")

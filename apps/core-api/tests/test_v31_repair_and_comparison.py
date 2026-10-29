@@ -13,7 +13,8 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
 
 
 def _file_client(tmp_path, monkeypatch):
@@ -238,7 +239,7 @@ def test_repair_missing_section_single(client, tmp_path, monkeypatch):
         json.dumps(repaired_section, ensure_ascii=False),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     assert canned.call_count == 2  # 初稿 + 一次小节修复（无反方检查）
     assert body["repair"]["attempted"] is True
@@ -262,7 +263,7 @@ def test_repair_full_rerun_for_two_missing(client, tmp_path, monkeypatch):
         json.dumps(_good_payload(), ensure_ascii=False),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     assert canned.call_count == 2
     assert body["repair"]["strategy"] == "full_rerun"
@@ -282,7 +283,7 @@ def test_repair_summary_only_keeps_report_text(client, tmp_path, monkeypatch):
         summary_text,
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     assert canned.call_count == 2
     assert body["repair"]["strategy"] == "summary_only"
@@ -310,7 +311,7 @@ def test_repair_conclusion_only_keeps_report_text(client, tmp_path, monkeypatch)
         json.dumps(repaired_conclusion, ensure_ascii=False),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     assert canned.call_count == 2  # 初稿 + 一次结论补写（无反方检查、无摘要重写）
     assert body["repair"]["attempted"] is True
@@ -333,7 +334,7 @@ def test_repair_conclusion_only_drops_invalid_direction(client, tmp_path, monkey
     """补写返回越界方向 → 丢弃方向（不编造），只采纳 statement；其余字段照常落库。"""
     payload = _good_payload()
     payload.pop("conclusion")
-    canned = _CannedModel(monkeypatch, [
+    _canned = _CannedModel(monkeypatch, [
         json.dumps(payload, ensure_ascii=False),
         json.dumps(
             {"statement": "多空交织：趋势与赔率相互掣肘。", "direction": "看多", "core_conflict": "趋势与赔率", "confidence": "high"},
@@ -341,7 +342,7 @@ def test_repair_conclusion_only_drops_invalid_direction(client, tmp_path, monkey
         ),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["repair"]["strategy"] == "conclusion_only"
     assert body["conclusion"]["statement"] == "多空交织：趋势与赔率相互掣肘。"
     assert body["conclusion"]["direction"] == ""       # 越界方向被丢弃，不臆造
@@ -352,12 +353,12 @@ def test_repair_conclusion_only_empty_output_keeps_original(client, tmp_path, mo
     """补写输出为空 → 保留原状（首屏仍空 + 告警仍在），绝不伪造一句结论。"""
     payload = _good_payload()
     payload.pop("conclusion")
-    canned = _CannedModel(monkeypatch, [
+    _canned = _CannedModel(monkeypatch, [
         json.dumps(payload, ensure_ascii=False),
         json.dumps({"statement": "", "direction": "偏多"}, ensure_ascii=False),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["repair"]["strategy"] == "conclusion_only"
     assert body["repair"]["repaired"] is False
     assert body["conclusion"]["statement"] == ""
@@ -373,7 +374,7 @@ def test_repair_failure_keeps_draft(client, tmp_path, monkeypatch):
         "这不是 JSON",
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert canned.call_count == 2  # 初稿 + 一次修复尝试（输出不可解析被如实留痕）
     assert body["ok"] is True
     assert body["repair"]["attempted"] is True
@@ -394,7 +395,7 @@ def test_repair_rollback_on_fake_citations(client, tmp_path, monkeypatch):
         json.dumps(fake, ensure_ascii=False),
     ])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert canned.call_count == 2  # 初稿 + 一次修复尝试
     assert body["ok"] is True
     assert body["report_revision"] == 1
@@ -408,7 +409,7 @@ def test_auto_repair_disabled(client, tmp_path, monkeypatch):
     """with_auto_repair=false → 不发起修复调用（成本敏感场景）。"""
     canned = _CannedModel(monkeypatch, [json.dumps(_tech_only_payload(), ensure_ascii=False)])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False, "with_auto_repair": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False, with_auto_repair=False)
     assert canned.call_count == 1
     assert body["repair"]["attempted"] is False
     assert body["quality_status"] == "incomplete"
@@ -433,7 +434,7 @@ def test_fixed_snapshot_good_report_across_modes(client, tmp_path, monkeypatch, 
     """好样本 × 三模式 × 三类财务快照：完整、模式贯穿、数字不在此链路失真、落库与响应一致。"""
     canned = _CannedModel(monkeypatch, [json.dumps(_good_payload(), ensure_ascii=False)])
     test_client, headers = _setup(client, tmp_path, monkeypatch, financial_rows=_SNAPSHOTS[snapshot_name])
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "mode": mode, "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", mode=mode, with_counter_check=False)
     assert canned.call_count == 1  # 完整报告不触发任何修复调用
     assert body["ok"] is True
     assert body["quality_status"] in ("complete", "needs_review")
@@ -456,7 +457,7 @@ def test_fixed_snapshot_bad_report_is_draft_in_response_and_storage(client, tmp_
     """坏样本（只有技术面）：三快照一致判 incomplete，修复关不掉闸门，草稿落库且不混入正式。"""
     canned = _CannedModel(monkeypatch, [json.dumps(_tech_only_payload(), ensure_ascii=False)])
     test_client, headers = _setup(client, tmp_path, monkeypatch, financial_rows=_SNAPSHOTS[snapshot_name])
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_auto_repair": False, "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_auto_repair=False, with_counter_check=False)
     assert canned.call_count == 1
     assert body["quality_status"] == "incomplete"
     assert body["is_draft"] is True
@@ -480,7 +481,7 @@ def test_fixed_snapshot_missing_data_target_no_model_call(client, tmp_path, monk
     for name in ("fetch_cn_kline", "fetch_cn_news", "fetch_cn_announcements", "fetch_financials", "fetch_valuation"):
         monkeypatch.setattr(app_module, name, _raise)
     canned = _CannedModel(monkeypatch, [])
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert canned.call_count == 0
     assert body["ok"] is False and body["stage"] == "evidence_unavailable"
 
@@ -491,7 +492,7 @@ def test_fixed_snapshot_citation_inconsistency_flagged(client, tmp_path, monkeyp
     payload["citations"] = ["S1", "S2"]
     canned = _CannedModel(monkeypatch, [json.dumps(payload, ensure_ascii=False)])
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert canned.call_count == 1  # 告警不触发修复（修复只对 incomplete）
     assert body["ok"] is True
     assert set(body["citation_consistency"]["undeclared_used"]) >= {"S4", "S5"}

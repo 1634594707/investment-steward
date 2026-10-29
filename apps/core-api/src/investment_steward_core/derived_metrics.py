@@ -16,6 +16,7 @@ TTM 置 None 并写明原因，**绝不用「单期年化」冒充 TTM**，也�
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,7 +50,7 @@ def _num(value: Any) -> float | None:
         result = float(str(value).replace(",", "").strip())
     except (TypeError, ValueError):
         return None
-    if result != result:  # NaN
+    if math.isnan(result):  # NaN
         return None
     return result
 
@@ -109,8 +110,8 @@ def _ttm(
     if same_value is None or annual_value is None:
         return (
             None,
-            f"缺基数（去年同期 {prior_same or '未知'}={same_value}，"
-            f"上年年报 {prior_annual or '未知'}={annual_value}），TTM 不可算",
+            (f"缺基数（去年同期 {prior_same or '未知'}={same_value}，"
+            f"上年年报 {prior_annual or '未知'}={annual_value}），TTM 不可算"),
         )
     return (
         current + annual_value - same_value,
@@ -133,7 +134,7 @@ def derive_fundamental_metrics(
 
     notes: list[str] = []
     prior_same, prior_annual = _period_context(latest)
-    ttm_revenue, rev_note = _ttm(by_income, "revenue", latest, prior_same, prior_annual)
+    ttm_revenue, _rev_note = _ttm(by_income, "revenue", latest, prior_same, prior_annual)
     ttm_net, net_note = _ttm(by_income, "net_profit", latest, prior_same, prior_annual)
     ttm_ocf, ocf_note = _ttm(by_cash, "operating_cash_flow", latest, prior_same, prior_annual)
 

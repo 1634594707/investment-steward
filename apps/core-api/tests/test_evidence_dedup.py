@@ -12,7 +12,6 @@ from types import SimpleNamespace
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
-
 from test_stock_research_tools import _file_client
 
 

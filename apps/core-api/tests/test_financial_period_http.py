@@ -5,19 +5,20 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from conftest import run_stock_report
-from test_t03_scan_history_http import scan_http  # noqa: F401
-from test_v31_repair_and_comparison import _good_payload, _mock_sources
 from investment_steward_core import jev_client, lhb_feed, report_quality
 from investment_steward_core.api import app as app_module
 from investment_steward_core.domain import ModelProfileStatus
 from investment_steward_core.model_client import ModelReply
+from test_t03_scan_history_http import scan_http as _scan_http
+from test_v31_repair_and_comparison import _good_payload, _mock_sources
+
+scan_http = _scan_http
 
 
 def test_legacy_cash_flow_is_rechecked_without_rewriting_the_historical_record(scan_http):
     http, headers, database = scan_http
-    source = Path(__file__).resolve().parents[3] / "docs/assets/history-audit-2026-10-25/original-report.json"
+    source = Path(__file__).parent / "fixtures/legacy-mixed-period-report.json"
     original_bytes = source.read_bytes()
     original = json.loads(original_bytes)
     database.insert_ai_research_report(original)

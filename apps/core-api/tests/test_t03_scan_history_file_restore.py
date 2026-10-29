@@ -3,9 +3,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-
 from test_desktop_e02_import import _client
-
 
 TABLE_KEYS = {"scan_job_history": "job_id", "scan_observations": "snapshot_id"}
 

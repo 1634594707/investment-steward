@@ -15,7 +15,8 @@ from __future__ import annotations
 import json
 import logging
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401
+from conftest import run_stock_report
 from investment_steward_core.storage import database as db_module
 
 
@@ -89,7 +90,7 @@ def test_success_path_reports_persisted_true(tmp_path, monkeypatch):
     _setup_active_profile(test_client, headers)
     _prepare(monkeypatch)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "000060"})
+    body = run_stock_report(test_client, headers, symbol="000060")
     assert body["ok"] is True
     assert body.get("persisted") is True, "成功落库时应显式告知 persisted=True"
     assert body.get("report_id")
@@ -109,7 +110,7 @@ def test_persist_failure_is_reported_not_silent(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(db_module.Database, "insert_ai_research_report", _boom)
 
     with caplog.at_level(logging.ERROR):
-        body = run_stock_report(test_client, headers, **{"symbol": "000060"})
+        body = run_stock_report(test_client, headers, symbol="000060")
 
     # 仍交付报告（不阻断），但必须诚实标注未保存
     assert body["ok"] is True

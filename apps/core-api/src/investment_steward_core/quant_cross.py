@@ -18,7 +18,8 @@ import hashlib
 import json
 import math
 import random
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from investment_steward_core import quant_factors, quant_panel, quant_stats
 
@@ -506,7 +507,7 @@ def cross_section_mine(
         }
     train_end = int(split["train_end"])
     valid_end = int(split["valid_end"])
-    train_dates = dates[:train_end]
+    _train_dates = dates[:train_end]
 
     def score(tokens: list[str], upto: int, *, apply_neutralise: bool = True) -> dict[str, Any] | None:
         try:
@@ -564,7 +565,7 @@ def cross_section_mine(
                 seen.add(key)
                 batch.append(key)
             for cs_op in CS_RANK_OPS:
-                key = tuple([*item["tokens"], cs_op])
+                key = (*item["tokens"], cs_op)
                 if key in seen:
                     continue
                 seen.add(key)

@@ -16,6 +16,8 @@ Windows 上的同族入口；且 `_restricted_builtins()` 只过滤内建**名�
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from investment_steward_core.quant_pack_runner import ALLOWED_IMPORTS, run_pack_payload
 
@@ -101,7 +103,9 @@ def test_process_creation_blocked_even_via_subclasses_chain():
     )
     assert result["ok"] is False, "经 __subclasses__ 链的进程创建未被拦截"
     assert "FileNotFoundError" not in result["error"], "调用仍触达了操作系统层"
-    assert "os.spawn" in result["error"]
+    # CPython spawnv audits spawn on Windows and fork on POSIX.
+    event = "os.spawn" if os.name == "nt" else "os.fork"
+    assert f"策略包执行被阻断:{event}(" in result["error"]
 
 
 @pytest.mark.parametrize(

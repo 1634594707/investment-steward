@@ -10,9 +10,10 @@
 
 from __future__ import annotations
 
+import itertools
 import json
-from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from investment_steward_core import feed_health
@@ -245,9 +246,8 @@ def fetch_em_macro_series(series_id: str, limit: int = 15) -> list[dict[str, Any
         # F02：东财宏观取数埋点（此路径无重试，attempt_index 恒 1）。
         with feed_health.attempt(
             feed_health.SOURCE_MACRO_EASTMONEY, url, {"report": report, "value_field": value_field}
-        ):
-            with urllib.request.urlopen(request, timeout=10) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+        ), urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as error:
         raise RuntimeError(f"东财宏观拉取失败 {report}: {error}") from error
     if not payload.get("success"):
@@ -363,9 +363,8 @@ def fetch_fred_series(series_id: str, api_key: str, limit: int = 14) -> list[dic
         # F02：FRED 取数埋点（api_key 不入指纹——只记 series_id 与 limit）。
         with feed_health.attempt(
             feed_health.SOURCE_MACRO_FRED, FRED_API, {"series_id": series_id, "limit": int(limit)}
-        ):
-            with urllib.request.urlopen(request, timeout=10) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+        ), urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as error:
         raise RuntimeError(f"FRED 拉取失败 {series_id}: {error}") from error
     observations = []
@@ -393,9 +392,8 @@ def fetch_worldbank_series(iso3: str, indicator_id: str) -> list[dict[str, Any]]
         # F02：世界银行取数埋点。
         with feed_health.attempt(
             feed_health.SOURCE_MACRO_WORLDBANK, WORLD_BANK_API, {"iso3": iso3, "indicator": indicator_id}
-        ):
-            with urllib.request.urlopen(request, timeout=10) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+        ), urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as error:
         raise RuntimeError(f"世界银行拉取失败 {iso3}/{indicator_id}: {error}") from error
     rows = payload[1] if isinstance(payload, list) and len(payload) > 1 and isinstance(payload[1], list) else []
@@ -432,9 +430,8 @@ def fetch_okx_series(inst_id: str, limit: int = 15) -> list[dict[str, Any]]:
         # F02：OKX 取数埋点（冷却期直接抛出的调用**不产生**尝试记录——没有发请求就不算一次采集）。
         with feed_health.attempt(
             feed_health.SOURCE_MACRO_OKX, OKX_API, {"inst_id": inst_id, "bar": "1D", "limit": int(limit)}
-        ):
-            with urllib.request.urlopen(request, timeout=8) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+        ), urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as error:
         _source_fail_until[inst_id] = datetime.now(UTC) + timedelta(minutes=_OKX_FAIL_COOLDOWN_MINUTES)
         raise RuntimeError(f"OKX 拉取失败 {inst_id}: {error}") from error
@@ -504,7 +501,7 @@ def _resolve_series(
                 ordered = sorted(observations, key=lambda row: row["obs_date"], reverse=True)
                 observations = [
                     {"obs_date": row["obs_date"], "value": round(row["value"] - nxt["value"], 1)}
-                    for row, nxt in zip(ordered, ordered[1:])
+                    for row, nxt in itertools.pairwise(ordered)
                 ]
             return {**manual, "observations": observations}
     if source == "worldbank":

@@ -18,17 +18,15 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import (  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import derived_metrics as dm
+from investment_steward_core import valuation_evidence as ve
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import derived_metrics as dm
-from investment_steward_core import valuation_evidence as ve
 
 
 def _row(statement_type: str, period_end: str, items: dict[str, str]) -> SimpleNamespace:
@@ -43,12 +41,12 @@ def _row(statement_type: str, period_end: str, items: dict[str, str]) -> SimpleN
 
 
 def _snapshot(**overrides) -> ve.ValuationSnapshot:
-    base = dict(
-        symbol="600519", name="贵州茅台", board_code="016165", board_name="白酒Ⅱ",
-        trade_date="2026-09-10", close_price=1285.13, pe_ttm=19.73, pe_static=19.52,
-        pb_mrq=6.39, ps_ttm=9.27, peg=-4.76, pcf_ocf_ttm=13.49,
-        total_market_cap=1.6065e12, float_market_cap=1.6065e12, total_shares=1.25e9,
-    )
+    base = {
+        "symbol": "600519", "name": "贵州茅台", "board_code": "016165", "board_name": "白酒Ⅱ",
+        "trade_date": "2026-09-10", "close_price": 1285.13, "pe_ttm": 19.73, "pe_static": 19.52,
+        "pb_mrq": 6.39, "ps_ttm": 9.27, "peg": -4.76, "pcf_ocf_ttm": 13.49,
+        "total_market_cap": 1.6065e12, "float_market_cap": 1.6065e12, "total_shares": 1.25e9,
+    }
     base.update(overrides)
     return ve.ValuationSnapshot(**base)  # type: ignore[arg-type]
 
@@ -213,7 +211,7 @@ def test_valuation_and_derived_reach_model_prompt(client, tmp_path, monkeypatch)
         return {"choices": [{"message": {"content": report_json if len(payloads) == 1 else counter_json}}]}
 
     monkeypatch.setattr(mc, "_post_json", _fake)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert set(body["source_keys"]) == {"S2", "S3", "S4", "S5"}
     assert "S5" in body["available_citations"]
@@ -255,7 +253,7 @@ def test_valuation_failure_degrades_without_touching_citations(client, tmp_path,
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert "valuation" in body["source_errors"]        # 失败如实记录
     assert "S5" not in body["available_citations"]     # 失败来源不可被引用

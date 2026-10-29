@@ -16,23 +16,22 @@
 from __future__ import annotations
 
 import pytest
-
 from investment_steward_core import direction_research as dr
 
 
 def _board(**kw) -> dr.BoardValuationInput:
-    base = dict(
-        board_code="BK_TEST",
-        board_name="测试板块",
-        pb_percentile_median=20.0,
-        pe_percentile_median=20.0,
-        loss_ratio=0.0,
-        trend=None,
-        pb_percentile_sample_count=5,
-        loss_count=0,
-        loss_total=100,
-        trade_date="2026-09-11",
-    )
+    base = {
+        "board_code": "BK_TEST",
+        "board_name": "测试板块",
+        "pb_percentile_median": 20.0,
+        "pe_percentile_median": 20.0,
+        "loss_ratio": 0.0,
+        "trend": None,
+        "pb_percentile_sample_count": 5,
+        "loss_count": 0,
+        "loss_total": 100,
+        "trade_date": "2026-09-11",
+    }
     base.update(kw)
     return dr.BoardValuationInput(**base)
 

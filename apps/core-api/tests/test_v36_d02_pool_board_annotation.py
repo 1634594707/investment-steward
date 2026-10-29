@@ -210,7 +210,6 @@ def _payload_json() -> dict:
 def test_d02_e2e_style_topic_pool_rows_carry_board_judgment(tmp_path, monkeypatch):
     """端到端：风格主题响应里候选行带所属板块分类 + 违规标记，与顶层口径一致。"""
     from fastapi.testclient import TestClient
-
     from investment_steward_core import model_client as mc
     from investment_steward_core.api import app as api_app
     from investment_steward_core.api import create_app

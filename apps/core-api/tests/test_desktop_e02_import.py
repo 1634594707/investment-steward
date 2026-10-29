@@ -125,7 +125,6 @@ def test_apply_merge_and_replace_round_trip(tmp_path):
 
 
 def _table_count(tmp_path: Path, table: str) -> int:
-    from investment_steward_core.storage.database import Database
 
     db_path = tmp_path / "steward.sqlite3"
     assert db_path.exists()

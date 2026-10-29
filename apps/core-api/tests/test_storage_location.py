@@ -16,7 +16,6 @@ from investment_steward_core.storage.paths import (
     StorageLayout,
     clear_pointer,
     load_pointer,
-    pointer_file,
     write_pointer,
 )
 
@@ -206,7 +205,6 @@ def test_reset_default_migrates_to_host_fallback_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("STEWARD_DATA_DIR", raising=False)
 
     from fastapi.testclient import TestClient
-
     from investment_steward_core.api import create_app
     from investment_steward_core.config import CoreSettings
 

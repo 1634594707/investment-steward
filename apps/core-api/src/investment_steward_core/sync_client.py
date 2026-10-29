@@ -298,7 +298,7 @@ def apply_inbox(db: Any, local_user_id: Any) -> dict[str, Any]:
                         check_cycle=str(payload.get("check_cycle", "manual")),
                         status=status, dedup_key=dedup,
                     ))
-                except Exception as error:  # 字段校验(如 check_cycle 枚举)失败 → 如实记缺口,不中断
+                except Exception as error:  # 字段校验(如 check_cycle 枚举)失败 → 如实记缺口,不中断  # noqa: BLE001 - Boundary reports the error without aborting independent work.
                     unknown_kinds.append(f"watch_item:{event['idempotency_key']}:{error}")
                     continue
                 applied_watch += 1

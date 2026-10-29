@@ -10,9 +10,7 @@ import json
 import random
 
 import pytest
-
 from investment_steward_core import quant_models, quant_pool
-from investment_steward_core.storage.database import Database
 from investment_steward_core.storage.paths import StorageLayout
 from test_quant_pool import _bars, _db
 

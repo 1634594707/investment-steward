@@ -116,7 +116,6 @@ def test_probe_bypasses_cache_so_it_produces_a_sample(tmp_path, monkeypatch):
 
 def _client(tmp_path):
     from fastapi.testclient import TestClient
-
     from investment_steward_core.api import create_app
     from investment_steward_core.config import CoreSettings
 
@@ -204,8 +203,8 @@ def test_retry_is_audited(tmp_path, monkeypatch):
 
 def test_retry_endpoint_is_registered_once():
     """路由唯一性（B04 的守护）：/data-source/retry 只有一份注册。"""
-    from pathlib import Path
     import tempfile
+    from pathlib import Path
 
     from investment_steward_core.api import create_app
     from investment_steward_core.config import CoreSettings

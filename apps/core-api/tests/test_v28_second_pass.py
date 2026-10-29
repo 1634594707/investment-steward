@@ -17,20 +17,17 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from conftest import (  # noqa: F401  确保 fixture 可用
+from conftest import (
     SAMPLE_CONCLUSION,
     SAMPLE_SUMMARY_IN_BAND,
-    client as client_fixture,
     run_stock_report,
 )
-
-from test_stock_research_tools import (  # noqa: F401
+from investment_steward_core import report_quality, tactics, tactics_score
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import report_quality, tactics, tactics_score
 
 _NAME_BY_ID = {item["id"]: item["name"] for item in tactics.catalog()}
 
@@ -543,7 +540,7 @@ def test_stock_report_exposes_v28_decision_card_and_support_chain(client, tmp_pa
     fake, calls = _model_with_calls(report, counter)
     monkeypatch.setattr(mc, "_post_json", fake)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert len(calls) == 2                                    # 报告 + 反方检查
 

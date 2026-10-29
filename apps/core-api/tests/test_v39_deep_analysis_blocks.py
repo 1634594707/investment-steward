@@ -11,10 +11,9 @@
 
 from __future__ import annotations
 
-
-from conftest import run_stock_report
 from typing import Any
 
+from conftest import run_stock_report
 from investment_steward_core import report_quality as rq
 from test_v32_followup_and_cockpit import _CannedModel, _setup
 
@@ -226,7 +225,7 @@ def _canned_report() -> dict[str, Any]:
 def test_endpoint_ships_the_three_deep_research_blocks(client, tmp_path, monkeypatch) -> None:
     _CannedModel(monkeypatch, report=_canned_report())
     test_client, headers = _setup(client, tmp_path, monkeypatch)
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     cash = body["cash_flow_quality"]
     assert (cash["coverage_ratio"], cash["verdict"]) == (2.63, "不足以判断盈利质量")

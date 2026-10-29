@@ -283,7 +283,7 @@ def test_direction_endpoint_c02_industry_layer_survives_counter_check(client, tm
     assert body["counter_check_application"]["removed_judgment_ids"] == ["J1"]
     kinds = [item["kind"] for item in body["core_judgments"]]
     assert "industry" in kinds, "定稿后仍必须有产业景气层"
-    added = [item for item in body["core_judgments"] if item["kind"] == "industry"][0]
+    added = next(item for item in body["core_judgments"] if item["kind"] == "industry")
     assert added["confidence"] == "low"
     assert added["text"] == direction_engine.INDUSTRY_JUDGMENT_FALLBACK_TEXT
     assert not any("缺少「产业景气」层" in warning for warning in body["quality_warnings"])

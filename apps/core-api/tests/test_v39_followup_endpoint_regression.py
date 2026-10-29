@@ -8,21 +8,19 @@
 
 from __future__ import annotations
 
-
-from conftest import run_stock_report
 from typing import Any
 
+from conftest import run_stock_report
+from investment_steward_core import analysis_followup
 from test_v32_followup_and_cockpit import (  # 同目录 pytest 模块互用夹具
     _CannedModel,
     _setup,
     _v28_report_payload,
 )
 
-from investment_steward_core import analysis_followup
-
 
 def make_report(test_client, headers) -> str:
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "with_counter_check": False})
+    body = run_stock_report(test_client, headers, symbol="600001", with_counter_check=False)
     assert body["ok"] is True
     return str(body["report_id"])
 

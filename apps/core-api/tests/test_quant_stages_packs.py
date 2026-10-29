@@ -6,7 +6,7 @@ import hashlib
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from investment_steward_core import market_feed, quant_models, signing
+from investment_steward_core import market_feed, signing
 from test_quant_pool import _bars
 
 

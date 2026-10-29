@@ -20,12 +20,11 @@ v27/v28 的 `support` 由**确定性集合运算**得出（引用是否真实存
 
 from __future__ import annotations
 
-
-from conftest import run_stock_report
 import json
 import sqlite3
 from pathlib import Path
 
+from conftest import run_stock_report
 from investment_steward_core import credential_store, jev_client, report_quality
 
 # —— 合成来源内容（「来源 id → 实际内容」，与 app.py 的 sources 同形状）——
@@ -480,7 +479,7 @@ def test_endpoint_applies_semantic_layer_and_records_purpose(tmp_path, monkeypat
 
     monkeypatch.setattr(jev_client, "_post_endpoint", _fake)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
 
     # 一次请求问完两条判断的四道题（官方 fan-out：加题几乎不加时延）
@@ -512,7 +511,7 @@ def test_endpoint_with_jev_disabled_makes_no_jev_request_and_returns_null(tmp_pa
 
     monkeypatch.setattr(jev_client, "_post_endpoint", _must_not_be_called)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     # 未启用 → 该层不存在（None 而不是 available=False 的空壳），前端据此区分「没跑」与「跑过」
     assert body["jev"] is None

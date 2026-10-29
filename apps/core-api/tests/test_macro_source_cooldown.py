@@ -3,7 +3,6 @@ import urllib.request
 from datetime import UTC, datetime
 
 import pytest
-
 from investment_steward_core import macro_feed
 
 

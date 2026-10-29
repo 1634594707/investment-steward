@@ -28,7 +28,6 @@ from investment_steward_core.domain.longterm import (
 )
 from investment_steward_core.storage.database import Database
 
-
 # ———————————————— 8.1 决策时间线 ————————————————
 
 def _as_utc(value: Any) -> datetime | None:

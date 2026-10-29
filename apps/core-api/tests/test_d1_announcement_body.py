@@ -24,10 +24,10 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-from investment_steward_core import news_evidence
-from investment_steward_core import report_quality
-from test_v31_repair_and_comparison import (  # noqa: F401  复用固定证据快照与样本
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import news_evidence, report_quality
+from test_v31_repair_and_comparison import (
     _CannedModel,
     _good_payload,
     _setup,
@@ -267,7 +267,7 @@ def test_report_registers_grade_a_source_when_body_available(client, tmp_path, m
     test_client, headers = _setup(client, tmp_path, monkeypatch)
     _stub_announcements(monkeypatch, with_body=True)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert "S3A" in body["source_keys"]
     assert "S3A" in body["available_citations"]
@@ -297,7 +297,7 @@ def test_report_has_no_grade_a_and_says_why_when_body_unavailable(client, tmp_pa
     test_client, headers = _setup(client, tmp_path, monkeypatch)
     _stub_announcements(monkeypatch, with_body=False)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert "S3A" not in body["source_keys"], "没取到正文就不该有 S3A 这个来源"
     assert body["evidence_quality"]["tiers"]["A"] == []

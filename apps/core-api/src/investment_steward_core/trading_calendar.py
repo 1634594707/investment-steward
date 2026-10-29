@@ -21,8 +21,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import date
-from typing import Any, Iterable
+from typing import Any
 
 ISO_FORMAT = "%Y-%m-%d"
 

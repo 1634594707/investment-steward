@@ -288,7 +288,7 @@ def test_html_error_page_is_treated_as_failure(monkeypatch):
 
 def test_decode_body_prefers_utf8_then_falls_back_to_gb18030():
     """`_decode_body`：正常 XML 走 UTF-8；gb2312 的错误页走兜底，不许抛异常。"""
-    assert cf._decode_body("<x>(c) 沪</x>".encode("utf-8")) == "<x>(c) 沪</x>"
+    assert cf._decode_body("<x>(c) 沪</x>".encode()) == "<x>(c) 沪</x>"
     assert "网页错误" in cf._decode_body("<title>网页错误</title>".encode("gb2312"))
 
 

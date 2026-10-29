@@ -2,7 +2,6 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from investment_steward_core import support_resistance, tactics, tactics_score
 
 

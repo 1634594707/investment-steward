@@ -17,9 +17,7 @@
 from __future__ import annotations
 
 import pytest
-
 from investment_steward_core import direction_research as dr
-
 
 # ---------------------------------------------------------------------------
 # 合成载荷
@@ -353,11 +351,11 @@ def test_c05_derivation_sentence_is_exempt():
 # ---------------------------------------------------------------------------
 
 def _board(**kw) -> dr.BoardValuationInput:
-    base = dict(
-        board_code="BK_TEST", board_name="白色家电", pb_percentile_median=20.0,
-        pe_percentile_median=None, loss_ratio=0.0, trend=None,
-        pb_percentile_sample_count=5, loss_count=0, loss_total=100, trade_date="2026-09-11",
-    )
+    base = {
+        "board_code": "BK_TEST", "board_name": "白色家电", "pb_percentile_median": 20.0,
+        "pe_percentile_median": None, "loss_ratio": 0.0, "trend": None,
+        "pb_percentile_sample_count": 5, "loss_count": 0, "loss_total": 100, "trade_date": "2026-09-11",
+    }
     base.update(kw)
     return dr.BoardValuationInput(**base)
 

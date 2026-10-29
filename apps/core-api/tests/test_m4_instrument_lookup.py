@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from investment_steward_core import instrument_lookup as lookup
 
 FIXTURES = Path(__file__).parent / "fixtures" / "instrument_lookup"

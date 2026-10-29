@@ -20,7 +20,7 @@ from investment_steward_core import youzi_horizon as hz
 
 DAYS = tuple(
     (date(2026, 9, 1) + timedelta(days=offset)).strftime("%Y%m%d")
-    for offset in range(0, 40)
+    for offset in range(40)
     if (date(2026, 9, 1) + timedelta(days=offset)).weekday() < 5
 )
 CODE = "600519"
@@ -502,8 +502,8 @@ def test_limitations_are_negations_only_and_allowlisted() -> None:
     """免责说明只允许「不做什么」的否定表述，且逐字冻结（防悄悄加上正向暗示）。"""
     page = youzi_replay.build_page(build_inputs(), CODE, START, END)
     assert page.limitations == (
-        "区间内只包含**已取到**的交易日；未取到的日子在 coverage 中为 unknown，"
-        "不代表当日没有披露。",
+        ("区间内只包含**已取到**的交易日；未取到的日子在 coverage 中为 unknown，"
+        "不代表当日没有披露。"),
         "事实标签的窗口以事件所在交易日为末尾，与显示页边界无关；上下文不足时不生成标签。",
         "只有已披露事实与期限状态，不含持仓、清仓或收益结论。",
     )

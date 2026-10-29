@@ -12,7 +12,8 @@ EVAL = runpy.run_path(str(ROOT / "scripts/evaluate-research-baseline.py"))
 
 def test_v2_clarifies_denominator_without_moving_evidence_or_answers():
     v1_raw = EVAL["CORPUS"].read_bytes()
-    assert hashlib.sha256(v1_raw).hexdigest() == "3fc4b04fb4e0977dac6130136019e15d88ffffca25498ea6c7313da61fd9b0ef"
+    # Git checkout may convert LF to CRLF; evidence and answers must stay frozen.
+    assert hashlib.sha256(v1_raw.replace(b"\r\n", b"\n")).hexdigest() == "1304685331baa53bc28dabcc866884aa619bbb30c0e293b7ab5e91055bee26c8"
     v1 = json.loads(v1_raw)
     v2_path = ROOT / "evals/research/v2/cases.json"
     v2 = json.loads(v2_path.read_bytes())

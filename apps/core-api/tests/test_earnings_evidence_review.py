@@ -1,8 +1,8 @@
 """R03: evidence existence and completed factor analysis are separate judgments."""
 
 import pytest
-
-from investment_steward_core import jev_client, report_quality as rq
+from investment_steward_core import jev_client
+from investment_steward_core import report_quality as rq
 
 
 def _rows():

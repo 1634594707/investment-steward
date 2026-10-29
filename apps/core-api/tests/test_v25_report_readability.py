@@ -23,22 +23,18 @@ import json
 import re
 
 import pytest
-
-from conftest import (  # noqa: F401  确保 fixture 可用
+from conftest import (
     SAMPLE_CONCLUSION,
     SAMPLE_SUMMARY_IN_BAND,
-    client as client_fixture,
     run_stock_report,
 )
-
-from test_stock_research_tools import (  # noqa: F401
+from investment_steward_core import prompting, report_quality
+from investment_steward_core.api.app import display_amount, display_indicators
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import prompting, report_quality
-from investment_steward_core.api.app import display_amount, display_indicators
 
 # 机器精度裸浮点：7 位及以上小数（展示精度最高为 MACD 的 4 位）。
 _MACHINE_FLOAT = re.compile(r"\d\.\d{7,}")
@@ -128,7 +124,7 @@ def test_evidence_text_carries_no_machine_precision_floats(client, tmp_path, mon
 
     monkeypatch.setattr(mc, "_post_json", fake_post)
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
 
     prompt = json.dumps(captured["payload"], ensure_ascii=False)

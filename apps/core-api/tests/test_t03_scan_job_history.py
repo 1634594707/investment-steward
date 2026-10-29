@@ -3,8 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-
-from investment_steward_core.storage.database import Database, SCAN_JOB_STALE_REASON
+from investment_steward_core.storage.database import SCAN_JOB_STALE_REASON, Database
 
 
 @pytest.fixture

@@ -22,13 +22,12 @@
 
 from __future__ import annotations
 
-
-from conftest import run_stock_report
 import json
 import sqlite3
 from pathlib import Path
 
 import pytest
+from conftest import run_stock_report
 from investment_steward_core import credential_store, jev_client, report_quality
 
 # ——————————————————————————————————————————————————————————————
@@ -427,7 +426,7 @@ def test_stock_report_triages_watchpoints_and_records_purpose(tmp_path, monkeypa
     fake, calls = _fake_jev()
     monkeypatch.setattr(jev_client, "_post_endpoint", fake)
 
-    body = run_stock_report(http, headers, **{"symbol": "600001"})
+    body = run_stock_report(http, headers, symbol="600001")
     assert body["ok"] is True, body
     assert len(calls) == 1, "三条验证点应合成一个分片、只出网一次"
     assert set(calls[0]["questions"]) == {
@@ -465,7 +464,7 @@ def test_stock_report_keeps_every_watchpoint_when_triage_fails(tmp_path, monkeyp
         raise urllib.error.HTTPError("u", 401, "Unauthorized", {}, None)
 
     monkeypatch.setattr(jev_client, "_post_endpoint", _boom)
-    body = run_stock_report(http, headers, **{"symbol": "600001"})
+    body = run_stock_report(http, headers, symbol="600001")
 
     assert body["ok"] is True
     assert len(body["watchpoints"]) == 3, "验证点一条都不能少"
@@ -483,7 +482,7 @@ def test_stock_report_zero_change_when_jev_disabled(tmp_path, monkeypatch):
     http, headers = _client(tmp_path, monkeypatch, jev_enabled=False)
     monkeypatch.setattr(jev_client, "_post_endpoint", lambda *a, **k: pytest.fail("Jev 关闭时不得出网"))
 
-    body = run_stock_report(http, headers, **{"symbol": "600001"})
+    body = run_stock_report(http, headers, symbol="600001")
     assert body["ok"] is True
     assert len(body["watchpoints"]) == 3
     assert body["jev_followup"] is None
@@ -497,7 +496,7 @@ def test_followup_turn_triages_new_watchpoints_with_same_ruler(tmp_path, monkeyp
     fake, calls = _fake_jev()
     monkeypatch.setattr(jev_client, "_post_endpoint", fake)
 
-    base = run_stock_report(http, headers, **{"symbol": "600001"})
+    base = run_stock_report(http, headers, symbol="600001")
     report_id = str(base["report_id"])
 
     calls.clear()
@@ -524,7 +523,7 @@ def test_followup_turn_still_delivers_when_triage_fails(tmp_path, monkeypatch):
     import urllib.error
 
     http, headers = _client(tmp_path, monkeypatch, jev_enabled=True)
-    base = run_stock_report(http, headers, **{"symbol": "600001"})
+    base = run_stock_report(http, headers, symbol="600001")
     report_id = str(base["report_id"])
 
     def _boom(*_args, **_kwargs):

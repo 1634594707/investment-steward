@@ -17,8 +17,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from investment_steward_core.api import create_app
 from investment_steward_core.api import app as app_module
+from investment_steward_core.api import create_app
 from investment_steward_core.config import CoreSettings
 from investment_steward_core.domain import Notification
 
@@ -78,7 +78,7 @@ def test_quiet_hours_holds_delivery_and_hides_in_app(client, monkeypatch):
     )
     assert saved.status_code == 200
 
-    user_id = _session_user(test_client, headers)
+    _user_id = _session_user(test_client, headers)
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(
         app_module, "deliver_notification",
@@ -132,7 +132,7 @@ def test_in_app_disabled_hides_pending_but_external_still_tried(client, monkeypa
     )
     assert saved.status_code == 200
 
-    user_id = _session_user(test_client, headers)
+    _user_id = _session_user(test_client, headers)
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(app_module, "deliver_notification", lambda n, store: [
         {"channel": "notify_webhook", "kind": "dingtalk", "delivered": False, "detail": "未配置投递通道，保持站内 pending"}
@@ -157,7 +157,7 @@ def test_external_disabled_skips_delivery_without_backoff(client, monkeypatch):
     )
     assert saved.status_code == 200
 
-    user_id = _session_user(test_client, headers)
+    _user_id = _session_user(test_client, headers)
     monkeypatch.setattr(app_module, "evaluate_notifications", lambda db, user: [_notification(user)])
     monkeypatch.setattr(
         app_module, "deliver_notification",

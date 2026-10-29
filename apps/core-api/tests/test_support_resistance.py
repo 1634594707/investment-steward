@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from investment_steward_core import market_feed, support_resistance
 
 

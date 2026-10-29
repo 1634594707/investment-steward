@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from investment_steward_core.storage.database import Database
 
 
@@ -89,8 +88,8 @@ def test_snapshots_round_trip_through_existing_export_and_restore():
 def test_daily_scan_archives_original_input_or_fetch_failure(monkeypatch, feed_state):
     from datetime import UTC, datetime, timedelta
     from types import SimpleNamespace
-    from fastapi.routing import APIRoute
 
+    from fastapi.routing import APIRoute
     from investment_steward_core.api import app as app_module
     from investment_steward_core.config import CoreSettings
     from investment_steward_core.domain import PluginInstallationState

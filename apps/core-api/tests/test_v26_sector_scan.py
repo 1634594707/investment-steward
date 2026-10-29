@@ -19,7 +19,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
-
 from investment_steward_core import tactics, tactics_score
 
 _NAME_BY_ID = {item["id"]: item["name"] for item in tactics.catalog()}
@@ -254,6 +253,18 @@ def test_sectors_endpoint_lists_industry_sectors(client, monkeypatch):
     """GET /tactics/sectors 是「按板块划分」的选项来源（code/name/领涨股）。"""
     from investment_steward_core.api import app as app_module
 
+    test_client, headers = client
+    monkeypatch.setattr(app_module, "fetch_cn_sector_list", lambda: [
+        {"code": "new_blhy", "name": "玻璃行业", "member_count": 30, "change_pct": 2.1,
+         "leader_symbol": "600176", "leader_name": "中国巨石"},
+    ])
+    response = test_client.get("/tactics/sectors", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source"] == "新浪财经 行业板块"
+    assert body["sectors"][0]["code"] == "new_blhy"
+    assert body["sectors"][0]["leader_name"] == "中国巨石"
+
 def _run_scan_to_done(test_client, headers, payload):
     """D01：POST 只建任务，这里轮询到终态并返回 summary（done）/任务体（cancelled/error）。"""
     import time as _time
@@ -272,18 +283,6 @@ def _run_scan_to_done(test_client, headers, payload):
             return status_response
     raise AssertionError("扫描任务 15s 内未完成")
 
-
-    test_client, headers = client
-    monkeypatch.setattr(app_module, "fetch_cn_sector_list", lambda: [
-        {"code": "new_blhy", "name": "玻璃行业", "member_count": 30, "change_pct": 2.1,
-         "leader_symbol": "600176", "leader_name": "中国巨石"},
-    ])
-    response = test_client.get("/tactics/sectors", headers=headers)
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["source"] == "新浪财经 行业板块"
-    assert body["sectors"][0]["code"] == "new_blhy"
-    assert body["sectors"][0]["leader_name"] == "中国巨石"
 
 
 def test_sectors_endpoint_reports_upstream_failure(client, monkeypatch):
@@ -349,7 +348,7 @@ def test_scan_market_sectors_mode_can_disable_resonance(client, tmp_path, monkey
     monkeypatch.setattr(
         app_module, "fetch_cn_kline", lambda symbol, limit=250, period="day": (rising, "test-provider")
     )
-    monkeypatch.setattr(app_module, "fetch_cn_sector_list", lambda: [])
+    monkeypatch.setattr(app_module, "fetch_cn_sector_list", list)
     monkeypatch.setattr(app_module, "fetch_cn_sector_members", lambda code, top=60: _SECTOR_MEMBERS[:top])
 
     body = _run_scan_to_done(test_client, headers, {"mode": "sectors", "sectors": ["new_blhy"], "per_sector": 5,
@@ -484,7 +483,7 @@ def test_ai_review_reports_unavailable_instead_of_502_when_nothing_usable(client
     monkeypatch.setattr(
         app_module, "fetch_cn_kline", lambda symbol, limit=250, period="day": (rising, "test-provider")
     )
-    monkeypatch.setattr(app_module, "fetch_cn_sector_list", lambda: [])
+    monkeypatch.setattr(app_module, "fetch_cn_sector_list", list)
     monkeypatch.setattr(
         mc, "_post_json",
         lambda *a, **k: {"choices": [{"message": {"content": "抱歉，我无法回答这个问题。"}}]},

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import time
 import urllib.error
 import urllib.parse
@@ -287,7 +288,7 @@ def _emit_model_call_record(record: dict[str, Any]) -> None:
     try:
         _model_call_recorder(record)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Best-effort operation failed", exc_info=True)
 
 
 def emit_model_call_record(record: dict[str, Any]) -> None:

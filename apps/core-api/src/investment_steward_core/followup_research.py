@@ -18,7 +18,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from investment_steward_core import trading_calendar
 

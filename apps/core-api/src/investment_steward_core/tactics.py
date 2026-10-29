@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 from typing import Any
 
@@ -121,7 +122,7 @@ def _crossed_down(a: list[float | None], b: list[float | None], i: int) -> bool:
 
 
 def _aligned(values_by_period: list[list[float | None]], i: int, ascending: bool) -> bool:
-    pairs = zip(values_by_period, values_by_period[1:])
+    pairs = itertools.pairwise(values_by_period)
     for shorter, longer in pairs:
         if shorter[i] is None or longer[i] is None:
             return False

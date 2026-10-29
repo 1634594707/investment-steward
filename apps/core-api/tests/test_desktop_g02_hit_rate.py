@@ -16,15 +16,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import (  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import longterm as longterm_service
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import longterm as longterm_service
 
 
 def _report_json(**extra) -> str:
@@ -220,7 +219,7 @@ def test_hit_rate_buckets_by_report_model_and_title_for_materialized_watchpoints
         {"signal": "站稳 MA20 后放量", "verify_by": _iso(-6)[:10], "expected_if_true": "倾向乐观"},
     ])
     monkeypatch.setattr(mc, "_post_json", _two_call_model(report))
-    assert run_stock_report(test_client, headers, **{"symbol": "600018"})["ok"] is True
+    assert run_stock_report(test_client, headers, symbol="600018")["ok"] is True
 
     # G01 读路径把带日期的验证点落成判断。
     queue = test_client.get("/ai-research/review-queue", headers=headers).json()
@@ -252,7 +251,7 @@ def test_hit_rate_survives_deleted_source_report(tmp_path, monkeypatch):
         {"signal": "删除来源研报后的判定", "verify_by": _iso(-6)[:10], "expected_if_true": "倾向乐观"},
     ])
     monkeypatch.setattr(mc, "_post_json", _two_call_model(report))
-    assert run_stock_report(test_client, headers, **{"symbol": "600019"})["ok"] is True
+    assert run_stock_report(test_client, headers, symbol="600019")["ok"] is True
     queue = test_client.get("/ai-research/review-queue", headers=headers).json()
     report_id = str(queue["items"][0]["report_id"])
     judgment_id = str(queue["items"][0]["judgment_id"])

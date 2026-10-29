@@ -3,7 +3,13 @@ from __future__ import annotations
 
 import json
 
-from investment_steward_core.macro_trade import COMTRADE_SUBSCRIPTION_API, COMTRADE_SUBSCRIPTION_MONTHLY_API, fetch_trade, fetch_trade_monthly, trade_guard
+from investment_steward_core.macro_trade import (
+    COMTRADE_SUBSCRIPTION_API,
+    COMTRADE_SUBSCRIPTION_MONTHLY_API,
+    fetch_trade,
+    fetch_trade_monthly,
+    trade_guard,
+)
 
 
 class _FakeResponse:

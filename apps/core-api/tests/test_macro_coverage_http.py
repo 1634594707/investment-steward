@@ -2,10 +2,11 @@
 from types import SimpleNamespace
 
 import pytest
-
-from test_t03_scan_history_http import scan_http  # noqa: F401
 from investment_steward_core import macro_feed
 from investment_steward_core.api import app as app_module
+from test_t03_scan_history_http import scan_http as _scan_http
+
+scan_http = _scan_http
 
 
 @pytest.mark.parametrize("region", ["us", "cn", "eu", "jp", "in"])

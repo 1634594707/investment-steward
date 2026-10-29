@@ -16,9 +16,7 @@
 from __future__ import annotations
 
 import pytest
-
 from investment_steward_core import report_quality as rq
-
 
 _UNDETERMINED_VALUATION = {
     "verdict": "无数据",
@@ -210,7 +208,7 @@ def test_d02_peer_above_ps_flags_ps_below_with_metric_named_note():
     body = "本股 PB/PS 低于同业中位数。"
     hits = rq.valuation_conclusion_hits(_report(body), "fair", peer_position)
     assert hits
-    aligned, changes = rq.align_valuation_language(_report(body), "fair", peer_position)
+    aligned, _changes = rq.align_valuation_language(_report(body), "fair", peer_position)
     assert "PS 高于同业中位数" in aligned
     assert rq._D02_NOTE_MARKER in aligned
     # 幂等：重复执行不再叠加。

@@ -15,16 +15,14 @@ import json
 from datetime import date, timedelta
 
 import pytest
-
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import (  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import tactics, tactics_score
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import tactics, tactics_score
 
 _NAME_BY_ID = {item["id"]: item["name"] for item in tactics.catalog()}
 
@@ -260,7 +258,7 @@ def test_stock_report_drops_fabricated_citations(client, tmp_path, monkeypatch):
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001", "question": "趋势"})
+    body = run_stock_report(test_client, headers, symbol="600001", question="趋势")
     assert body["ok"] is True, body
     assert body["citations"] == ["S1", "S2"]          # S9 不属于本次来源，被剔除
     assert body["citation_dropped"] == ["S9"]
@@ -283,7 +281,7 @@ def test_stock_report_rejects_all_fabricated_citations(client, tmp_path, monkeyp
         lambda *a, **k: {"choices": [{"message": {"content": json.dumps({
             "title": "假引用报告", "report": "### 技术面\n内容 [S9]", "citations": ["S9"]})}}]},
     )
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is False and body["stage"] == "citation"
     assert body["dropped_citations"] == ["S9"]
 
@@ -301,7 +299,7 @@ def test_stock_report_emits_form_warnings_without_rewriting_model_values(client,
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     warnings = " ".join(body["quality_warnings"])
     assert "字" in warnings                 # 长度不足
@@ -333,7 +331,7 @@ def test_stock_report_normalizes_structured_judgements(client, tmp_path, monkeyp
     }, ensure_ascii=False)
     monkeypatch.setattr(mc, "_post_json", lambda *a, **k: {"choices": [{"message": {"content": report_json}}]})
 
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is True, body
     assert body["scenarios"][0]["name"] == "乐观"
     assert body["levels"]["support"][0]["price"] == 9.8      # 字符串数字归一为数值

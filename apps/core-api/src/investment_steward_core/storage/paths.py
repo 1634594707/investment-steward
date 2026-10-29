@@ -128,7 +128,7 @@ class StorageLayout:
         """量化实盘记录 JSON 路径。"""
         return self.artifacts / QUANT_TRACK_RECORDS_FILE
 
-    def ensure(self) -> "StorageLayout":
+    def ensure(self) -> StorageLayout:
         """创建三类可写目录（install 由安装程序管理，不在此创建）。"""
         for directory in (self.user_data, self.cache, self.artifacts):
             directory.mkdir(parents=True, exist_ok=True)
@@ -142,7 +142,7 @@ class StorageLayout:
         install: Path | str | None = None,
         cache: Path | str | None = None,
         artifacts: Path | str | None = None,
-    ) -> "StorageLayout":
+    ) -> StorageLayout:
         """以用户数据目录为基准构造布局。
 
         `cache` 与 `artifacts` 可显式指定（用户自选位置时从配置读取）；
@@ -158,7 +158,7 @@ class StorageLayout:
         )
 
     @classmethod
-    def from_environment(cls, fallback_data_dir: Path | str | None = None) -> "StorageLayout":
+    def from_environment(cls, fallback_data_dir: Path | str | None = None) -> StorageLayout:
         """按「环境变量 > 位置指针 > fallback_data_dir > 默认」解析布局，供 Core 启动时使用。
 
         - `STEWARD_DATA_DIR` 等环境变量：最高优先（显式启动参数、测试）。

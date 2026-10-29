@@ -56,7 +56,6 @@ def test_ma20_support_hits_on_pullback_to_rising_ma20():
         price = round(price * 1.01, 3)  # 缓涨让 MA20 向上
         bars.append(_bar((index % 28) + 1, price * 0.999, price, price * 1.004, price * 0.994))
     # 最后一根：下探 MA20 附近后收阳（low 触及 ma20*1.0 以内、close > ma20）
-    import math
 
     closes = [float(bar["close"]) for bar in bars]
     ma20 = tactics.sma(closes, 20)[-1]

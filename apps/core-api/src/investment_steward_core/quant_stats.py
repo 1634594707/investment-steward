@@ -24,7 +24,8 @@ from __future__ import annotations
 import bisect
 import math
 import random
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 IC_SPEC_VERSION = 1
 DEFAULT_ALPHA = 0.05
@@ -338,7 +339,7 @@ def null_scale_by_permutation(
     mean = sum(pool) / len(pool)
     sd = math.sqrt(sum((value - mean) ** 2 for value in pool) / len(pool))
     ordered = sorted(abs(value) for value in pool)
-    index = min(len(ordered) - 1, max(0, int(math.ceil(0.95 * len(ordered))) - 1))
+    index = min(len(ordered) - 1, max(0, math.ceil(0.95 * len(ordered)) - 1))
     return {
         "null_mean": mean,
         "null_sigma": sd,

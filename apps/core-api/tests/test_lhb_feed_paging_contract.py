@@ -41,7 +41,7 @@ class _QuerySpyKernel:
         self.rows = rows
         self.queries: list[dict[str, list[str]]] = []
 
-    def fetch(self, params, *, sort_params, filter_params, budget):  # noqa: ANN001
+    def fetch(self, params, *, sort_params, filter_params, budget):
         merged = {**params, **sort_params, **filter_params}
         self.queries.append(parse_qs(_urlencode(merged)))
         columns = str(merged.get("sortColumns") or "")

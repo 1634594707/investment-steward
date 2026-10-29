@@ -12,9 +12,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
 
 
 def _post_scan_sync(test_client, headers, payload):
@@ -335,6 +334,6 @@ def test_research_report_rejects_uncited_output(client, tmp_path, monkeypatch):
         lambda *a, **k: {"choices": [{"message": {"content": json.dumps({
             "title": "无引用报告", "report": "全部是判断没有来源标注。", "citations": []})}}]},
     )
-    body = run_stock_report(test_client, headers, **{"symbol": "600001"})
+    body = run_stock_report(test_client, headers, symbol="600001")
     assert body["ok"] is False and body["stage"] == "parse"
     assert "无引用不发布" in body["detail"]

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from investment_steward_core import (
     analysis_followup,
     followup_research,
@@ -389,7 +388,7 @@ def test_q08_uncalibrated_levels_are_never_shown_as_up_probability() -> None:
 
 def test_q08_historical_high_without_derivation_is_reference_level_not_target() -> None:
     view = report_quality.scenario_probability_view(REPORT["scenarios"], levels=REPORT["levels"])
-    upper = [row for row in view["scenarios"][0]["bounds"] if row["side"] == "high"][0]
+    upper = next(row for row in view["scenarios"][0]["bounds"] if row["side"] == "high")
     assert upper["kind"] == "reference" and upper["value"] == 18.95
     assert "不作为未来窗口的目标价" in upper["note"]
     assert view["reference_bounds"][0]["scenario"] == "乐观"
@@ -397,7 +396,7 @@ def test_q08_historical_high_without_derivation_is_reference_level_not_target() 
     derived = json.loads(json.dumps(REPORT["scenarios"]))
     derived[0]["range_basis"] = "正常化盈利×同业中位倍数测算"
     relaxed = report_quality.scenario_probability_view(derived, levels=REPORT["levels"])
-    assert "仍属情景而非承诺" in [row for row in relaxed["scenarios"][0]["bounds"] if row["side"] == "high"][0]["note"]
+    assert "仍属情景而非承诺" in next(row for row in relaxed["scenarios"][0]["bounds"] if row["side"] == "high")["note"]
     assert relaxed["reference_bounds"] == []
 
 
@@ -420,7 +419,7 @@ def test_q09_source_catalog_is_traceable_and_never_invents_links() -> None:
     assert "C1" in by_id["S4"]["used_by"] and by_id["S4"]["cited"] is True
     # 真实链接存在时才登记，且不改写。
     linked = followup_research.build_source_catalog(dict(REPORT, source_links={"S5": "https://example.test/valuation"}))
-    assert [row for row in linked if row["source_id"] == "S5"][0]["url"] == "https://example.test/valuation"
+    assert next(row for row in linked if row["source_id"] == "S5")["url"] == "https://example.test/valuation"
 
 
 def test_q09_core_support_ratio_names_the_counted_claims() -> None:

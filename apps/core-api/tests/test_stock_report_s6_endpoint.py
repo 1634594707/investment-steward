@@ -7,13 +7,11 @@
 
 from __future__ import annotations
 
-
-from conftest import run_stock_report
 import json
 import re
 from types import SimpleNamespace
 
-from conftest import SAMPLE_SUMMARY_IN_BAND, load_youzi_json
+from conftest import SAMPLE_SUMMARY_IN_BAND, load_youzi_json, run_stock_report
 from investment_steward_core import lhb_feed as lf
 
 
@@ -276,7 +274,7 @@ def _model_reply(monkeypatch, calls: list[set[str]]) -> None:
 
 
 def _report_body(test_client, headers, symbol: str) -> dict:
-    return run_stock_report(test_client, headers, **{"symbol": symbol, "with_counter_check": False, "with_auto_repair": False})
+    return run_stock_report(test_client, headers, symbol=symbol, with_counter_check=False, with_auto_repair=False)
 
 
 def test_listed_stock_gets_s6_and_unlisted_does_not(tmp_path, monkeypatch):

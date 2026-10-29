@@ -18,17 +18,14 @@ import json
 from datetime import date, timedelta
 from uuid import UUID
 
-import pytest
-
-from conftest import client as client_fixture, run_stock_report  # noqa: F401  确保 fixture 可用
-
-from test_stock_research_tools import (  # noqa: F401
+from conftest import client as client_fixture  # noqa: F401  确保 fixture 可用
+from conftest import run_stock_report
+from investment_steward_core import longterm as longterm_service
+from test_stock_research_tools import (
     _file_client,
     _mock_sources,
     _setup_active_profile,
 )
-
-from investment_steward_core import longterm as longterm_service
 
 
 def _report_json(**extra) -> str:
@@ -74,12 +71,12 @@ def _seed_report_with_watchpoints(tmp_path, monkeypatch, watchpoints: list[dict[
     report = _report_json(watchpoints=watchpoints)
     fake, _ = _two_call_model(report, None)
     monkeypatch.setattr(mc, "_post_json", fake)
-    assert run_stock_report(test_client, headers, **{"symbol": "600002"})["ok"] is True
+    assert run_stock_report(test_client, headers, symbol="600002")["ok"] is True
     return test_client, headers
 
 
 def _dated_watchpoints() -> list[dict[str, object]]:
-    today = date.today()
+    today = date.today()  # noqa: DTZ011 - Watchpoint due dates follow the local calendar.
     return [
         {"signal": "已到期的信号", "verify_by": (today - timedelta(days=3)).isoformat(),
          "expected_if_true": "倾向乐观"},
