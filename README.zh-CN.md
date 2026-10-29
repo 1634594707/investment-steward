@@ -9,10 +9,9 @@
 
 [2026-10-30 前端优化说明](UPDATES-2026-10-30.md) · [2026-10-28 累计更新与验收状态](UPDATES-2026-10-28.md)
 
-  <img src="docs/assets/demo-preview-zh.webp" width="920" alt="AI Investment Steward 演示循环——55 条在案证据，四种建议动作">
+  <img src="docs/assets/demo-preview.webp" width="920" alt="AI Investment Steward 演示循环——今日决策台与 55 条在案证据、持仓 K 线、AI 研究工作台与证据库">
 
-  ▶ 6 秒循环自动播放 · 全部为本地真实数据，非示意图
-  完整 95 秒演示：[在新标签页打开](https://1634594707.github.io/investment-steward/assets/demo-zh.mp4)
+  ▶ 10 秒循环自动播放 · 全部为本地真实数据，非示意图
 
 </div>
 

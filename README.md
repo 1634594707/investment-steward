@@ -9,10 +9,9 @@
 
 [2026-10-30 frontend optimization notes (中文)](UPDATES-2026-10-30.md) · [2026-10-28 update notes and validation status (中文)](UPDATES-2026-10-28.md)
 
-  <img src="docs/assets/demo-preview-en.webp" width="920" alt="AI Investment Steward walkthrough — 55 items of evidence on file, then four possible next steps">
+  <img src="docs/assets/demo-preview.webp" width="920" alt="AI Investment Steward — Today brief with 55 items of evidence on file, portfolio with a live K-line chart, the AI research workbench, and the evidence library">
 
-  ▶ 6-second loop, autoplaying · real local data, no mock-ups
-  Full 95-second walkthrough: [open in a new tab](https://1634594707.github.io/investment-steward/assets/demo-en.mp4)
+  ▶ 10-second loop, autoplaying · real local data, no mock-ups
 
 </div>
 
