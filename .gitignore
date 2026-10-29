@@ -23,6 +23,17 @@ apps/desktop-host/dist*/
 apps/desktop-host/tools/build*/
 apps/desktop-host/tools/dist*/
 
+# --- Android 构建中间产物（源文件保留在 mobile/www）------------------------
+/mobile/android/assets/
+/mobile/android/assets_tmp/
+/mobile/android/src/com/investment/steward/mobile/EmbeddedPage.java
+/mobile/.gradle/
+/mobile/local.properties
+/mobile/**/*.apk
+/mobile/**/*.aab
+/mobile/**/*.dex
+/mobile/**/*.class
+
 # --- Python 缓存与测试临时目录 --------------------------------------------
 __pycache__/
 *.py[cod]
@@ -91,6 +102,9 @@ docs/perf/
 docs/assets/*/
 # archify 等工具生成的隐藏交付目录
 docs/architecture/.archify-*/
+# 视觉验收报告/截图与历史路由快照不属于 Pages 发布内容；HTML 和规格源保留。
+/docs/architecture/*.visual-check.*
+/docs/architecture/route-inventory*.json
 
 # --- AI 工具目录（本机安装产物）-------------------------------------------
 # 其它 AI 工具的本机忽略清单：仓库只认 .gitignore，别让它入库
@@ -98,12 +112,10 @@ docs/architecture/.archify-*/
 .codebuddy/
 .claude/
 .cursor/
-# skills 目录 = teamai pull 分发的本地副本，源头在 .teamai/skills/
-.codex/skills/
-# WorkBuddy：笔记/临时产物不入库，仅放行 teamai 注入的 hooks
-# （teamai single-repo 模式靠它让队友 clone 后自动引导）
-.workbuddy/*
-!.workbuddy/settings.json
+# 本机工具配置与分发副本不入库，团队技能源保留在 .teamai/skills/
+/.codex/
+# WorkBuddy 本机接入配置同样仅在本地保存。
+/.workbuddy/
 .workbuddy-ai/
 
 # Internal decision notes follow the local-only process-document policy.
