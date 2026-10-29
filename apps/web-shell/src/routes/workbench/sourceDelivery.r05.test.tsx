@@ -1,5 +1,5 @@
-/** R05: use exact successful Core HTTP responses across the actual page and export functions. */
-import { readFileSync, writeFileSync } from "node:fs";
+/** R05: committed catalog snapshots from controlled Core HTTP responses, with synthetic report metadata. */
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "@testing-library/react";
@@ -8,7 +8,7 @@ import { SourceCatalogTable } from "./panels";
 import { buildStockReportHtml, buildStockReportMarkdown } from "./export";
 import type { SourceCatalogEntry, StockReport } from "./researchTypes";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../docs/assets/history-audit-2026-10-25/r05");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
 it.each(["stock-news-url", "stock-missing-news-url", "collab-news-url", "collab-missing-news-url"])(
   "%s: titles stay title-only and successful bodies retain their own identity across delivery", (name) => {
     const fixture = JSON.parse(readFileSync(resolve(root, `${name}.json`), "utf8")) as {
@@ -48,8 +48,5 @@ it.each(["stock-news-url", "stock-missing-news-url", "collab-news-url", "collab-
     }
     expect(page.container.textContent).toContain("未保留该编号的来源文本");
     expect(exported.body.textContent).toContain("未保留该编号的来源文本");
-    // Emit only after every delivery assertion succeeds; these are controlled fixtures, not real market reports.
-    writeFileSync(resolve(root, `${name}.md`), markdown, "utf8");
-    writeFileSync(resolve(root, `${name}.html`), html, "utf8");
   },
 );

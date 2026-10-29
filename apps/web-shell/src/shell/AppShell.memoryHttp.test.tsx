@@ -45,7 +45,7 @@ let fixtureParent: string;
 beforeAll(async () => {
   const root = resolve("../..");
   fixtureParent = mkdtempSync(resolve(tmpdir(), "steward-memory-http-"));
-  server = spawn(resolve(root, ".venv/Scripts/python.exe"), ["-u", "-c", fixture], {
+  server = spawn(resolve(root, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"), ["-u", "-c", fixture], {
     cwd: root, windowsHide: true, env: { ...process.env, STEWARD_MEMORY_TEST_PARENT: fixtureParent },
   });
   let errors = "";

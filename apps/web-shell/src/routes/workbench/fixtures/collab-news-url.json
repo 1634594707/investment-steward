@@ -1,0 +1,256 @@
+{
+  "report": {
+    "ok": true,
+    "symbol": "TEST",
+    "report_id": "synthetic-historical-report",
+    "title": "合成历史报告",
+    "report": "历史正文 [S1]：保留来源缺口。",
+    "citations": [],
+    "limitations": [],
+    "confidence": "low",
+    "model": "synthetic",
+    "generated_at": "2026-10-25T00:00:00Z",
+    "source_keys": [],
+    "source_errors": {},
+    "source_catalog": [
+      {
+        "source_id": "S1",
+        "name": "行情与技术面（K 线/指标/战法）",
+        "url": "",
+        "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+        "documents": [],
+        "data_date": "2026-06-04",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "B",
+        "scope_note": "行情为数据商接口二次分发；指标与战法按收盘口径，不含盘中实时。",
+        "cited": true,
+        "used_by": []
+      },
+      {
+        "source_id": "S2",
+        "name": "近期新闻",
+        "url": "https://example.test/news-one",
+        "url_note": "",
+        "documents": [
+          {
+            "title": "第一篇新闻",
+            "data_date": "2026-09-01 12:30",
+            "url": "https://example.test/news-one"
+          },
+          {
+            "title": "第二篇新闻",
+            "data_date": "",
+            "url": ""
+          }
+        ],
+        "data_date": "2026-09-01",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "C",
+        "scope_note": "新闻为媒体摘要，只能作线索与情绪，不能当作公司事实。",
+        "cited": true,
+        "used_by": []
+      },
+      {
+        "source_id": "S3",
+        "name": "近期公告（标题口径）",
+        "url": "https://example.test/notice-1",
+        "url_note": "",
+        "documents": [
+          {
+            "title": "公告1",
+            "data_date": "2026-09-01",
+            "url": "https://example.test/notice-1"
+          },
+          {
+            "title": "公告2",
+            "data_date": "2026-09-02",
+            "url": "https://example.test/notice-2"
+          },
+          {
+            "title": "公告3",
+            "data_date": "2026-09-03",
+            "url": "https://example.test/notice-3"
+          }
+        ],
+        "data_date": "2026-09-03",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "B",
+        "scope_note": "公告仅标题口径，正文数字须回链交易所原文核对。",
+        "cited": true,
+        "used_by": []
+      },
+      {
+        "source_id": "S3A",
+        "name": "公告正文全文（披露原文）",
+        "url": "https://example.test/body-three.pdf",
+        "url_note": "",
+        "documents": [
+          {
+            "title": "公告2",
+            "data_date": "2026-09-02",
+            "url": "https://example.test/notice-2"
+          },
+          {
+            "title": "公告3",
+            "data_date": "2026-09-03",
+            "url": "https://example.test/body-three.pdf"
+          }
+        ],
+        "data_date": "2026-09-03",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "A",
+        "scope_note": "公告正文为数据商转载的交易所披露原文（非摘要）；数字可逐字核对，但渠道非交易所直连。",
+        "cited": false,
+        "used_by": []
+      },
+      {
+        "source_id": "S4",
+        "name": "财务摘要与派生指标",
+        "url": "https://data.eastmoney.com/bbsj/",
+        "url_note": "",
+        "documents": [],
+        "data_date": "2026-06-30",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "B",
+        "scope_note": "财务为数据商 F10 摘要（二次分发）：可核对绝对值与同比，不构成审计级证据。",
+        "cited": true,
+        "used_by": [
+          "C1"
+        ]
+      },
+      {
+        "source_id": "S5",
+        "name": "估值与历史分位",
+        "url": "",
+        "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+        "documents": [],
+        "data_date": "2026-09-10",
+        "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+        "quality": "C",
+        "scope_note": "估值同口径不含股息率；分位窗口受历史长度限制，同业仅取盈利可比样本。",
+        "cited": true,
+        "used_by": []
+      }
+    ]
+  },
+  "immediate_catalog": [
+    {
+      "source_id": "S1",
+      "name": "行情与技术面（K 线/指标/战法）",
+      "url": "",
+      "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+      "documents": [],
+      "data_date": "2026-06-04",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "B",
+      "scope_note": "行情为数据商接口二次分发；指标与战法按收盘口径，不含盘中实时。",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S2",
+      "name": "近期新闻",
+      "url": "https://example.test/news-one",
+      "url_note": "",
+      "documents": [
+        {
+          "title": "第一篇新闻",
+          "data_date": "2026-09-01 12:30",
+          "url": "https://example.test/news-one"
+        },
+        {
+          "title": "第二篇新闻",
+          "data_date": "",
+          "url": ""
+        }
+      ],
+      "data_date": "2026-09-01",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "C",
+      "scope_note": "新闻为媒体摘要，只能作线索与情绪，不能当作公司事实。",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S3",
+      "name": "近期公告（标题口径）",
+      "url": "https://example.test/notice-1",
+      "url_note": "",
+      "documents": [
+        {
+          "title": "公告1",
+          "data_date": "2026-09-01",
+          "url": "https://example.test/notice-1"
+        },
+        {
+          "title": "公告2",
+          "data_date": "2026-09-02",
+          "url": "https://example.test/notice-2"
+        },
+        {
+          "title": "公告3",
+          "data_date": "2026-09-03",
+          "url": "https://example.test/notice-3"
+        }
+      ],
+      "data_date": "2026-09-03",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "B",
+      "scope_note": "公告仅标题口径，正文数字须回链交易所原文核对。",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S3A",
+      "name": "公告正文全文（披露原文）",
+      "url": "https://example.test/body-three.pdf",
+      "url_note": "",
+      "documents": [
+        {
+          "title": "公告2",
+          "data_date": "2026-09-02",
+          "url": "https://example.test/notice-2"
+        },
+        {
+          "title": "公告3",
+          "data_date": "2026-09-03",
+          "url": "https://example.test/body-three.pdf"
+        }
+      ],
+      "data_date": "2026-09-03",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "A",
+      "scope_note": "公告正文为数据商转载的交易所披露原文（非摘要）；数字可逐字核对，但渠道非交易所直连。",
+      "cited": false,
+      "used_by": []
+    },
+    {
+      "source_id": "S4",
+      "name": "财务摘要与派生指标",
+      "url": "https://data.eastmoney.com/bbsj/",
+      "url_note": "",
+      "documents": [],
+      "data_date": "2026-06-30",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "B",
+      "scope_note": "财务为数据商 F10 摘要（二次分发）：可核对绝对值与同比，不构成审计级证据。",
+      "cited": true,
+      "used_by": [
+        "C1"
+      ]
+    },
+    {
+      "source_id": "S5",
+      "name": "估值与历史分位",
+      "url": "",
+      "url_note": "来源未提供可访问链接；本报告未保留该编号的来源文本，需回查原始记录",
+      "documents": [],
+      "data_date": "2026-09-10",
+      "retrieved_at": "2026-10-28T07:50:46.765615+00:00",
+      "quality": "C",
+      "scope_note": "估值同口径不含股息率；分位窗口受历史长度限制，同业仅取盈利可比样本。",
+      "cited": true,
+      "used_by": []
+    }
+  ]
+}

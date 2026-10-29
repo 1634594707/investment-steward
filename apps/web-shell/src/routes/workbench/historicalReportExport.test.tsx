@@ -1,6 +1,5 @@
-/** Re-export the user-provided historical report using the application's actual export functions. */
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+/** Historical export regression using synthetic, committed reports. */
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
@@ -8,13 +7,13 @@ import { buildStockReportHtml, buildStockReportMarkdown } from "./export";
 import { formatTimestamp } from "./format";
 import type { StockReport } from "./researchTypes";
 
-it("原始研报重导出保留历史正文及来源缺失，引用回到真实目录", () => {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../docs/assets/history-audit-2026-10-25");
-  const baselineBytes = readFileSync(resolve(root, "original-report.json"));
-  const viewBytes = readFileSync(resolve(root, "original-report-view.json"));
+it("合成历史研报重导出保留正文及来源缺失，引用回到来源目录", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
+  const baselineBytes = readFileSync(resolve(root, "historical-baseline.json"));
+  const viewBytes = readFileSync(resolve(root, "historical-view.json"));
   const baseline = JSON.parse(baselineBytes.toString("utf8")) as StockReport;
   const report = JSON.parse(viewBytes.toString("utf8")) as StockReport;
-  expect(report.report_id).toBe("bea494cc-5e3f-44e4-9f8d-5b8156c85a30");
+  expect(report.report_id).toBe("synthetic-historical-report");
   expect(report.report).toBe(baseline.report);
   expect(report.generated_at).toBe(baseline.generated_at);
   expect(report.source_catalog?.map((row) => row.source_id)).toEqual(["S1", "S2", "S3", "S4", "S5"]);
@@ -49,16 +48,5 @@ it("原始研报重导出保留历史正文及来源缺失，引用回到真实�
   const citations = [...parsed.querySelectorAll<HTMLAnchorElement>("a.cite")];
   expect(citations.length).toBeGreaterThan(0);
   for (const citation of citations) expect(parsed.getElementById(citation.hash.slice(1))).not.toBeNull();
-  expect(readFileSync(resolve(root, "original-report.json"))).toEqual(baselineBytes);
-  // Acceptance artifacts are written only after every assertion above succeeds.
-  const files = { "original-report-reexport.md": markdown, "original-report-reexport.html": html };
-  for (const [name, content] of Object.entries(files)) writeFileSync(resolve(root, name), content, "utf8");
-  const sha256 = (content: string | Uint8Array) => createHash("sha256").update(content).digest("hex");
-  writeFileSync(resolve(root, "reexport-evidence.json"), JSON.stringify({
-    report_id: report.report_id, generated_at: report.generated_at,
-    baseline_sha256: sha256(baselineBytes), view_sha256: sha256(viewBytes),
-    outputs: Object.fromEntries(Object.entries(files).map(([name, content]) => [name, sha256(content)])),
-    source_rows: report.source_catalog!.length, source_urls: 0, citation_links: citations.length,
-    scope: "DOM assertions and actual export artifacts; viewport rendering and printing not verified",
-  }, null, 2) + "\n", "utf8");
+  expect(readFileSync(resolve(root, "historical-baseline.json"))).toEqual(baselineBytes);
 });

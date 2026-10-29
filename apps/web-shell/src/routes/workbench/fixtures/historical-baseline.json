@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "symbol": "TEST",
+  "report_id": "synthetic-historical-report",
+  "title": "合成历史报告",
+  "report": "历史正文 [S1]：保留来源缺口。",
+  "citations": [],
+  "limitations": [],
+  "confidence": "low",
+  "model": "synthetic",
+  "generated_at": "2026-10-25T00:00:00Z",
+  "source_keys": [],
+  "source_errors": {}
+}

@@ -1,0 +1,135 @@
+{
+  "ok": true,
+  "symbol": "TEST",
+  "report_id": "synthetic-historical-report",
+  "title": "合成历史报告",
+  "report": "历史正文 [S1]：保留来源缺口。",
+  "citations": [],
+  "limitations": [],
+  "confidence": "low",
+  "model": "synthetic",
+  "generated_at": "2026-10-25T00:00:00Z",
+  "source_keys": [],
+  "source_errors": {},
+  "source_catalog": [
+    {
+      "source_id": "S1",
+      "name": "合成来源1",
+      "url": "",
+      "documents": [],
+      "url_note": "未保留来源链接",
+      "quality": "B",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S2",
+      "name": "合成来源2",
+      "url": "",
+      "documents": [],
+      "url_note": "未保留来源链接",
+      "quality": "B",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S3",
+      "name": "合成来源3",
+      "url": "",
+      "documents": [],
+      "url_note": "未保留来源链接",
+      "quality": "B",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S4",
+      "name": "合成来源4",
+      "url": "",
+      "documents": [],
+      "url_note": "未保留来源链接",
+      "quality": "B",
+      "cited": true,
+      "used_by": []
+    },
+    {
+      "source_id": "S5",
+      "name": "合成来源5",
+      "url": "",
+      "documents": [],
+      "url_note": "未保留来源链接",
+      "quality": "B",
+      "cited": true,
+      "used_by": []
+    }
+  ],
+  "cash_flow_quality": {
+    "version": "v1",
+    "metric_metadata": {},
+    "periods": [],
+    "operating_cash_flow": 10.08,
+    "net_income": 7.93,
+    "coverage_ratio": null,
+    "operating_cash_flow_period": "TTM-2026H1",
+    "capex_period": "2026H1",
+    "free_cash_flow_derived": false,
+    "capex": 6.06,
+    "free_cash_flow": null,
+    "free_cash_flow_reported": -2.63,
+    "extras_present": [],
+    "explanatory_present": [],
+    "derived_present": [],
+    "verdict": "不足以判断盈利质量",
+    "note": "期间口径不一致，原值留痕。",
+    "strength": "insufficient"
+  },
+  "research_completeness": {
+    "version": "v1",
+    "done_count": 1,
+    "items": [
+      {
+        "key": "earnings_decomposition",
+        "label": "earnings_decomposition",
+        "state": "done",
+        "state_label": "已完成",
+        "covered": [],
+        "gaps": [],
+        "evidence": [],
+        "note": "合成测试"
+      },
+      {
+        "key": "cash_flow_and_capex",
+        "label": "cash_flow_and_capex",
+        "state": "partial",
+        "state_label": "部分完成",
+        "covered": [],
+        "gaps": [],
+        "evidence": [],
+        "note": "合成测试"
+      },
+      {
+        "key": "valuation",
+        "label": "valuation",
+        "state": "partial",
+        "state_label": "部分完成",
+        "covered": [],
+        "gaps": [],
+        "evidence": [],
+        "note": "合成测试"
+      },
+      {
+        "key": "risk",
+        "label": "risk",
+        "state": "partial",
+        "state_label": "部分完成",
+        "covered": [],
+        "gaps": [],
+        "evidence": [],
+        "note": "合成测试"
+      }
+    ]
+  },
+  "quality_warnings": [
+    "生成时告警（历史留痕，不代表当前核验）：合成来源缺失"
+  ]
+}

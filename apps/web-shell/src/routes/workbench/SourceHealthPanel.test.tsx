@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SourceHealthPanel } from "./SourceHealthPanel";
 import { ReportResultTabs } from "./panels";
 import { buildStockReportHtml, buildStockReportMarkdown } from "./export";
+import { formatTimestamp } from "./format";
 import type { StockReport } from "./researchTypes";
 
 const report: StockReport = {
@@ -23,7 +24,7 @@ describe("来源健康与补研入口", () => {
     const markdown = buildStockReportMarkdown(report);
     const html = new DOMParser().parseFromString(buildStockReportHtml(report), "text/html");
     for (const output of [container.textContent!, markdown, html.body.textContent!]) {
-      for (const text of ["检查日期：2026-10-26", "取数失败", "观测日期超过阈值", "日期无法核验", "观测日期在阈值内", "缓存年龄：未知", "连接失败", "UTC+08:00"]) {
+      for (const text of ["检查日期：2026-10-26", "取数失败", "观测日期超过阈值", "日期无法核验", "观测日期在阈值内", "缓存年龄：未知", "连接失败", formatTimestamp("2026-10-26T01:00:00Z")]) {
         expect(output).toContain(text);
       }
     }
